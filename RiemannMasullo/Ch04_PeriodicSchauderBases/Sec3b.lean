@@ -29,7 +29,8 @@ def actionIsotype (ρ : G →* (E →L[ℂ] E)) (ω : PontryaginDual G) : Submod
 /-- Paper: Corollary 4.3.3.3(2), p. 183. A vector lies in the isotype exactly
 when every group element acts on it by the specified character value. -/
 theorem mem_actionIsotype (ρ : G →* (E →L[ℂ] E)) (ω : PontryaginDual G) (u : E) :
-    u ∈ actionIsotype ρ ω ↔ ∀ g : G, ρ g u = (ω g : ℂ) • u := by sorry
+    u ∈ actionIsotype ρ ω ↔ ∀ g : G, ρ g u = (ω g : ℂ) • u := by
+  simp [actionIsotype, Submodule.mem_iInf, sub_eq_zero]
 
 /-- Paper: Lemma 4.3.3.1(2), p. 181 and Corollary 4.3.3.3(2), p. 183.
 The isotypic subspace is closed in the original topology. -/
