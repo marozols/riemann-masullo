@@ -169,7 +169,27 @@ one unshifted real or complex gamma factor at each infinite place. -/
 theorem heckeGammaFactor_one (s : ℂ) :
     heckeGammaFactor (1 : U[F]) s =
       Complex.Gammaℝ s ^ InfinitePlace.nrRealPlaces F *
-        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F := by sorry
+        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F := by
+  classical
+  have hR (v : InfinitePlace F) (hv : v.IsReal) :
+      (realHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose = (0, 0) := by
+    apply (realHeckeCharacter_parameters (1 : U[F]) v hv).unique
+      (realHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose_spec
+    refine ⟨rfl, fun x ↦ ?_⟩
+    change (1 : ℂ) * _ ^ (0 : ℂ) = (‖(x : ℝ)‖ : ℂ) ^ (0 : ℂ) * _ ^ (0 : ℕ)
+    simp
+  have hC (v : InfinitePlace F) (hv : v.IsComplex) :
+      (complexHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose = (0, 0) := by
+    apply (complexHeckeCharacter_parameters (1 : U[F]) v hv).unique
+      (complexHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose_spec
+    refine ⟨rfl, fun x ↦ ?_⟩
+    change (1 : ℂ) * _ ^ (0 : ℂ) = ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ (0 : ℂ) * _ ^ (0 : ℤ)
+    simp
+  unfold heckeGammaFactor
+  simp_rw [hR, hC]
+  simp only [Fin.val_zero, Int.natAbs_zero, Nat.cast_zero, zero_div, add_zero, dite_eq_ite]
+  rw [Finset.prod_ite]
+  simp only [Finset.prod_const, ← Fintype.card_subtype, InfinitePlace.not_isReal_iff_isComplex]
 
 /-- The value of a unitary Hecke character on a local uniformizer has norm one. -/
 theorem norm_ideleClassNormTwist_zero_localValue (χ : U[F]) (v : HeightOneSpectrum (𝓞 F)) :
