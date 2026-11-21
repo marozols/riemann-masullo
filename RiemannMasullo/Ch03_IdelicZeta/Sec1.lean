@@ -1216,7 +1216,17 @@ theorem sIdeleQuotient_quasiCharacterParametrization (σ : ℝ≥0ˣ →ₜ* SId
 /-- Paper: Equation (3.1.2.5), p. 121. The S-idelic module gives complex exponent
 charts on the space of quasi-characters of J_{F,S}. -/
 theorem sIdeleQuotient_hasNormTwistCharts : HasNormTwistCharts (sIdeleQuotientNorm F S) := by
-  sorry
+  let p := (adeleProjection F S).comp (integralAdelesOutside F S).subtype
+  let d := p.comp (integralAdeleDiagonal F S)
+  obtain ⟨hd, hc, _⟩ := sAdele_additive_quotient F S
+  have : IsClosed (projectedDiagonal : Set (SAdeleRing F S)ˣ) := by
+    rw [MonoidHom.map_range]
+    exact isClosed_range_unitsMap d.toMonoidHom hd hc
+  have : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section F S
+  obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+  exact hasNormTwistCharts_of_proper _ (isProperMap_sIdeleQuotientNorm F S)
+    ⟨σ t, (hσ t).trans_ne ht⟩
 
 local notation "LocalIntegers(" v ")" => HeightOneSpectrum.adicCompletionIntegers F v
 local notation "LocalUnits(" v ")" => (HeightOneSpectrum.adicCompletionIntegers F v)ˣ
