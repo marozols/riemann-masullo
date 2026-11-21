@@ -524,7 +524,23 @@ theorem cyclicQuotient_surjOn_of_contains (K : Compacts ℝ) (n : ℤ) (hn : 1 �
     (ε : ℝ) (hε : 0 < ε) (hε1 : ε < 1)
     (hK : Icc (n * Real.log γ + Real.log (1 - ε))
       (n * Real.log γ + Real.log (γ + ε)) ⊆ (K : Set ℝ)) :
-    SurjOn (fun x : ℝ ↦ ((x / Real.log γ : ℝ) : T)) (K : Set ℝ) univ := by sorry
+    SurjOn (fun x : ℝ ↦ ((x / Real.log γ : ℝ) : T)) (K : Set ℝ) univ := by
+  intro z _
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let r := (AddCircle.equivIco (1 : ℝ) (n : ℝ)) z
+  have hr : (r : ℝ) ∈ Ico (n : ℝ) ((n : ℝ) + 1) := r.property
+  refine ⟨(r : ℝ) * L, hK ⟨?_, ?_⟩, ?_⟩
+  · have hlog := Real.log_nonpos (by linarith : 0 ≤ 1 - ε) (by linarith : 1 - ε ≤ 1)
+    exact (add_le_of_nonpos_right hlog).trans (mul_le_mul_of_nonneg_right hr.1 hL.le)
+  · have hlog : L ≤ Real.log (γ + ε) :=
+      Real.log_le_log (by linarith) (by linarith)
+    have hu := mul_le_mul_of_nonneg_right hr.2.le hL.le
+    rw [add_mul, one_mul] at hu
+    exact hu.trans (add_le_add (le_refl _) hlog)
+  · change (↑((r : ℝ) * L / L) : T) = z
+    rw [mul_div_cancel_right₀ _ hL.ne']
+    exact AddCircle.coe_equivIco
 
 /-- Paper: Lemma 4.2.2.4, p. 171. The test space with support in a given
 compact set is a closed subspace of the exponential decay space. -/
