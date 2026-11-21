@@ -536,7 +536,31 @@ theorem compactLogProfileInclusion_closed (K : Compacts ℝ)
 agrees with the topology inherited from the exponential decay space. -/
 theorem compactLogProfileInclusion_isEmbedding (K : Compacts ℝ)
     (hK : (interior (K : Set ℝ)).Nonempty) :
-    IsEmbedding (compactLogProfileInclusion K) := by sorry
+    IsEmbedding (compactLogProfileInclusion K) := by
+  clear hK
+  let P := compactLogProfileInclusion K
+  have hi : Injective P := by
+    intro f g he
+    exact ContDiffMapSupportedIn.ext fun x ↦ congrArg (fun F : E ↦ F.val x) he
+  let e := LinearEquiv.ofInjective P.toLinearMap hi
+  let U := unweightedLogProfile.comp P.range.subtypeL
+  have hfun (f : P.range) : (e.symm f : ℝ → ℂ) = (U f : ℝ → ℂ) := by
+    obtain ⟨g, rfl⟩ := e.surjective f
+    rw [e.symm_apply_apply]
+    exact funext fun x ↦ (unweightedLogProfile_apply (P g) x).symm
+  have hc : Continuous e.symm := by
+    apply (ContDiffMapSupportedIn.withSeminorms ℂ ℝ ℂ ⊤ K).continuous_of_continuous_comp e.symm.toLinearMap
+    intro n
+    let q := (SchwartzMap.seminorm ℂ 0 n).comp U.toLinearMap
+    apply Seminorm.continuous_of_le (q := q) (((schwartz_withSeminorms ℂ ℝ ℂ).continuous_seminorm (0,n)).comp U.continuous)
+    intro f
+    apply (ContDiffMapSupportedIn.seminorm_top_le_iff ℂ (apply_nonneg q f) n (e.symm f)).2
+    intro x _
+    rw [hfun]
+    exact (U f).norm_iteratedFDeriv_le_seminorm ℂ n x
+  let H : D[K] ≃L[ℂ] P.range :=
+    { e with continuous_toFun := P.rangeRestrict.continuous, continuous_invFun := hc }
+  exact IsEmbedding.subtypeVal.comp H.toHomeomorph.isEmbedding
 
 /-- Paper: Proposition 4.2.2.5(1), p. 173. The Mellin evaluation sequence
 is an absolute Schauder basis of the strong quotient dual. This dual is
