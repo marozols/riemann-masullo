@@ -499,7 +499,21 @@ def positiveRealHaar : Measure ℝ≥0ˣ :=
 under `dt/t` is the logarithm of T for T at least 1. -/
 theorem positiveRealHaar_interval (T : ℝ≥0ˣ) (hT : 1 ≤ (T.val : ℝ)) :
     positiveRealHaar {t | (t.val : ℝ) ∈ Icc 1 (T.val : ℝ)} =
-      ENNReal.ofReal (Real.log (T.val : ℝ)) := by sorry
+      ENNReal.ofReal (Real.log (T.val : ℝ)) := by
+  let e (x : ℝ) := Units.mk0 (Real.exp x).toNNReal (by positivity)
+  have he : Measurable e :=
+    measurable_comap_iff.mpr (continuous_real_toNNReal.comp Real.continuous_exp).measurable
+  have hset : MeasurableSet {t : ℝ≥0ˣ | (t.val : ℝ) ∈ Icc 1 (T.val : ℝ)} :=
+    measurableSet_Icc.preimage (NNReal.continuous_coe.measurable.comp MeasurableSpace.le_map_comap)
+  change (volume.map e) _ = _
+  rw [Measure.map_apply he hset]
+  have hpre : e ⁻¹' {t | (t.val : ℝ) ∈ Icc 1 (T.val : ℝ)} = Icc 0 (Real.log (T.val : ℝ)) := by
+    ext x
+    change (1 ≤ ((Real.exp x).toNNReal : ℝ) ∧ ((Real.exp x).toNNReal : ℝ) ≤ _) ↔ _
+    rw [Real.coe_toNNReal _ (Real.exp_pos x).le, Real.one_le_exp_iff,
+      ← Real.le_log_iff_exp_le (zero_lt_one.trans_le hT)]
+    rfl
+  rw [hpre, Real.volume_Icc, sub_zero]
 
 local notation "classVolume(" F ")" =>
   ENNReal.ofReal ((2 : ℝ) ^ InfinitePlace.nrRealPlaces F *
