@@ -1250,13 +1250,40 @@ theorem compactLogProfileInclusion_isEmbedding (K : Compacts ℝ)
     (hK : (interior (K : Set ℝ)).Nonempty) :
     IsEmbedding (compactLogProfileInclusion K) := by sorry
 
+private theorem circleAbsolute_map {X Y : Type*} [AddCommGroup X] [Module ℂ X] [TopologicalSpace X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y] (e : X ≃L[ℂ] Y) {x : ℕ → X}
+    {c : ℕ → StrongDual ℂ X} (h : SchauderBasis.IsAbsolute x c) :
+    SchauderBasis.IsAbsolute (e ∘ x) (fun n ↦ (c n).comp e.symm.toContinuousLinearMap) := by
+  intro p hp
+  let q := p.comp e.toLinearEquiv.toLinearMap
+  obtain ⟨r, hr, hbound⟩ := h q (hp.comp e.continuous)
+  refine ⟨r.comp e.symm.toLinearEquiv.toLinearMap, hr.comp e.symm.continuous, fun u ↦ ?_⟩
+  simpa only [q, Seminorm.comp_apply, ContinuousLinearEquiv.coe_toLinearEquiv,
+    LinearEquiv.coe_coe, map_smul, Function.comp_apply, ContinuousLinearMap.comp_apply,
+    ContinuousLinearEquiv.coe_coe] using hbound (e.symm u)
+
 /-- Paper: Proposition 4.2.2.5(1), p. 173. The Mellin evaluation sequence
 is an absolute Schauder basis of the strong quotient dual. This dual is
 identified with the annihilator by Lemma 4.2.1.3. -/
 theorem cyclicQuotientMellinCoeff_absoluteBasis :
     let δ := cyclicQuotientMellinCoeff γ hγ ∘ freq
     ∃ c : ℕ → StrongDual ℂ (StrongDual ℂ (E ⧸ (cyclicPeriodizationCLM γ hγ).ker)),
-      IsSchauderBasis δ c ∧ SchauderBasis.IsAbsolute δ c := by sorry
+      IsSchauderBasis δ c ∧ SchauderBasis.IsAbsolute δ c := by
+  let P := cyclicPeriodizationCLM γ hγ
+  obtain ⟨e, he⟩ := cyclicPeriodization_quotient_equiv γ hγ
+  have heq : e.toContinuousLinearMap = P.ker.liftQL P le_rfl := by
+    ext u
+    obtain ⟨f, rfl⟩ := P.ker.mkQ_surjective u
+    exact he f
+  have hz : (Real.log γ : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.log_pos hγ).ne'
+  let transfer := normalizedFourierPullback e (Real.log γ : ℂ) hz
+  have hm : transfer ∘ (cyclicFourierCoeff ∘ freq) = cyclicQuotientMellinCoeff γ hγ ∘ freq := by
+    funext n
+    change normalizedFourierPullback e _ hz (cyclicFourierCoeff (freq n)) = _
+    rw [normalizedFourierPullback_apply, heq]
+    rfl
+  exact ⟨_, hm ▸ circleBasis_map transfer cyclicFourierCoeff_unconditionalBasis.1,
+    hm ▸ circleAbsolute_map transfer cyclicFourierCoeff_absolute⟩
 
 /-- Paper: Proposition 4.2.2.5(2), p. 173. For an interval wider than a
 fundamental interval, all monomials have lifts supported in that same interval,
