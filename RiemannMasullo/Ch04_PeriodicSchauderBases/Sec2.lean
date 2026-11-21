@@ -200,7 +200,44 @@ theorem cyclicFourierCoeff_spec (m : ℤ) :
       fourierCoeff (fun z : T ↦ f (point z)) m + fourierCoeff (fun z : T ↦ g (point z)) m) ∧
     (∀ (c : ℂ) (f : S), fourierCoeff (fun z : T ↦ (c • f) (point z)) m =
       c * fourierCoeff (fun z : T ↦ f (point z)) m) ∧
-    Continuous (fun f : S ↦ fourierCoeff (fun z : T ↦ f (point z)) m) := by sorry
+    Continuous (fun f : S ↦ fourierCoeff (fun z : T ↦ f (point z)) m) := by
+  let ev (f : S) (z : T) := f (point z)
+  have hc (f : S) : Continuous (ev f) := by
+    apply (QuotientAddGroup.isQuotientMap_mk (AddSubgroup.zmultiples (1 : ℝ))).continuous_iff.mpr
+    let s (x : ℝ) := ((0, x • EuclideanSpace.single (0 : Fin 1) (1 : ℝ)) :
+      EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1))
+    have hs : Continuous s := continuous_const.prodMk (continuous_id.smul continuous_const)
+    have he (x : ℝ) : elementaryCover (s x) (0 : Fin 0 → ℤ) PUnit.unit = point (x : T) := by
+      refine Prod.ext rfl (Prod.ext ?_ rfl)
+      funext j
+      have hj : j = 0 := Subsingleton.elim _ _
+      subst j
+      simp [elementaryCover, s, PiLp.smul_apply]
+    simpa only [Function.comp_def, ev, he] using ((f.property.1 0 PUnit.unit).continuous.comp hs)
+  have hInt (f : S) : Integrable (ev f) AddCircle.haarAddCircle :=
+    (hc f).integrable_of_hasCompactSupport (HasCompactSupport.of_compactSpace _)
+  have hadd (f g : S) : fourierCoeff (ev (f + g)) m = fourierCoeff (ev f) m + fourierCoeff (ev g) m :=
+    congrFun (fourierCoeff.add (hInt f) (hInt g)) m
+  have hsmul (c : ℂ) (f : S) : fourierCoeff (ev (c • f)) m = c * fourierCoeff (ev f) m :=
+    fourierCoeff.const_mul (ev f) c m
+  let L : S →ₗ[ℂ] ℂ := { toFun f := fourierCoeff (ev f) m, map_add' := hadd, map_smul' := hsmul }
+  let i : ElementarySchwartzIndex 0 1 0 := (0, 0, 0, 0)
+  have hp : Continuous (fun f : S ↦ elementarySchwartzSeminorm i f) :=
+    (withGeneratingSeminorms_spec _ _).continuous_seminorm i
+  refine ⟨hadd, hsmul, (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp L fun _ ↦
+    Seminorm.continuous_of_le (q := (elementarySchwartzSeminorm i : Seminorm ℂ S)) hp ?_⟩
+  intro f
+  have hb (z : T) : ‖ev f z‖ ≤ elementarySchwartzSeminorm i f := by
+    change (‖ev f z‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val i).toReal
+    apply ENNReal.toReal_mono (f.property.2 i).ne
+    rw [show i = (0, 0, 0, 0) from rfl, elementarySchwartzBound_zero]
+    exact le_iSup (fun g ↦ (‖f g‖₊ : ENNReal)) (point z)
+  have h := norm_integral_le_of_norm_le_const (μ := (AddCircle.haarAddCircle : Measure T))
+    (f := fun z : T ↦ fourier (-m) z • ev f z)
+    (ae_of_all _ fun z ↦ by simpa only [norm_smul, fourier_apply, Circle.norm_coe, one_mul] using hb z)
+  change ‖fourierCoeff (ev f) m‖ ≤ elementarySchwartzSeminorm i f
+  rw [fourierCoeff]
+  simpa only [Measure.real, measure_univ, ENNReal.toReal_one, mul_one] using h
 
 /-- Paper: (4.2.1.4), p. 162. The coefficient uses Mathlib's Fourier integral
 with probability Haar measure, which absorbs the factor (1 / log γ). -/
