@@ -226,7 +226,11 @@ theorem isEmbedding_compactSupportStage (K : Compacts X) :
 set form a closed subset in the inductive limit topology. -/
 theorem isClosed_compactSupportStage (K : Compacts X) :
     letI := compactSupportLCTopology X E
-    IsClosed (compactSupportStage (E := E) K : Set C_c(X, E)) := by sorry
+    IsClosed (compactSupportStage (E := E) K : Set C_c(X, E)) := by
+  let := compactSupportLCTopology X E
+  simp only [compactSupportStage, Submodule.coe_iInf]
+  exact isClosed_iInter fun x ↦ isClosed_iInter fun _ ↦
+    isClosed_eq (continuous_compactSupport_eval (E := E) x) continuous_const
 
 /-- Paper: Lemma C.5.1.3(2), p. 721. Restriction to each summand identifies compactly
 supported maps on a topological disjoint union with the locally convex direct sum. -/
