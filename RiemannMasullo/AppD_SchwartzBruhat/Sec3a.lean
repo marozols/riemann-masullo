@@ -137,7 +137,36 @@ gives a nonzero example whenever the strip is nonempty.
 Deviation: Sanity check in the zero-extension representation. -/
 theorem gaussian_mem_schwartzBergmanSubmodule (I : Set ℝ) (hI : IsOpen I) :
     (Complex.re ⁻¹' I).indicator (fun z : ℂ ↦ Complex.exp (z ^ 2)) ∈
-      schwartzBergmanSubmodule I := by sorry
+      schwartzBergmanSubmodule I := by
+  refine ⟨fun z hz ↦ indicator_of_notMem hz _, ?_, ?_⟩
+  · have h : Differentiable ℂ (fun z : ℂ ↦ Complex.exp (z ^ 2)) := by fun_prop
+    intro z hz
+    apply DifferentiableAt.differentiableWithinAt
+    apply (h z).congr_of_eventuallyEq
+    filter_upwards [(hI.preimage Complex.continuous_re).mem_nhds hz] with w hw
+    exact indicator_of_mem hw _
+  · intro a b _ hab N
+    let M := max |a| |b|
+    refine ⟨N.factorial * Real.exp (1 + 2 * M ^ 2), ?_⟩
+    rintro _ ⟨z, hz, rfl⟩
+    have hstrip : z.re ∈ Icc a b := hz
+    have hM : |z.re| ≤ M := abs_le_max_abs_abs hstrip.1 hstrip.2
+    have hsq : z.re ^ 2 ≤ M ^ 2 := by
+      simpa using pow_le_pow_left₀ (abs_nonneg _) hM 2
+    have hweight : ‖z‖ ^ N ≤ N.factorial * Real.exp ‖z‖ := by
+      have h := (div_le_iff₀ (show 0 < (N.factorial : ℝ) by positivity)).mp
+        (Real.pow_div_factorial_le_exp ‖z‖ (norm_nonneg z) N)
+      simpa [mul_comm] using h
+    change ‖z ^ N * (Complex.re ⁻¹' I).indicator _ z‖ ≤ _
+    rw [indicator_of_mem (show z ∈ Complex.re ⁻¹' I from hab hstrip), norm_mul, norm_pow, Complex.norm_exp]
+    calc
+      _ ≤ (N.factorial * Real.exp ‖z‖) * Real.exp (z ^ 2).re :=
+        mul_le_mul_of_nonneg_right hweight (Real.exp_pos _).le
+      _ = N.factorial * Real.exp (‖z‖ + (z ^ 2).re) := by rw [Real.exp_add, mul_assoc]
+      _ ≤ _ := by
+        apply mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr ?_) (by positivity)
+        rw [pow_two, Complex.mul_re]
+        nlinarith [Complex.sq_norm_sub_sq_re z, sq_nonneg (‖z‖ - 1 / 2)]
 
 /-- Paper: (D.3.1.7), p. 799. Evaluate the polynomially weighted function on the
 vertical line with real part a. -/
