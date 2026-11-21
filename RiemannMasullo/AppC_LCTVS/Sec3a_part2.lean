@@ -7,6 +7,7 @@ public import Mathlib.Analysis.InnerProductSpace.TensorProduct
 public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Measure.Prod
 public import Mathlib.MeasureTheory.Measure.Regular
+import Mathlib.LinearAlgebra.Dimension.LinearMap
 
 /-!
 # Nuclear convergence and Schatten classes
@@ -60,6 +61,21 @@ theorem countable_orthogonalSummands [SeparableSpace H]
 -- TODO(paper-gap): The proof on p. 701 calls each PᵢT finite-rank. A single
 -- summand equal to ℓ²(ℕ) and T diagonal with entries 2^(-n-1) gives a counterexample.
 
+omit [CompleteSpace H] in
+/-- The canonical operator associated to an algebraic tensor has finite-dimensional range. -/
+private theorem finiteDimensional_range_tensorToFiniteRank
+    (z : StrongDual ℂ H ⊗[ℂ] H) :
+    FiniteDimensional ℂ (tensorToFiniteRank z).toLinearMap.range := by
+  induction z using TensorProduct.inductionOn with
+  | tmul φ y =>
+    have := FiniteDimensional.span_of_finite ℂ (Set.finite_singleton y)
+    apply Submodule.finiteDimensional_of_le (S₂ := ℂ ∙ y)
+    rintro _ ⟨x, rfl⟩
+    exact Submodule.mem_span_singleton.mpr ⟨φ x, (tensorToFiniteRank_tmul φ y x).symm⟩
+  | add z w hz hw =>
+    rw [map_add, ContinuousLinearMap.toLinearMap_add]
+    exact Submodule.finiteDimensional_of_le (LinearMap.range_add_le _ _)
+
 /-- Paper: Proposition C.3.5.1(1), p. 699. Along any increasing cofinal sequence
 of finite subsets, the finite sums of projected nuclear operators converge
 in trace norm to the original operator. -/
@@ -70,7 +86,54 @@ theorem tendsto_traceNorm_sum_orthogonalProjections_mul [SeparableSpace H]
     (T : nuclearEndomorphisms H) :
     Tendsto (fun k ↦ traceNorm
       ((∑ i ∈ s k, (⟨P(i) * T.val, mul_mem_nuclearEndomorphisms_left (P(i)) T⟩ :
-        nuclearEndomorphisms H)) - T)) atTop (𝓝 0) := by sorry
+        nuclearEndomorphisms H)) - T)) atTop (𝓝 0) := by
+  let Q (k : ℕ) : H →L[ℂ] H := (∑ i ∈ s k, P(i)) - 1
+  have hQ : ∀ x, Tendsto (fun k ↦ Q k x) atTop (𝓝 0) := by
+    intro x
+    have hx := (hSOT x).comp (hs.tendsto_atTop_atTop hcofinal)
+    simpa [Q, Function.comp_def] using hx.sub tendsto_const_nhds (b := x)
+  have hP (i : ι) : IsStarProjection (P(i)) := isStarProjection_starProjection
+  have hQ_norm (k : ℕ) : ‖Q k‖ ≤ 1 := by
+    have hsum : IsStarProjection (∑ i ∈ s k, P(i)) := by
+      refine IsStarProjection.sum (fun i _ ↦ hP i) ?_
+      intro i _ j _ hij
+      exact ((hP i).isSelfAdjoint.isStarOrtho_iff_mul_eq_zero (hP j).isSelfAdjoint).mpr
+        (hV hij).starProjection_comp_starProjection
+    simpa [Q, norm_sub_rev] using hsum.one_sub.norm_le _
+  let product (k : ℕ) (A : nuclearEndomorphisms H) : nuclearEndomorphisms H :=
+    ⟨Q k * A.val, mul_mem_nuclearEndomorphisms_left (Q k) A⟩
+  have hsum (k : ℕ) :
+      (∑ i ∈ s k, (⟨P(i) * T.val, mul_mem_nuclearEndomorphisms_left (P(i)) T⟩ :
+        nuclearEndomorphisms H)) - T = product k T := by
+    apply Subtype.ext
+    simp [product, Q, sub_mul, Finset.sum_mul]
+  simp_rw [hsum]
+  let : Norm (nuclearEndomorphisms H) := ⟨traceNorm⟩
+  have hcore := (traceNorm_normedSpaceCore (H := H)).toCore
+  have hnonneg (A : nuclearEndomorphisms H) : 0 ≤ traceNorm A :=
+    hcore.norm_nonneg A
+  refine Metric.tendsto_nhds.mpr fun ε hε ↦ ?_
+  obtain ⟨z, hz⟩ := exists_tensorToFiniteRank_traceNorm_sub_lt T (half_pos hε)
+  let F : nuclearEndomorphisms H :=
+    ⟨tensorToFiniteRank z, tensorToFiniteRank_mem_nuclearEndomorphisms z⟩
+  obtain ⟨_, hF⟩ := tendsto_traceNorm_mul_finiteRank Q hQ F.val
+    (finiteDimensional_range_tensorToFiniteRank z)
+  have hF' : Tendsto (fun k ↦ traceNorm (product k F)) atTop (𝓝 0) := hF
+  filter_upwards [Metric.tendsto_nhds.mp hF' (ε / 2) (half_pos hε)] with k hk
+  have hsplit : product k T = product k (T - F) + product k F := by
+    apply Subtype.ext
+    simp [product, mul_sub]
+  have hbound : traceNorm (product k (T - F)) ≤ traceNorm (T - F) :=
+    (traceNorm_mul_left_le (Q k) (T - F)).trans
+      (by simpa using mul_le_mul_of_nonneg_right (hQ_norm k) (hnonneg (T - F)))
+  have htriangle : traceNorm (product k T) ≤
+      traceNorm (product k (T - F)) + traceNorm (product k F) := by
+    rw [hsplit]
+    exact hcore.norm_triangle _ _
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg (hnonneg (product k F))] at hk
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg (hnonneg (product k T))]
+  change traceNorm (T - F) < ε / 2 at hz
+  linarith
 
 /-- Paper: Proposition C.3.5.1(2), p. 699. The finite sums of the traces of
 the projected operators converge to the trace of the original operator. -/
@@ -369,13 +432,49 @@ Deviation: The approximation-number index starts at zero. -/
 theorem abs_approximationNumber_sub_le (A B : E →L[ℂ] F) (n : ℕ) :
     |approximationNumber A n - approximationNumber B n| ≤ ‖A - B‖ := by sorry
 
+/-- Every strict upper bound for an approximation number is realized as a strict error bound
+by some approximant of the prescribed rank. -/
+private theorem exists_approximation_of_lt {T : E →L[ℂ] F} {n : ℕ} {a : ℝ}
+    (h : approximationNumber T n < a) :
+    ∃ S : E →L[ℂ] F, S.toLinearMap.rank ≤ (n : Cardinal) ∧ ‖S - T‖ < a := by
+  have hz : (0 : E →L[ℂ] F).toLinearMap.rank ≤ (n : Cardinal) := by simp
+  unfold approximationNumber at h
+  obtain ⟨r, ⟨S, hS, rfl⟩, hlt⟩ := exists_lt_of_csInf_lt (by exact ⟨_, 0, hz, rfl⟩) h
+  exact ⟨S, hS, hlt⟩
+
 /-- Paper: Lemma C.3.6.3(3), p. 704. The approximation number of a product
 at the sum of two one-based indices is bounded by the product of the
 approximation numbers of its factors at the corresponding indices.
 Deviation: The one-based index sum becomes m + n + 1 in zero-based indexing. -/
 theorem approximationNumber_comp_le (A : F →L[ℂ] G) (B : E →L[ℂ] F) (m n : ℕ) :
     approximationNumber (A.comp B) (m + n + 1) ≤
-      approximationNumber A m * approximationNumber B n := by sorry
+      approximationNumber A m * approximationNumber B n := by
+  apply le_mul_of_forall_lt₀
+  intro a ha b hb
+  obtain ⟨S, hS, hSa⟩ := exists_approximation_of_lt ha
+  obtain ⟨T, hT, hTb⟩ := exists_approximation_of_lt hb
+  -- Subtract the product of the errors from the composite to get an approximant.
+  let R := S.comp B + (A - S).comp T
+  have hleft := (LinearMap.rank_comp_le_left B.toLinearMap S.toLinearMap).trans hS
+  have hright : ((A - S).comp T).toLinearMap.rank ≤ (n : Cardinal) := by
+    apply Cardinal.lift_le.mp
+    exact (LinearMap.lift_rank_comp_le_right T.toLinearMap (A - S).toLinearMap).trans
+      (by simpa only [Cardinal.lift_natCast] using Cardinal.lift_le.mpr hT)
+  have hR : R.toLinearMap.rank ≤ ((m + n + 1 : ℕ) : Cardinal) := by
+    refine (LinearMap.rank_add_le _ _).trans ((add_le_add hleft hright).trans ?_)
+    exact_mod_cast Nat.le_succ (m + n)
+  have herr : R - A.comp B = (S - A).comp (B - T) := by
+    simp only [R, ContinuousLinearMap.comp_sub, ContinuousLinearMap.sub_comp]
+    abel
+  calc
+    approximationNumber (A.comp B) (m + n + 1) ≤ ‖R - A.comp B‖ := by
+      unfold approximationNumber
+      refine csInf_le ?_ ⟨R, hR, rfl⟩
+      exact ⟨0, fun r ⟨S, _, h⟩ ↦ h ▸ norm_nonneg _⟩
+    _ ≤ ‖S - A‖ * ‖T - B‖ := by
+      rw [herr, norm_sub_rev T B]
+      exact ContinuousLinearMap.opNorm_comp_le _ _
+    _ ≤ a * b := mul_le_mul hSa.le hTb.le (norm_nonneg _) ((norm_nonneg _).trans hSa.le)
 
 end SchattenClasses
 

@@ -1,6 +1,7 @@
 module
 
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec2b
+import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
 
@@ -26,8 +27,61 @@ theorem verticalStrip_weighted_iteratedDeriv_bounded (a b : ℝ) (hab : a < b)
     (h : ∀ c d : ℝ, a < c → c < d → d < b →
       BddAbove ((fun z : ℂ ↦ ‖z ^ N * f z‖) '' (Complex.re ⁻¹' Ioo c d)))
     (k : ℕ) (c d : ℝ) (hac : a < c) (hcd : c < d) (hdb : d < b) :
-    BddAbove ((fun z : ℂ ↦ ‖z ^ N * iteratedDeriv k f z‖) '' (Complex.re ⁻¹' Ioo c d)) :=
-  by sorry
+    BddAbove ((fun z : ℂ ↦ ‖z ^ N * iteratedDeriv k f z‖) '' (Complex.re ⁻¹' Ioo c d)) := by
+  let r := min (c - a) (b - d) / 2
+  have hr : 0 < r := by
+    dsimp [r]
+    positivity
+  have ha : a < c - r := by
+    dsimp [r]
+    linarith [min_le_left (c - a) (b - d)]
+  have hb : d + r < b := by
+    dsimp [r]
+    linarith [min_le_right (c - a) (b - d)]
+  obtain ⟨M, hM⟩ := h (c - r) (d + r) ha (by linarith) hb
+  let B := 2 ^ N * max M 0
+  refine ⟨k.factorial * B / (r / 4) ^ k, ?_⟩
+  rintro _ ⟨z, hz, rfl⟩
+  change c < z.re ∧ z.re < d at hz
+  -- Choose a circle on which the weight at the center is controlled by the boundary weight.
+  obtain ⟨R, hRlo, hRhi, hweight⟩ : ∃ R : ℝ, r / 4 ≤ R ∧ R ≤ r ∧
+      ∀ w ∈ Metric.sphere z R, ‖z‖ ≤ 2 * ‖w‖ := by
+    by_cases hsmall : ‖z‖ ≤ r / 2
+    · refine ⟨r, by linarith, le_rfl, ?_⟩
+      intro w hw
+      have hd := dist_le_norm_add_norm w z
+      rw [Metric.mem_sphere.mp hw] at hd
+      linarith [norm_nonneg w]
+    · refine ⟨r / 4, le_rfl, by linarith, ?_⟩
+      intro w hw
+      have hd := norm_sub_norm_le z w
+      rw [← dist_eq_norm, dist_comm, Metric.mem_sphere.mp hw] at hd
+      linarith
+  have hstrip {w : ℂ} (hw : w ∈ Metric.closedBall z R) :
+      w ∈ Complex.re ⁻¹' Ioo (c - r) (d + r) := by
+    have hd := (Complex.abs_re_le_norm (w - z)).trans (mem_closedBall_iff_norm.mp hw)
+    rw [Complex.sub_re, abs_le] at hd
+    exact ⟨by linarith [hz.1], by linarith [hz.2]⟩
+  have hdiff := (hf.const_mul (z ^ N)).diffContOnCl_ball (c := z) (R := R)
+    (fun w hw ↦ Ioo_subset_Ioo ha.le hb.le (hstrip hw))
+  have hcircle (w : ℂ) (hw : w ∈ Metric.sphere z R) : ‖z ^ N * f w‖ ≤ B := by
+    have hwM := hM (mem_image_of_mem _ (hstrip (Metric.sphere_subset_closedBall hw)))
+    calc
+      ‖z ^ N * f w‖ = ‖z‖ ^ N * ‖f w‖ := by rw [norm_mul, norm_pow]
+      _ ≤ (2 * ‖w‖) ^ N * ‖f w‖ := by
+        gcongr
+        exact hweight w hw
+      _ = 2 ^ N * ‖w ^ N * f w‖ := by rw [mul_pow, norm_mul, norm_pow, mul_assoc]
+      _ ≤ B := by
+        dsimp [B]
+        gcongr
+        exact hwM.trans (le_max_left _ _)
+  have hest := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le k
+    (by linarith : 0 < R) hdiff hcircle
+  rw [iteratedDeriv_const_mul_field] at hest
+  apply hest.trans
+  exact div_le_div_of_nonneg_left (by dsimp [B]; positivity) (by positivity)
+    (pow_le_pow_left₀ (by positivity) hRlo k)
 
 -- TODO(paper-gap): The proof's displayed denominator in (D.3.1.2) uses
 -- σ + Re(z), although the real part of σ + iT - z is σ - Re(z).
@@ -39,8 +93,32 @@ theorem schwartzBergman_closure (I : Set ℝ) :
       EqOn f 0 (Complex.re ⁻¹' I)ᶜ ∧ DifferentiableOn ℂ f (Complex.re ⁻¹' I) ∧
       ∀ (a b : ℝ), a ≤ b → Icc a b ⊆ I → ∀ N : ℕ,
         BddAbove ((fun z : ℂ ↦ ‖z ^ N * f z‖) '' (Complex.re ⁻¹' Icc a b))
-    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) :=
-  by sorry
+    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) := by
+  dsimp only
+  refine ⟨⟨eqOn_refl _ _, differentiableOn_const 0, ?_⟩, ?_, ?_⟩
+  · intro a b _ _ N
+    exact ⟨0, by rintro _ ⟨z, _, rfl⟩; simp⟩
+  · rintro f g ⟨hf, df, bf⟩ ⟨hg, dg, bg⟩
+    refine ⟨fun z hz ↦ ?_, df.add dg, ?_⟩
+    · simp [Pi.add_apply, hf hz, hg hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      obtain ⟨B, hB⟩ := bg a b hab hI N
+      refine ⟨A + B, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (f z + g z)‖ ≤ _
+      rw [mul_add]
+      exact (norm_add_le _ _).trans (add_le_add (hA ⟨z, hz, rfl⟩) (hB ⟨z, hz, rfl⟩))
+  · rintro c f ⟨hf, df, bf⟩
+    refine ⟨fun z hz ↦ ?_, df.const_mul c, ?_⟩
+    · simp [Pi.smul_apply, hf hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      refine ⟨‖c‖ * A, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (c * f z)‖ ≤ _
+      rw [mul_left_comm, norm_mul]
+      exact mul_le_mul_of_nonneg_left (hA ⟨z, hz, rfl⟩) (norm_nonneg _)
 
 /-- Paper: Definition D.3.1.3, p. 800. These are the holomorphic functions
 with rapid decay on every bounded-width strip whose real closure is contained in the interval.
@@ -164,7 +242,8 @@ def logExponentialDecaySubmodule (I : Set ℝ) : Submodule ℂ (ℝ → ℂ) :=
 profile, bundled as a Schwartz map. -/
 theorem logExponentialDecay_weight_mem_range (I : Set ℝ)
     (a : I) (f : logExponentialDecaySubmodule I) :
-    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by sorry
+    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by
+  exact (Submodule.mem_iInf _).mp f.property a
 
 /-- Paper: (D.3.2.1), p. 801. This is the linear multiplier to the space
 of Schwartz functions in logarithmic coordinates. -/
@@ -364,7 +443,16 @@ local notation "GoodCompact" => {k : Subgroup G // IsCompact (k : Set G) ∧
 /-- Paper: Definition D.3.3.3, p. 805. The modulation is trivial on each
 compact subgroup because the positive-real group has no nontrivial compact subgroup. -/
 theorem compactSubgroup_le_modulation_ker (k : Subgroup G) (hk : IsCompact (k : Set G)) :
-    k ≤ m.toMonoidHom.ker := by sorry
+    k ≤ m.toMonoidHom.ker := by
+  obtain ⟨y, hy, hmax⟩ := hk.exists_isMaxOn ⟨1, k.one_mem⟩
+    (Units.continuous_val.comp m.continuous).continuousOn
+  have bound (x : G) (hx : x ∈ k) : (m x).val ≤ 1 := by
+    apply (mul_le_iff_le_one_right (Units.zero_lt (m y))).mp
+    have h : (m (y * x)).val ≤ (m y).val := hmax (k.mul_mem hy hx)
+    simpa only [map_mul, Units.val_mul] using h
+  intro x hx
+  apply Units.ext
+  exact le_antisymm (bound x hx) (by simpa using bound x⁻¹ (k.inv_mem hx))
 
 /-- Paper: Definition D.3.3.3, p. 805. The homomorphism induced by the
 modulation on a compact-subgroup quotient is continuous. -/
