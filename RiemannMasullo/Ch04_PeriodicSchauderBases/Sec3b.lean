@@ -205,7 +205,11 @@ theorem existsUnique_compactActionAverage [CompactSpace G]
           Continuous p) ∧
         ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
           TendstoUniformly (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop)) :
-    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ 1 P := by sorry
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ 1 P := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  simpa [IsPettisIsotypicAverageOn] using
+    existsUnique_pettisIntegral_continuousFamily μ (K := univ) isCompact_univ
+      (ae_of_all _ fun _ ↦ mem_univ _) (fun g ↦ ρ g) hρ
 
 /-- Paper: Corollary 4.3.3.3(1), p. 183. The character-weighted orbit
 integrals determine a unique continuous linear operator for a sequentially
