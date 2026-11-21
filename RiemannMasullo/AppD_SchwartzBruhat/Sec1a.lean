@@ -5,6 +5,7 @@ public import Mathlib.Analysis.Distribution.SchwartzSpace.Basic
 public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.Analysis.InnerProductSpace.PiL2
 public import Mathlib.MeasureTheory.Measure.Haar.Quotient
+public import Mathlib.MeasureTheory.Group.Integral
 public import Mathlib.Algebra.MvPolynomial.Eval
 public import Mathlib.Topology.Algebra.PontryaginDual
 public import Mathlib.Topology.ContinuousMap.ZeroAtInfty
@@ -12,6 +13,7 @@ import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Separation
 import Mathlib.Topology.Algebra.IsUniformGroup.Basic
 import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
+import Mathlib.Analysis.Calculus.ContDiff.Comp
 import Mathlib.Analysis.Calculus.ContDiff.Operations
 
 /-!
@@ -443,7 +445,20 @@ the quotient integral agrees with integration using that representative. -/
 theorem lcaCosetIntegral_mk (μH : Measure H) [μH.IsHaarMeasure] (f : G → ℂ) (x : G)
     (hf : Integrable (fun h : H ↦ f (x * (h : G))) μH) :
     lcaCosetIntegral H μH f (QuotientGroup.mk x) =
-      ∫ h : H, f (x * (h : G)) ∂μH := by sorry
+      ∫ h : H, f (x * (h : G)) ∂μH := by
+  rw [lcaCosetIntegral]
+  set y : G := Quotient.out (QuotientGroup.mk x) with hydef
+  have hy : QuotientGroup.mk y = QuotientGroup.mk x := Quotient.out_eq' _
+  have hk : y⁻¹ * x ∈ H := QuotientGroup.eq.mp hy
+  let k : H := ⟨y⁻¹ * x, hk⟩
+  have hxe : x = y * (k : G) := by
+    simp [k]
+  rw [hxe]
+  have hassoc : ∀ h : H, y * (k : G) * (h : G) = y * ((k * h : H) : G) := by
+    intro h
+    rw [Subgroup.coe_mul, mul_assoc]
+  simp_rw [hassoc]
+  exact (MeasureTheory.integral_mul_left_eq_self (fun h : H ↦ f (y * (h : G))) k).symm
 
 /-- Paper: Theorem D.1.2.1, p. 747. A regular Haar measure on the quotient
 is normalized by Weil's formula on continuous compactly supported test functions. -/
@@ -591,7 +606,32 @@ theorem elementaryPartial_descends (f : ElementaryLieGroup m n r F → ℂ)
     (hf : ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) :
     ContDiff ℝ ∞ (fun xt ↦ elementaryPartial f β γ xt a b) ∧
       ∀ u v, elementaryCover u a b = elementaryCover v a b →
-        elementaryPartial f β γ u a b = elementaryPartial f β γ v a b := by sorry
+        elementaryPartial f β γ u a b = elementaryPartial f β γ v a b := by
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let p : X → ℂ := fun w ↦ f (elementaryCover w a b)
+  have hs {k : ℕ} (d : Fin k → X) :
+      ContDiff ℝ ∞ (fun w ↦ (iteratedFDeriv ℝ k p w) d) :=
+    (ContinuousMultilinearMap.apply ℝ (fun _ : Fin k ↦ X) ℂ d).contDiff.comp
+      (hf.iteratedFDeriv_right (by simp))
+  refine ⟨hs _, fun u v huv ↦ ?_⟩
+  have hre : u.1 = v.1 := congrArg (fun y : ElementaryLieGroup m n r F ↦ y.1) huv
+  have htor (i : Fin n) : (u.2 i : AddCircle (1 : ℝ)) = (v.2 i : AddCircle (1 : ℝ)) :=
+    congrArg (fun y : ElementaryLieGroup m n r F ↦ y.2.1 i) huv
+  have hshift : (fun w : X ↦ p (w + (v - u))) = p := by
+    funext w
+    apply congrArg f
+    apply Prod.ext
+    · change w.1 + (v.1 - u.1) = w.1
+      simp [hre]
+    · refine Prod.ext (funext fun i ↦ ?_) rfl
+      change ((w.2 i + (v.2 i - u.2 i) : ℝ) : AddCircle (1 : ℝ)) = (w.2 i : AddCircle (1 : ℝ))
+      simp only [AddCircle.coe_add, AddCircle.coe_sub, htor, sub_self, add_zero]
+  have hderiv (k : ℕ) : iteratedFDeriv ℝ k p u = iteratedFDeriv ℝ k p v := by
+    simpa only [hshift, add_sub_cancel] using
+      (iteratedFDeriv_comp_add_right (f := p) k (v - u) u)
+  dsimp only [elementaryPartial]
+  dsimp only [p] at hderiv
+  rw [hderiv]
 
 /-- Paper: (D.1.3.7), p. 750. These are the two monomial multi-indices and the
 two derivative multi-indices in the paper's order. -/
@@ -622,7 +662,9 @@ discrete fibre and has finite weighted bounds. -/
 theorem elementarySchwartzSubmodule_zero_mem :
     (0 : ElementaryLieGroup m n r F → ℂ) ∈
       {f | (∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) ∧
-        ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)} := by sorry
+        ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)} := by
+  refine ⟨fun _ _ ↦ contDiff_const, fun i ↦ ?_⟩
+  simp [elementarySchwartzBound, elementaryPartial]
 
 /-- Each weighted mixed-derivative bound is subadditive on fibrewise smooth functions. -/
 theorem elementarySchwartzBound_add_le {f g : ElementaryLieGroup m n r F → ℂ}

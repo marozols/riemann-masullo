@@ -86,9 +86,11 @@ def main():
         global _lock
         _lock = open(lockdir / "issues.lock", "w")
         fcntl.flock(_lock, fcntl.LOCK_EX)
-        ok, head, tip = at_main()
-        if not ok:
-            sys.exit(f"this checkout is at {head} and origin/main is at {tip}: update it, then rerun")
+        # A checkout a few merges behind is handled below. One far behind is refused.
+        run(["git", "fetch", "-q", "origin", "main"])
+        behind = int(run(["git", "rev-list", "--count", "HEAD..origin/main"]).stdout.strip() or 0)
+        if behind > 40:
+            sys.exit(f"this checkout is {behind} commits behind origin/main: update it, then rerun")
     branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
     if branch != "main":
         print(f"note: on branch {branch}, not main", file=sys.stderr)
@@ -104,10 +106,26 @@ def main():
 
     new = [k for k in current if k not in open_issues]
     stale = [k for k in open_issues if k not in current]
-    if apply and (new or stale):
-        ok, head, tip = at_main()
-        if not ok:
-            sys.exit(f"main moved to {tip} while this ran (checkout at {head}): update, then rerun")
+    # `main` moves while this runs, and the checkout may be a few merges behind. What this
+    # checkout cannot know about is left alone: a `sorry` whose issue was closed after this
+    # commit was made (it has just been proved), and an issue opened after it (its `sorry` is
+    # newer than this checkout). The next run, from a later commit, settles both.
+    head_time = run(["git", "show", "-s", "--format=%cI", "HEAD"]).stdout.strip()
+    since = run(["date", "-u", "-d", f"{head_time} - 2 minutes", "+%Y-%m-%dT%H:%M:%SZ"]).stdout.strip()
+    recent = run(["gh", "api", "--paginate",
+                  f"repos/{{owner}}/{{repo}}/issues?state=all&labels=proof&since={since}&per_page=100",
+                  "--jq", ".[] | select(.pull_request | not) | {number, state, body, created_at} | tojson"])
+    if recent.returncode:
+        sys.exit(recent.stderr)
+    recent = [json.loads(line) for line in recent.stdout.splitlines() if line.strip()]
+    just_closed = {m.group(1) for i in recent if i["state"] == "closed"
+                   for m in [MARK.search(i["body"] or "")] if m}
+    just_opened = {i["number"] for i in recent if i["created_at"] >= since}
+    skipped = [k for k in new if k in just_closed] + [k for k in stale if open_issues[k] in just_opened]
+    new = [k for k in new if k not in just_closed]
+    stale = [k for k in stale if open_issues[k] not in just_opened]
+    if skipped:
+        print(f"note: {len(skipped)} left for the next run (changed on main after {sha})")
     print(f"{len(current)} sorries at {sha}; {len(open_issues)} open proof issues; "
           f"{len(new)} to open, {len(stale)} to close")
     for key in new:
