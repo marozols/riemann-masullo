@@ -806,7 +806,30 @@ theorem sIdeleQuotientCharacter_eq_prod_restrictions (c : QuasiCharacter (SIdele
       (∀ w u, a w u = c (QuotientGroup.mk (e.symm (eArch.symm (Pi.mulSingle w u), 1)))) ∧
       (∀ v u, b v u = c (QuotientGroup.mk (e.symm (1, eS.symm (Pi.mulSingle v u))))) ∧
       ∀ g : (SAdeleRing F S)ˣ, c (QuotientGroup.mk g) =
-        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by sorry
+        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by
+  classical
+  let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F) ((v : S) → v.val.adicCompletion F)
+  let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+  let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+  let q : (SAdeleRing F S)ˣ →ₜ* SIdeleQuotient F S :=
+    ⟨QuotientGroup.mk' _, QuotientGroup.continuous_mk⟩
+  let f := (c.comp q).comp ⟨e.symm.toMonoidHom, e.symm.continuous⟩
+  let a := f.toMonoidHom.comp ((MonoidHom.inl _ _).comp eArch.symm.toMonoidHom)
+  let b := f.toMonoidHom.comp ((MonoidHom.inr _ _).comp eS.symm.toMonoidHom)
+  have ha : Continuous a := f.continuous.comp (eArch.symm.continuous.prodMk continuous_const)
+  have hb : Continuous b := f.continuous.comp (continuous_const.prodMk eS.symm.continuous)
+  let A (w : InfinitePlace F) := w.Completionˣ
+  let B (v : S) := (v.val.adicCompletion F)ˣ
+  refine ⟨fun w ↦ ⟨a.comp (MonoidHom.mulSingle A w), ha.comp (continuous_mulSingle (A := A) w)⟩,
+    fun v ↦ ⟨b.comp (MonoidHom.mulSingle B v), hb.comp (continuous_mulSingle (A := B) v)⟩,
+    fun _ _ ↦ rfl, fun _ _ ↦ rfl, fun g ↦ ?_⟩
+  change c (q g) =
+    (∏ w, a (Pi.mulSingle w (eArch (e g).1 w))) * ∏ v, b (Pi.mulSingle v (eS (e g).2 v))
+  rw [← map_prod, ← map_prod, Finset.univ_prod_mulSingle, Finset.univ_prod_mulSingle]
+  change c (q g) = f (eArch.symm (eArch (e g).1), 1) * f (1, eS.symm (eS (e g).2))
+  rw [eArch.symm_apply_apply, eS.symm_apply_apply, ← map_mul]
+  change c (q g) = c (q (e.symm (((e g).1, 1) * (1, (e g).2))))
+  simp
 
 local notation "finiteNorm" => Units.map nnNormHom.toMonoidHom
 local notation "infiniteNorm(" w ")" => (Units.map nnNormHom.toMonoidHom) ^ InfinitePlace.mult w
