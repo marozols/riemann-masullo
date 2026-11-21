@@ -464,7 +464,24 @@ theorem regularIsotypicIntegral_orthogonalProjection (ω : PontryaginDual K)
 /-- Paper: Corollary 4.3.3.4, p. 184. Distinct isotypic subspaces of Haar L²
 are orthogonal. -/
 theorem regularL2_isotypes_orthogonal (ω χ : PontryaginDual K) (h : ω ≠ χ) :
-    ∀ f ∈ actionIsotype ρ₁ ω, ∀ g ∈ actionIsotype ρ₁ χ, ⟪f, g⟫_ℂ = 0 := by sorry
+    ∀ f ∈ actionIsotype ρ₁ ω, ∀ g ∈ actionIsotype ρ₁ χ, ⟪f, g⟫_ℂ = 0 := by
+  obtain ⟨k, hk⟩ : ∃ k : K, ω k ≠ χ k := by
+    by_contra! he
+    exact h (DFunLike.ext _ _ he)
+  intro f hf g hg
+  have hi := regularL2Action_inner ν (k : G) f g
+  change ⟪ρ₁ k f, ρ₁ k g⟫_ℂ = _ at hi
+  rw [((mem_actionIsotype ..).1 hf k), ((mem_actionIsotype ..).1 hg k),
+    inner_smul_left, inner_smul_right, ← mul_assoc] at hi
+  have hne : star (ω k : ℂ) * (χ k : ℂ) ≠ 1 := by
+    intro he
+    apply hk
+    apply Subtype.coe_injective
+    apply mul_left_cancel₀ (a := star (ω k : ℂ)) (by simp)
+    exact (show star (ω k : ℂ) * (ω k : ℂ) = 1 by simp [← Circle.coe_inv_eq_conj]).trans he.symm
+  change star (ω k : ℂ) * (χ k : ℂ) * ⟪f, g⟫_ℂ = ⟪f, g⟫_ℂ at hi
+  exact (mul_eq_zero.mp (show (star (ω k : ℂ) * (χ k : ℂ) - 1) * ⟪f, g⟫_ℂ = 0 by
+    rw [sub_mul, hi, one_mul, sub_self])).resolve_left (sub_ne_zero.mpr hne)
 
 end HilbertProjectors
 
