@@ -7,6 +7,7 @@ public import Mathlib.NumberTheory.NumberField.HeckeLFunction
 public import Mathlib.Topology.Algebra.PontryaginDual
 
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
+import RiemannMasullo.AppA_AlgebraicNT.Sec2
 
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
@@ -709,7 +710,27 @@ theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) :=
 as used to parametrize the components in (3.1.2.5). -/
 theorem sIdeleQuotientNorm_exists_section :
     ∃ σ : ℝ≥0ˣ →ₜ* SIdeleQuotient F S, RightInverse σ (sIdeleQuotientNorm F S) := by
-  sorry
+  obtain ⟨w⟩ := (inferInstance : Nonempty (InfinitePlace F))
+  let s := singlePlaceIdeleNormSection F w
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := (continuous_fst.prodMk (continuous_pi fun v : S ↦
+    (RestrictedProduct.continuous_eval v.val).comp continuous_snd)).units_map _
+  let q := QuotientGroup.mk' projectedDiagonal
+  refine ⟨⟨q.comp (p.comp s), QuotientGroup.continuous_mk.comp
+    (hp.comp (singlePlaceIdeleNormSection_continuous F w))⟩, fun t ↦ ?_⟩
+  -- The chosen section has every finite coordinate equal to one.
+  let A := integralAdelesOutside F S
+  have hmem (u : ℝ≥0ˣ) : (s u).val ∈ A := by
+    simp only [A, integralAdelesOutside, Subring.mem_iInf]
+    intro v _
+    exact (v.adicCompletionIntegers F).one_mem
+  have ht : s t ∈ A.toSubmonoid.units :=
+    ⟨hmem t, by
+      change ((s t)⁻¹).val ∈ A
+      rw [← map_inv]
+      exact hmem t⁻¹⟩
+  let g := A.toSubmonoid.unitsEquivUnitsType ⟨s t, ht⟩
+  exact ((sIdeleNorm_spec F S).1 g).symm.trans (singlePlaceIdeleNormSection_rightInverse F w t)
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
