@@ -690,7 +690,18 @@ quotient with the smooth circle Schwartz space.
 Deviation: The source is the quotient by the kernel of the periodization. -/
 theorem cyclicPeriodization_quotient_equiv (γ : ℝ) (hγ : 1 < γ) :
     let P := cyclicPeriodizationCLM γ hγ
-    ∃ e : (E ⧸ P.ker) ≃L[ℂ] S, ∀ f : E, e (P.ker.mkQL f) = P f := by sorry
+    ∃ e : (E ⧸ P.ker) ≃L[ℂ] S, ∀ f : E, e (P.ker.mkQL f) = P f := by
+  let P := cyclicPeriodizationCLM γ hγ
+  let e := P.toLinearMap.quotKerEquivOfSurjective (cyclicPeriodization_surjective γ hγ)
+  have he (f : E) : e (P.ker.mkQL f) = P f := P.toLinearMap.quotKerEquivOfSurjective_apply_mk _ f
+  have hq : IsQuotientMap P := (cyclicPeriodization_isOpenMap γ hγ).isQuotientMap
+    P.continuous (cyclicPeriodization_surjective γ hγ)
+  refine ⟨{ e with continuous_toFun := P.ker.isQuotientMap_mkQL.continuous_iff.mpr ?_,
+                   continuous_invFun := hq.continuous_iff.mpr ?_ }, he⟩
+  · exact P.continuous.congr fun f ↦ (he f).symm
+  · exact P.ker.mkQL.continuous.congr fun f ↦ by
+      change P.ker.mkQL f = e.symm (P f)
+      rw [← he, e.symm_apply_apply]
 
 /-- Paper: Remark 4.2.1.8, p. 170. The exponential system is regular in
 the smooth topology. -/
