@@ -713,7 +713,19 @@ theorem sIdeleQuotientNorm_exists_section :
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
-  sorry
+  let n := ideleClassNorm F
+  let : CompactSpace n.ker := (ideleClassGroup_finiteness F).2.1
+  obtain ⟨_, _, _, _, _, _, _, _, hn, _, ⟨s, hs, hsn⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  let f (p : n.ker × ℝ≥0ˣ) := p.1.val * s p.2
+  have hf : Continuous f := (continuous_subtype_val.comp continuous_fst).mul (hs.comp continuous_snd)
+  have hcomp : n ∘ f = Prod.snd := by
+    funext p
+    change n (p.1.val * s p.2) = p.2
+    rw [map_mul, MonoidHom.mem_ker.mp p.1.property, hsn, one_mul]
+  apply isProperMap_of_comp_of_surj hf hn (hcomp ▸ isProperMap_snd_of_compactSpace)
+  intro g
+  refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
+  exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
 
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
