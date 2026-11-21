@@ -1055,7 +1055,10 @@ theorem asymptoticCauchy_eq_iteratedDeriv_of_selectedHeights (hz : z.re ∈ Ioo 
 conditions, the difference of the normalized integrals vanishes outside. -/
 theorem asymptoticCauchy_eq_zero_of_selectedHeights (hz : z.re ∉ Icc (a + ε) (b - ε)) :
     normalizedCauchyIntegral Φ N (b - ε) z - normalizedCauchyIntegral Φ N (a + ε) z =
-      0 := by sorry
+      0 := by
+  exact asymptoticCauchy_eq_zero
+    (uniformlySchwartzOnStrip_of_selectedHeights ha₁ ha₂ hab hb₁ hb₂ hΦ hLeft hRight T hMono hInf hHeight)
+    ε hε hWidth N z hz
 
 end CauchySelectedHeights
 
