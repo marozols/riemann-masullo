@@ -255,7 +255,15 @@ local notation "finAt(" v ")" => fun x ↦
 place and taking its class is continuous and multiplicative. -/
 theorem sLocalInfiniteInsertion_properties (w : InfinitePlace F) :
     let i : w.Completionˣ → Jₛ := archAt(w)
-    i 1 = 1 ∧ (∀ x y, i (x * y) = i x * i y) ∧ Continuous i := by sorry
+    i 1 = 1 ∧ (∀ x y, i (x * y) = i x * i y) ∧ Continuous i := by
+  classical
+  let A (v : InfinitePlace F) := v.Completionˣ
+  let q : Iₛ →* Jₛ := QuotientGroup.mk' _
+  let i := (q.comp (eProd).symm.toMonoidHom).comp
+    ((MonoidHom.inl _ _).comp ((eArch).symm.toMonoidHom.comp (MonoidHom.mulSingle A w)))
+  refine ⟨i.map_one, i.map_mul, ?_⟩
+  exact QuotientGroup.continuous_mk.comp ((eProd).symm.continuous.comp
+    (((eArch).symm.continuous.comp (continuous_mulSingle (A := A) w)).prodMk continuous_const))
 
 /-- Paper: Equation (3.3.1.3), p. 129. Inserting a unit at an archimedean
 place restricts an S-local quasi-character to that place. -/
