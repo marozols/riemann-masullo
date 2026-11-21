@@ -444,7 +444,13 @@ theorem one_mem_ideleNormBand (a b : ℝ) :
 
 /-- Paper: §3.2.2, p. 124. The surjective idele class norm takes values
 other than one, so its abscissa is defined. -/
-theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by sorry
+theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  let t := Units.mk0 (2 : ℝ≥0) (by norm_num)
+  obtain ⟨g, hg⟩ := hsurj t
+  refine ⟨g, fun h ↦ ?_⟩
+  have ht := congrArg Units.val (hg.symm.trans h)
+  norm_num [t] at ht
 
 local notation "rightHalf" =>
   (relativeRightHalfPlane (ideleClassNorm F) (isProperMap_ideleClassNorm F)
