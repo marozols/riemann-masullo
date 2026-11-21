@@ -267,7 +267,16 @@ def sLocalInfiniteRestriction (w : InfinitePlace F) (c : Xₛ) : QuasiCharacter 
 place and taking its class is continuous and multiplicative. -/
 theorem sLocalFiniteInsertion_properties (v : S) :
     let i : (v.val.adicCompletion F)ˣ → Jₛ := finAt(v)
-    i 1 = 1 ∧ (∀ x y, i (x * y) = i x * i y) ∧ Continuous i := by sorry
+    i 1 = 1 ∧ (∀ x y, i (x * y) = i x * i y) ∧ Continuous i := by
+  classical
+  let : DecidableEq S := Classical.decEq _
+  let B (w : S) := (w.val.adicCompletion F)ˣ
+  let q : Iₛ →* Jₛ := QuotientGroup.mk' _
+  let i := (q.comp (eProd).symm.toMonoidHom).comp
+    ((MonoidHom.inr _ _).comp ((eFin).symm.toMonoidHom.comp (MonoidHom.mulSingle B v)))
+  refine ⟨i.map_one, i.map_mul, ?_⟩
+  exact QuotientGroup.continuous_mk.comp ((eProd).symm.continuous.comp
+    (continuous_const.prodMk ((eFin).symm.continuous.comp (continuous_mulSingle (A := B) v))))
 
 /-- Paper: Equation (3.3.1.3), p. 129. Inserting a local unit at a finite
 place restricts an S-local quasi-character to that place. -/
