@@ -27,9 +27,11 @@ theorem norm_uniformizer_adicCompletion (v : HeightOneSpectrum R) (π : v.adicCo
   rw [FinitePlace.norm_def, hval, WithZeroMulInt.toNNReal_neg_apply _ (by simp)]
   simp
 
-/-- The residue field of the completion is a quotient of `R / v`. -/
-private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
-    Finite (ResidueField (v.adicCompletionIntegers K)) := by
+omit [Ring.HasFiniteQuotients R] in
+/-- The residue field of a completion at a height-one prime is isomorphic to the quotient
+of the base ring by that prime. -/
+theorem nonempty_residueFieldEquiv_adicCompletion (v : HeightOneSpectrum R) :
+    Nonempty ((R ⧸ v.asIdeal) ≃+* ResidueField (v.adicCompletionIntegers K)) := by
   let O := v.adicCompletionIntegers K
   let f := (residue O).comp (algebraMap R O)
   let q : R ⧸ v.asIdeal →+* ResidueField O := Ideal.Quotient.lift v.asIdeal f (by
@@ -39,8 +41,8 @@ private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
     change Valued.v (algebraMap R (v.adicCompletion K) r) < (1 : ℤᵐ⁰)
     rw [HeightOneSpectrum.valuedAdicCompletion_eq_valuation]
     exact (v.valuation_lt_one_iff_mem r).2 hr)
-  have := Ring.HasFiniteQuotients.finiteQuotient v.ne_bot
-  apply Finite.of_surjective q
+  let := Ideal.Quotient.field v.asIdeal
+  refine ⟨RingEquiv.ofBijective q ⟨q.injective, ?_⟩⟩
   intro y
   obtain ⟨x, rfl⟩ := residue_surjective y
   -- Approximate the representative first by an element of `K`, then by one of `R`.
@@ -68,6 +70,20 @@ private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
   apply (Valuation.mem_maximalIdeal_iff _ ν).2
   change ν (algebraMap R (v.adicCompletion K) r - x) < 1
   simpa only [sub_add_sub_cancel] using ν.map_add_lt hr' ha
+
+omit [Ring.HasFiniteQuotients R] in
+/-- The cardinality of the completed residue field is the absolute norm of the prime. -/
+theorem card_residueField_adicCompletion (v : HeightOneSpectrum R) :
+    Nat.card (ResidueField (v.adicCompletionIntegers K)) = v.asIdeal.absNorm := by
+  obtain ⟨e⟩ := nonempty_residueFieldEquiv_adicCompletion (K := K) v
+  exact (Nat.card_congr e.toEquiv).symm.trans (Ideal.absNorm_of_ne_bot v.ne_bot).symm
+
+/-- The residue field of the completion at a height-one prime is finite. -/
+private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
+    Finite (ResidueField (v.adicCompletionIntegers K)) := by
+  obtain ⟨e⟩ := nonempty_residueFieldEquiv_adicCompletion (K := K) v
+  have := Ring.HasFiniteQuotients.finiteQuotient v.ne_bot
+  exact Finite.of_equiv _ e.toEquiv
 
 open Valued.integer in
 /-- Closed balls in the completion at a height-one prime are compact when the base
