@@ -451,7 +451,32 @@ def WeaklyContDiffOn (k : Type*) [RCLike k] [NormedAlgebra k ℂ]
 equivalent to existence of a unique weak differential. -/
 theorem weaklyDifferentiableOn_iff_existsUnique {Ω : Set V} (hΩ : IsOpen Ω) (f : V → E) :
     WeaklyDifferentiableOn k f Ω ↔
-      ∃! D : Ω × V → PettisWeakCompletion E, HasWeakDifferentialOn k f D := by sorry
+      ∃! D : Ω × V → PettisWeakCompletion E, HasWeakDifferentialOn k f D := by
+  constructor
+  · intro hf
+    let D (p : Ω × V) : Module.Dual ℂ (StrongDual ℂ E) :=
+      { toFun := fun φ ↦ fderivWithin k (φ ∘ f) Ω p.1 p.2
+        map_add' := fun φ ψ ↦ by
+          change fderivWithin k ((φ ∘ f) + (ψ ∘ f)) Ω p.1 p.2 = _
+          rw [fderivWithin_add (hΩ.uniqueDiffOn p.1 p.1.property)
+            (hf φ p.1 p.1.property) (hf ψ p.1 p.1.property)]
+          rfl
+        map_smul' := fun c φ ↦ by
+          change fderivWithin k (c • (φ ∘ f)) Ω p.1 p.2 = _
+          rw [fderivWithin_const_smul (hΩ.uniqueDiffOn p.1 p.1.property)
+            (hf φ p.1 p.1.property)]
+          rfl }
+    refine ⟨D, fun φ x ↦ ⟨_, (hf φ x x.property).hasFDerivWithinAt, fun _ ↦ rfl⟩, ?_⟩
+    intro D' hD'
+    funext ⟨x, v⟩
+    apply LinearMap.ext
+    intro φ
+    obtain ⟨L, hL, heval⟩ := hD' φ x
+    rw [heval, ← hL.fderivWithin (hΩ.uniqueDiffOn x x.property)]
+    rfl
+  · rintro ⟨D, hD, _⟩ φ x hx
+    obtain ⟨L, hL, _⟩ := hD φ ⟨x, hx⟩
+    exact hL.differentiableWithinAt
 
 /-- Paper: Definition C.5.1.6, p. 723. Weak continuous differentiability on an open
 set means continuous differentiability of each scalar evaluation. -/
