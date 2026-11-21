@@ -1049,7 +1049,10 @@ include hε hWidth
 along the selected horizontal lines gives the Cauchy derivative formula inside. -/
 theorem asymptoticCauchy_eq_iteratedDeriv_of_selectedHeights (hz : z.re ∈ Ioo (a + ε) (b - ε)) :
     normalizedCauchyIntegral Φ N (b - ε) z - normalizedCauchyIntegral Φ N (a + ε) z =
-      iteratedDeriv N Φ z := by sorry
+      iteratedDeriv N Φ z := by
+  exact asymptoticCauchy_eq_iteratedDeriv
+    (uniformlySchwartzOnStrip_of_selectedHeights ha₁ ha₂ hab hb₁ hb₂ hΦ hLeft hRight T hMono hInf hHeight)
+    ε hε hWidth N z hz
 
 /-- Paper: Corollary B.2.2.6, p. 603. Under the same edge and height
 conditions, the difference of the normalized integrals vanishes outside. -/
