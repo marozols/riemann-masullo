@@ -518,7 +518,41 @@ theorem cyclicFourierCoeff_interval (γ : ℝ) (hγ : 1 < γ) (f : S) (m : ℤ) 
     cyclicFourierCoeff m f =
       (Real.log γ : ℂ)⁻¹ * ∫ t in (1 : ℝ)..γ,
         f (point ((Real.log t / Real.log γ : ℝ) : T)) *
-          Complex.exp (-phase[γ, m] * (Real.log t : ℂ)) / (t : ℂ) := by sorry
+          Complex.exp (-phase[γ, m] * (Real.log t : ℂ)) / (t : ℂ) := by
+  let L := Real.log γ
+  have hL : L ≠ 0 := (Real.log_pos hγ).ne'
+  let u (x : ℝ) := Real.log x / L
+  let g (y : ℝ) := (fourier (-m) (↑y : T)) * circleRestriction f (↑y : T)
+  have hg : Continuous g := ((fourier (-m)).continuous.comp continuous_quot_mk).mul (circleRestriction_smooth f).continuous
+  have hpos (x : ℝ) (hx : x ∈ uIcc 1 γ) : 0 < x := by
+    rw [uIcc_of_le hγ.le] at hx
+    exact zero_lt_one.trans_le hx.1
+  have hd (x : ℝ) (hx : x ∈ uIcc 1 γ) : HasDerivAt u (x⁻¹ / L) x := (Real.hasDerivAt_log (hpos x hx).ne').div_const L
+  have hc : ContinuousOn (fun x : ℝ ↦ x⁻¹ / L) (uIcc 1 γ) :=
+    (continuousOn_id.inv₀ (fun x hx ↦ (hpos x hx).ne')).div_const L
+  have hsub := intervalIntegral.integral_deriv_smul_comp' hd hc hg.continuousOn
+  have h₁ : u 1 = 0 := by simp [u]
+  have hγ' : u γ = 1 := div_self hL
+  rw [h₁, hγ'] at hsub
+  change fourierCoeff (circleRestriction f) m = _
+  rw [fourierCoeff_eq_intervalIntegral _ _ 0]
+  simp only [div_one, zero_add, one_smul]
+  change (∫ y in (0 : ℝ)..1, g y) = _
+  rw [← hsub, ← intervalIntegral.integral_const_mul]
+  apply intervalIntegral.integral_congr
+  intro x hx
+  have hfreq : fourier (-m) (↑(u x) : T) = Complex.exp (-phase[γ, m] * (Real.log x : ℂ)) := by
+    rw [fourier_coe_apply]
+    congr 1
+    push_cast
+    dsimp [u, L]
+    push_cast
+    ring
+  change (x⁻¹ / L) • (fourier (-m) (↑(u x) : T) * f (point (↑(u x) : T))) = _
+  rw [hfreq, Complex.real_smul]
+  push_cast
+  dsimp only [L, u]
+  ring
 
 -- TODO(paper-gap): The estimate (4.2.1.7) uses m^k for negative frequencies.
 -- For f = e₋₁ and k = 1 the printed right-hand side is negative.
