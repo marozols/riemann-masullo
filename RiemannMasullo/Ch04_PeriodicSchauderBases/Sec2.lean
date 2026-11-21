@@ -487,7 +487,8 @@ theorem compactLogProfile_mem (K : Compacts ℝ) (f : D[K]) :
 /-- Paper: §4.2.2, p. 170. Including profiles supported in a fixed compact set
 into the exponential decay space is continuous for the uniform derivative topology. -/
 theorem compactLogProfile_continuous (K : Compacts ℝ) :
-    Continuous (Y := E) (fun f : D[K] ↦ ⟨(f : ℝ → ℂ), compactLogProfile_mem K f⟩) := by sorry
+    Continuous (Y := E) (fun f : D[K] ↦ ⟨(f : ℝ → ℂ), compactLogProfile_mem K f⟩) := by
+  exact (supportedToLogDecayCLM univ univ_nonempty K).continuous
 
 /-- Paper: §4.2.2, p. 170. The inclusion of the fixed-support test space
 takes the same function as an exponentially decaying profile.
