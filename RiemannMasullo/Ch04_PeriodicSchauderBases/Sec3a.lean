@@ -6,6 +6,9 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
+import RiemannMasullo.ForMathlib.MeasureTheory.Integral.Prod
+
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
 @[expose] public noncomputable section
@@ -148,6 +151,58 @@ variable (τ : ℝ≥0ˣ →ₜ* G) (hτ : RightInverse τ m)
 
 include hτ
 
+omit hm hν hν₁ hτ in
+/-- Paper: Definition A.3.2.1, p. 559. The exponential pushforward of Lebesgue measure
+is a multiplicative Haar measure on the positive reals. -/
+theorem positiveRealHaar_isHaarMeasure : positiveRealHaar.IsHaarMeasure := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  let μ : Measure (Multiplicative ℝ) := (volume : Measure ℝ)
+  have : μ.IsHaarMeasure := by
+    have : IsFiniteMeasureOnCompacts μ :=
+      inferInstanceAs (IsFiniteMeasureOnCompacts (volume : Measure ℝ))
+    have : Measure.IsOpenPosMeasure μ :=
+      inferInstanceAs (Measure.IsOpenPosMeasure (volume : Measure ℝ))
+    have : μ.IsMulLeftInvariant :=
+      ⟨fun t ↦ (measurePreserving_add_left (volume : Measure ℝ) t.toAdd).map_eq⟩
+    constructor
+  let h := Real.expOrderIso.toHomeomorph.trans (Nonneg.unitsHomeomorphPos ℝ).symm
+  let e : Multiplicative ℝ ≃ₜ* ℝ≥0ˣ :=
+    { h with
+      map_mul' := fun x y ↦ by
+        apply Units.ext
+        apply NNReal.eq
+        change Real.exp (x.toAdd + y.toAdd) = Real.exp x.toAdd * Real.exp y.toAdd
+        exact Real.exp_add _ _ }
+  have he (x : ℝ) :
+      e (Multiplicative.ofAdd x) = Units.mk0 (Real.exp x).toNNReal (by positivity) := by
+    apply Units.ext
+    apply NNReal.eq
+    exact (Real.coe_toNNReal _ (Real.exp_pos x).le).symm
+  convert e.isHaarMeasure_map μ using 1
+  unfold positiveRealHaar
+  congr 1
+  funext x
+  exact (he x).symm
+
+omit hν hν₁ [MeasurableSpace G] [BorelSpace G] in
+/-- Use the section as a coordinate and invert the kernel variable to match the fiber integral. -/
+private theorem exists_regularIsotypic_sectionEquiv :
+    ∃ j : (K × ℝ≥0ˣ) ≃ₜ* G, ∀ p, j p = (p.1 : G)⁻¹ * τ p.2 := by
+  let r : ℝ≥0ˣ ≃ₜ m.toMonoidHom.range :=
+    { toFun := fun t ↦ ⟨t, τ t, hτ t⟩
+      invFun := Subtype.val
+      left_inv := fun _ ↦ rfl
+      right_inv := fun _ ↦ rfl
+      continuous_toFun := continuous_id.subtype_mk _
+      continuous_invFun := continuous_subtype_val }
+  let h : (K × ℝ≥0ˣ) ≃ₜ* (K × m.toMonoidHom.range) :=
+    { (Homeomorph.inv K).prodCongr r with
+      map_mul' := fun a b ↦ Prod.ext (by simp [mul_comm]) rfl }
+  let i : m.toMonoidHom.range →ₜ* ℝ≥0ˣ := ⟨m.toMonoidHom.range.subtype, continuous_subtype_val⟩
+  let τr := τ.comp i
+  obtain ⟨e, he⟩ := hm.exists_prod_equiv τr (fun t ↦ hτ t)
+  exact ⟨h.trans e, fun p ↦ he p.1⁻¹ (r p.2)⟩
+
 /-- Paper: (4.3.2.4), p. 178. Integration on the fibers parametrized by a
 section is defined almost everywhere and gives an L² function for `dt/t`.
 Deviation: We use fiber integration of a representative to define the
@@ -157,7 +212,31 @@ theorem regularIsotypicComponent_memLp (ω : PontryaginDual K) (f : RegularL2 ν
     (∀ᵐ t ∂positiveRealHaar,
       Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * τ t)) ν₁) ∧
     MemLp (fun t ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * τ t) ∂ν₁)
-      2 positiveRealHaar := by sorry
+      2 positiveRealHaar := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have : positiveRealHaar.IsHaarMeasure := positiveRealHaar_isHaarMeasure
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let logHomeo := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.toHomeomorph.symm
+  have : LocallyCompactSpace ℝ≥0ˣ := logHomeo.isOpenEmbedding.locallyCompactSpace
+  obtain ⟨j, hj⟩ := exists_regularIsotypic_sectionEquiv m hm τ hτ
+  let η := ν₁.prod positiveRealHaar
+  have : (η.map j).IsHaarMeasure := j.isHaarMeasure_map η
+  -- Both Haar measures on G differ by a finite positive scalar.
+  have hmem : MemLp (f : G → ℂ) 2 (η.map j) := by
+    rw [Measure.isMulLeftInvariant_eq_smul (η.map j) ν]
+    exact (Lp.memLp f).smul_measure_nnreal
+  have hcomp := hmem.comp_of_map j.continuous.measurable.aemeasurable
+  have hweighted : MemLp (fun p : K × ℝ≥0ˣ ↦ star (ω p.1 : ℂ) * f (j p)) 2 η := by
+    apply hcomp.of_le
+    · have hc : Continuous (fun p : K × ℝ≥0ˣ ↦ star (ω p.1 : ℂ)) := by fun_prop
+      exact hc.aestronglyMeasurable.mul hcomp.aestronglyMeasurable
+    · exact ae_of_all _ fun p ↦ by simp
+  constructor
+  · simpa only [hj] using
+      (memLp_two_prod_left_ae hweighted).mono fun t ht ↦ ht.integrable (by norm_num)
+  · simpa only [hj] using memLp_two_integral_prod_left hweighted
 
 /-- Paper: (4.3.2.4), p. 178. The section gives the `dt/t` L² coordinate
 of the unnormalized character average.
