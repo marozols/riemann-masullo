@@ -8,6 +8,7 @@ import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
 import Mathlib.Analysis.SpecialFunctions.ExpDeriv
+public import RiemannMasullo.ForMathlib.Analysis.Distribution.ContDiffMapSupportedIn
 
 /-!
 # Schwartz–Bergman spaces and Schwartz–Bruhat functions with exponential decay
@@ -401,6 +402,31 @@ local notation "E" => PositiveRealExponentialDecay I
 local notation "D" => StrongDual ℂ E
 
 open scoped BoundedContinuousFunction
+
+open scoped Distributions in
+/-- A smooth test function supported in a fixed compact set includes continuously into the
+space of profiles with Schwartz decay under every prescribed exponential weight. -/
+def supportedToLogDecayCLM (I : Set ℝ) (hI : I.Nonempty) (K : Compacts ℝ) :
+    𝓓_{K}(ℝ, ℂ) →L[ℂ] PositiveRealExponentialDecay I := by
+  let J : 𝓓_{K}(ℝ, ℂ) →ₗ[ℂ] PositiveRealExponentialDecay I :=
+    { toFun f := ⟨(f : ℝ → ℂ), mem_logExponentialDecaySubmodule_of_hasCompactSupport I
+        f.hasCompactSupport f.contDiff⟩
+      map_add' _ _ := rfl
+      map_smul' _ _ := rfl }
+  refine ⟨J, (positiveRealExponentialDecay_isEmbedding I hI).isInducing.continuous_iff.mpr ?_⟩
+  apply continuous_pi
+  intro a
+  let w (x : ℝ) : ℂ := Real.exp ((a : ℝ) * x)
+  have hw : ContDiff ℝ ∞ w :=
+    Complex.ofRealCLM.contDiff.comp ((contDiff_const.mul contDiff_id).exp)
+  let M : 𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓_{K}(ℝ, ℂ) :=
+    ContDiffMapSupportedIn.bilinLeftCLM (ContinuousLinearMap.mul ℂ ℂ) hw
+  convert ((supportedToSchwartzCLM ℂ K).comp M).continuous using 1
+  funext f
+  ext x
+  change logExponentialDecayTwist I a (show logExponentialDecaySubmodule I from J f) x = f x * w x
+  rw [logExponentialDecayTwist_apply I a _ x]
+  exact mul_comm _ _
 
 /-- Paper: Lemma D.3.2.3(1), p. 802. The image in the product is closed because the
 compatibility equations between weighted profiles are closed pointwise conditions. -/
