@@ -504,13 +504,53 @@ theorem cyclicExponential_absoluteBasis :
     have h := Equiv.intEquivNat.symm.hasSum_iff.mpr (hasSum_circleFourier f)
     exact h.mono_left (SummationFilter.conditional ℕ).le_atTop
 
+/-- A distribution's Fourier series converges uniformly on every bounded set of smooth
+functions, by the summable envelope for the primal Fourier terms. -/
+private theorem hasSum_circleFourier_dual (l : StrongDual ℂ S) :
+    HasSum (fun m : ℤ ↦ l (cyclicExponential m) • cyclicFourierCoeff m) l := by
+  let q := (normSeminorm ℂ ℂ).comp l.toLinearMap
+  have hq : Continuous q := continuous_norm.comp l.continuous
+  obtain ⟨Q, hQ, h⟩ := exists_circleFourier_term_bound q hq
+  apply (UniformConvergenceCLM.tendsto_iff_tendstoUniformlyOn (RingHom.id ℂ) ℂ {B : Set S | IsVonNBounded ℂ B}).2
+  intro B hB
+  obtain ⟨R, _, hR⟩ := (PolynormableSpace.withSeminorms ℂ S).isVonNBounded_iff_seminorm_bounded.mp hB ⟨Q, hQ⟩
+  let t (m : ℤ) (f : S) := l (cyclicExponential m) * cyclicFourierCoeff m f
+  have hsum (f : S) : HasSum (fun m ↦ t m f) (l f) := by
+    refine ((hasSum_circleFourier f).map l l.continuous).congr_fun fun m ↦ ?_
+    simp only [t, Function.comp_apply, map_smul, smul_eq_mul, mul_comm]
+  have hb (m : ℤ) (f : S) (hf : f ∈ B) : ‖t m f‖ ≤ unitCircleFourierWeight m * R := by
+    have ht : q (cyclicFourierCoeff m f • cyclicExponential m) = ‖t m f‖ := by
+      change ‖l (cyclicFourierCoeff m f • cyclicExponential m)‖ = _
+      rw [map_smul, smul_eq_mul, mul_comm]
+    rw [← ht]
+    exact (h f m).trans (mul_le_mul_of_nonneg_left (hR f hf).le (unitCircleFourierWeight_nonneg m))
+  have hu := tendstoUniformlyOn_tsum (summable_unitCircleFourierWeight.mul_right R) hb
+  convert hu using 1
+  · funext s f
+    change (∑ m ∈ s, (l (cyclicExponential m) • cyclicFourierCoeff m : StrongDual ℂ S)) f = _
+    induction s using Finset.induction_on with
+    | empty => rfl
+    | insert m s hm ih =>
+      rw [Finset.sum_insert hm, Finset.sum_insert hm]
+      change l (cyclicExponential m) * cyclicFourierCoeff m f + _ = t m f + _
+      exact congrArg (t m f + ·) ih
+  · exact funext fun f ↦ (hsum f).tsum_eq.symm
+  · rfl
+
 /-- Paper: Lemma 4.2.1.2(2), p. 162. Fourier coefficients are an unconditional
 Schauder basis of the strong dual, with coordinates given by evaluation on the monomials.
 Deviation: Frequencies are enumerated by the natural numbers. -/
 theorem cyclicFourierCoeff_unconditionalBasis :
     let ev := fun n : ℕ ↦ ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (cyclicExponential (freq n))
     IsSchauderBasis (cyclicFourierCoeff ∘ freq) ev ∧
-      SchauderBasis.IsUnconditional (cyclicFourierCoeff ∘ freq) ev := by sorry
+      SchauderBasis.IsUnconditional (cyclicFourierCoeff ∘ freq) ev := by
+  let e := Equiv.intEquivNat.symm
+  have hs (l : StrongDual ℂ S) := e.hasSum_iff.mpr (hasSum_circleFourier_dual l)
+  refine ⟨⟨?_, fun l ↦ (hs l).mono_left (SummationFilter.conditional ℕ).le_atTop⟩, hs⟩
+  intro m n
+  change cyclicFourierCoeff (e n) (cyclicExponential (e m)) = _
+  rw [cyclicFourierCoeff_exponential]
+  simp [eq_comm]
 
 /-- Paper: Lemma 4.2.1.2(3), p. 162. The quotient Fourier coefficient is the
 normalized integral of the lift over the multiplicative fundamental interval. -/
