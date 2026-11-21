@@ -4,10 +4,13 @@ public import RiemannMasullo.AppA_AlgebraicNT.Sec1
 public import Mathlib.Analysis.SpecialFunctions.Pow.Complex
 public import Mathlib.Geometry.Manifold.LocalDiffeomorph
 public import Mathlib.NumberTheory.NumberField.HeckeLFunction
+public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 
+import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
@@ -656,6 +659,13 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
       (∀ c, e c = dualQuasiCharacter m hm c) ∧ ∀ c, e.symm c = dualQuasiCharacter m hm c := by
   sorry
 
+/-- Paper: Following Equation (3.1.1.4), p. 119. Duality exchanges the components
+indexed by a norm-one character and its complex conjugate. -/
+theorem dualQuasiCharacter_image_component [IsTopologicalGroup G] (hm : IsProperMap m)
+    (hne : ∃ g, m g ≠ 1) (χ : PontryaginDual m.ker) :
+    dualQuasiCharacter m hm.continuous '' componentVerticalStrip m hm hne χ Set.univ =
+      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by sorry
+
 end Generalities
 
 section Ideles
@@ -782,6 +792,22 @@ theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
     b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
   sorry
 
+open Classical in
+/-- Paper: §3.1.2, p. 120. A quasi-character of J_{F,S} is the product of its local
+restrictions at the infinite places and the finite places in S. Each restriction
+evaluates the character on the S-idele with the given coordinate and ones elsewhere. -/
+theorem sIdeleQuotientCharacter_eq_prod_restrictions (c : QuasiCharacter (SIdeleQuotient F S)) :
+    let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+      ((v : S) → v.val.adicCompletion F)
+    let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+    let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+    ∃ (a : (w : InfinitePlace F) → QuasiCharacter w.Completionˣ)
+        (b : (v : S) → QuasiCharacter (v.val.adicCompletion F)ˣ),
+      (∀ w u, a w u = c (QuotientGroup.mk (e.symm (eArch.symm (Pi.mulSingle w u), 1)))) ∧
+      (∀ v u, b v u = c (QuotientGroup.mk (e.symm (1, eS.symm (Pi.mulSingle v u))))) ∧
+      ∀ g : (SAdeleRing F S)ˣ, c (QuotientGroup.mk g) =
+        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by sorry
+
 local notation "finiteNorm" => Units.map nnNormHom.toMonoidHom
 local notation "infiniteNorm(" w ")" => (Units.map nnNormHom.toMonoidHom) ^ InfinitePlace.mult w
 
@@ -824,7 +850,19 @@ theorem infinitePlace_quasiCharacterParametrization (w : InfinitePlace F)
 gives complex exponent charts. Its multiplicity is one at real places and two at complex places. -/
 theorem infinitePlace_hasNormTwistCharts (w : InfinitePlace F) :
     HasNormTwistCharts (infiniteNorm(w) : w.Completionˣ →* ℝ≥0ˣ) := by
-  sorry
+  have htwo : 1 < ‖(2 : w.Completion)‖ := by
+    rw [← (InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) (2 : w.Completion), map_ofNat]
+    norm_num
+  let : NontriviallyNormedField w.Completion := ⟨⟨2, htwo⟩⟩
+  let : ProperSpace w.Completion :=
+    .of_nontriviallyNormedField_of_weaklyLocallyCompactSpace w.Completion
+  apply hasNormTwistCharts_of_proper _ (isProperMap_units_nnNorm_pow w.mult w.mult_ne_zero)
+  let u := Units.mk0 (2 : w.Completion) (by rintro h; rw [h, norm_zero] at htwo; linarith)
+  refine ⟨u, fun he ↦ ?_⟩
+  have hv := congrArg (fun y : ℝ≥0ˣ ↦ ((y : ℝ≥0) : ℝ)) he
+  change ‖(2 : w.Completion)‖ ^ w.mult = 1 at hv
+  exact (one_lt_pow₀ htwo w.mult_ne_zero).ne' hv
 
 /-- Paper: §3.1.2, p. 120. Equip the Hecke characters with the norm-twist atlas. -/
 scoped instance heckeCharacterChartedSpace : ChartedSpace ℂ (HeckeCharacter (𝓞 F) F) :=

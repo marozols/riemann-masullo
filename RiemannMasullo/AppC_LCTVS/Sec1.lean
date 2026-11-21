@@ -15,10 +15,12 @@ import Mathlib.Analysis.Normed.Module.DoubleDual
 import Mathlib.Analysis.Normed.Module.FiniteDimension
 import Mathlib.Analysis.Normed.Operator.BanachSteinhaus
 import Mathlib.Topology.Algebra.Module.Star
+import Mathlib.Topology.Baire.CompleteMetrizable
 import Mathlib.Topology.ContinuousMap.ZeroAtInfty
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.WithSeminorms
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.WeakDual
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
 
 /-!
 # Locally convex topological vector spaces
@@ -985,7 +987,59 @@ theorem frechet_factorization [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [
     (hX : ∀ k, IsFrechetTVS (X k)) (i : ∀ k, X k →L[ℂ] E) (hi : ∀ k, Function.Injective (i k))
     (hr : ∀ k, range (i k) ⊆ range (i (k+1))) (hcov : ∀ x : E, ∃ k, x ∈ range (i k))
     {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F] (hF : IsFrechetTVS F)
-    (u : F →L[ℂ] E) : ∃ k, ∃ v : F →L[ℂ] X k, (i k).comp v = u := by sorry
+    (u : F →L[ℂ] E) : ∃ k, ∃ v : F →L[ℂ] X k, (i k).comp v = u := by
+  obtain ⟨hTF, hPF, hMF, hCF⟩ := hF
+  let : UniformSpace F := IsTopologicalAddGroup.rightUniformSpace F
+  have : IsUniformAddGroup F := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace F := hCF
+  have : (uniformity F).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero F]
+    infer_instance
+  have : BaireSpace F := by
+    let := UniformSpace.metricSpace F
+    infer_instance
+  -- Project the closed graphs of the equations u x = iₖ y onto F.
+  let diff (k : ℕ) := u.comp (ContinuousLinearMap.fst ℂ F (X k)) -
+    (i k).comp (ContinuousLinearMap.snd ℂ F (X k))
+  let G (k : ℕ) := (diff k).ker
+  let p (k : ℕ) := (ContinuousLinearMap.fst ℂ F (X k)).comp (G k).subtypeL
+  have hg (k : ℕ) (z : G k) : u z.val.1 = i k z.val.2 := sub_eq_zero.mp z.property
+  have hcover : ⋃ k, range (p k) = univ := by
+    apply eq_univ_of_forall
+    intro x
+    obtain ⟨k, y, hy⟩ := hcov (u x)
+    exact mem_iUnion.mpr ⟨k, ⟨(x, y), sub_eq_zero.mpr hy.symm⟩, rfl⟩
+  -- Baire gives a nonmeagre range, which is the hypothesis of the open mapping theorem.
+  have hex : ∃ k, ¬ IsMeagre (range (p k)) := by
+    by_contra! hm
+    have hm' := isMeagre_iUnion hm
+    rw [hcover] at hm'
+    exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty hm'
+  obtain ⟨k, hk⟩ := hex
+  obtain ⟨hTk, hPk, hMk, hCk⟩ := hX k
+  let : UniformSpace (X k) := IsTopologicalAddGroup.rightUniformSpace (X k)
+  have : IsUniformAddGroup (X k) := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace (X k) := hCk
+  have : CompleteSpace (G k) := completeSpace_coe_iff_isComplete.mpr (diff k).isClosed_ker.isComplete
+  have : IsUniformAddGroup (G k) := (G k).toAddSubgroup.isUniformAddGroup
+  have : FirstCountableTopology (G k) :=
+    inferInstanceAs (FirstCountableTopology ((G k) : Set (F × X k)))
+  have hop := isOpenMap_of_not_isMeagre_range (p k) hk
+  have hs : Function.Surjective (p k) := by
+    apply LinearMap.range_eq_top.mp
+    apply Submodule.eq_top_of_nonempty_interior'
+    have ho : IsOpen (range (p k)) := hop.isOpen_range
+    rw [show ((p k).range : Set F) = range (p k) from rfl, ho.interior_eq]
+    exact range_nonempty _
+  have hinj : Function.Injective (p k) := by
+    intro z w hzw
+    apply Subtype.ext
+    exact Prod.ext hzw (hi k ((hg k z).symm.trans ((congrArg u hzw).trans (hg k w))))
+  let e := LinearEquiv.ofBijective (p k).toLinearMap ⟨hinj, hs⟩
+  let inv : F →L[ℂ] G k := ⟨e.symm, e.toEquiv.continuous_symm_iff.mpr hop⟩
+  refine ⟨k, ((ContinuousLinearMap.snd ℂ F (X k)).comp (G k).subtypeL).comp inv, ?_⟩
+  ext x
+  exact (hg k (inv x)).symm.trans (congrArg u (e.apply_symm_apply x))
 
 -- TODO(paper-gap): On p. 665 the second Baire argument only establishes a dense union.
 

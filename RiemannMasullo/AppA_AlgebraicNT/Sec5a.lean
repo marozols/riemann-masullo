@@ -177,7 +177,15 @@ theorem inv_eq_sequence_openSubgroup_iff :
 /-- Paper: Remark A.5.2.4, p. 570. The constant singleton of the identity
 is an open, symmetric D-sequence on a countable discrete abelian group. -/
 theorem isDSequence_singleton_one [Countable G] [DiscreteTopology G] [μ.IsHaarMeasure] :
-    IsDSequence μ (fun _ ↦ ({1} : Set G)) := by sorry
+    IsDSequence μ (fun _ ↦ ({1} : Set G)) := by
+  have hpos : 0 < μ ({1} : Set G) := (isOpen_discrete _).measure_pos μ (singleton_nonempty 1)
+  have hfin : μ ({1} : Set G) < ∞ := isCompact_singleton.measure_lt_top
+  refine ⟨fun _ ↦ ⟨rfl, (measurableSet_singleton 1).nullMeasurableSet, hpos, hfin⟩,
+    antitone_const, 2, two_pos, fun _ ↦ ?_⟩
+  simp only [inv_singleton, inv_one, singleton_mul_singleton, mul_one]
+  refine ⟨hpos, ?_⟩
+  rw [ENNReal.ofReal_ofNat, two_mul]
+  exact ENNReal.lt_add_right hfin.ne hpos.ne'
 
 /-- Paper: Remark A.5.2.4, p. 570. The constant singleton of the identity
 forms a D′-sequence on a countable discrete abelian group. -/
