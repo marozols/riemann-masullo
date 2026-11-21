@@ -8,10 +8,12 @@ public import Mathlib.Topology.Algebra.PontryaginDual
 
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 
+import RiemannMasullo.ForMathlib.Analysis.Complex.CoveringMap
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual
+import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Cyclic
 
 /-!
 # Riemann surfaces of continuous quasi-characters
@@ -774,7 +776,33 @@ theorem finitePlace_quasiCharacterParametrization (v : Primes(F)) (π : (v.adicC
         ((ℂ ⧸ periods) × PontryaginDual (v.adicCompletionIntegers F)ˣ),
       ∀ c, (∀ s : ℂ, (e c).1 = QuotientAddGroup.mk s ↔ c π = (b : ℂ) * (q : ℂ) ^ (-s)) ∧
         ∀ u, ((e c).2 u : ℂ) = c (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom u) := by
-  sorry
+  let O := v.adicCompletionIntegers F
+  have : CompactSpace O := compactSpace_adicCompletionIntegers v
+  have : CompactSpace Oˣ := compactSpace_units_of_compactSpace O
+  obtain ⟨split, hπ', hO⟩ := finitePlace_unitDecomposition v π hπ
+  let f : (v.adicCompletion F)ˣ →ₜ* (Multiplicative ℤ × Oˣ) := ⟨split, split.continuous⟩
+  let g : (Multiplicative ℤ × Oˣ) →ₜ* (v.adicCompletion F)ˣ := ⟨split.symm, split.symm.continuous⟩
+  let transport : QuasiCharacter (v.adicCompletion F)ˣ ≃ₜ QuasiCharacter (Multiplicative ℤ × Oˣ) :=
+    { toFun := fun c ↦ c.comp g
+      invFun := fun c ↦ c.comp f
+      left_inv := fun c ↦ ContinuousMonoidHom.ext fun x ↦ congrArg c (split.symm_apply_apply x)
+      right_inv := fun c ↦ ContinuousMonoidHom.ext fun x ↦ congrArg c (split.apply_symm_apply x)
+      continuous_toFun := g.continuous_comp_left
+      continuous_invFun := f.continuous_comp_left }
+  obtain ⟨chars, hchars⟩ := exists_cyclicProductCharacterHomeomorph (U := Oˣ)
+  have hq : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  obtain ⟨cylinder, hcyl⟩ := exists_complexPowerCylinder _ hq b
+  let e := (transport.trans chars).trans (cylinder.symm.prodCongr (Homeomorph.refl _))
+  refine ⟨e, fun c ↦ ⟨fun s ↦ ?_, fun u ↦ ?_⟩⟩
+  · have hval := (hchars (transport c)).1
+    change _ = c (split.symm (Multiplicative.ofAdd 1, 1)) at hval
+    rw [← hπ', split.symm_apply_apply] at hval
+    change cylinder.symm (chars (transport c)).1 = _ ↔ _
+    rw [cylinder.symm_apply_eq, ← Units.val_inj, hval, hcyl]
+  · have hval := (hchars (transport c)).2 u
+    change _ = c (split.symm (1, u)) at hval
+    rw [← hO u, split.symm_apply_apply] at hval
+    exact hval
 
 /-- Paper: Equation (3.1.2.2), p. 120. At a finite place the locally defined complex
 exponent is a chart for the normalized absolute value. -/
