@@ -686,13 +686,39 @@ theorem elementarySchwartzSubmodule_add_mem {f g : ElementaryLieGroup m n r F �
   refine ⟨fun a b ↦ (hf.1 a b).add (hg.1 a b), fun i ↦ ?_⟩
   exact (elementarySchwartzBound_add_le hf.1 hg.1 i).trans_lt (ENNReal.add_lt_top.2 ⟨hf.2 i, hg.2 i⟩)
 
+/-- Complex scalar multiplication scales each weighted mixed-derivative bound by its norm. -/
+theorem elementarySchwartzBound_smul (c : ℂ) {f : ElementaryLieGroup m n r F → ℂ}
+    (hf : ∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b)))
+    (i : ElementarySchwartzIndex m n r) :
+    elementarySchwartzBound (c • f) i = (‖c‖₊ : ℝ≥0∞) * elementarySchwartzBound f i := by
+  simp only [elementarySchwartzBound, ENNReal.mul_iSup]
+  apply iSup_congr
+  intro xt
+  apply iSup_congr
+  intro a
+  apply iSup_congr
+  intro b
+  have hpartial : elementaryPartial (c • f) i.2.1 i.2.2.1 xt a b =
+      c • elementaryPartial f i.2.1 i.2.2.1 xt a b := by
+    have hsmul (n : ℕ) :
+        iteratedFDeriv ℝ n (fun v ↦ (c • f) (elementaryCover v a b)) xt =
+          c • iteratedFDeriv ℝ n (fun v ↦ f (elementaryCover v a b)) xt :=
+      iteratedFDeriv_const_smul_apply ((hf a b).of_le (by simp)).contDiffAt
+    dsimp only [elementaryPartial]
+    rw [hsmul]
+    rfl
+  rw [hpartial, smul_eq_mul, mul_left_comm, nnNorm_mul, ENNReal.coe_mul]
+
 /-- Paper: Definition D.1.3.1, p. 750. The Schwartz condition is closed under
 complex scalar multiplication. -/
 theorem elementarySchwartzSubmodule_smul_mem (c : ℂ) {f : ElementaryLieGroup m n r F → ℂ}
     (hf : (∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) ∧
       ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)) :
     c • f ∈ {h | (∀ a b, ContDiff ℝ ∞ (fun xt ↦ h (elementaryCover xt a b))) ∧
-      ∀ i, elementarySchwartzBound h i < (⊤ : ℝ≥0∞)} := by sorry
+      ∀ i, elementarySchwartzBound h i < (⊤ : ℝ≥0∞)} := by
+  refine ⟨fun a b ↦ (hf.1 a b).const_smul c, fun i ↦ ?_⟩
+  rw [elementarySchwartzBound_smul c hf.1 i]
+  exact ENNReal.mul_lt_top ENNReal.coe_lt_top (hf.2 i)
 
 /-- Paper: Definition D.1.3.1, p. 750. A Schwartz function is smooth in the real
 and torus variables on each discrete fibre and has finite bounds for all four multi-indices. -/
