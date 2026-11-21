@@ -9,6 +9,9 @@ public import Mathlib.Algebra.MvPolynomial.Eval
 public import Mathlib.Topology.Algebra.PontryaginDual
 public import Mathlib.Topology.ContinuousMap.ZeroAtInfty
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Separation
+import Mathlib.Topology.Algebra.IsUniformGroup.Basic
+import Mathlib.Topology.ContinuousMap.StoneWeierstrass
+import Mathlib.Topology.TietzeExtension
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
@@ -50,11 +53,274 @@ theorem pontryaginDual_pairing_separates :
   · intro χ ψ h
     exact PontryaginDual.ext (congrFun h)
 
+omit [T2Space G] in
+/-- Paper: (D.1.1.3), p. 746. Evaluating characters at a point gives a continuous
+homomorphism from the group into its bidual. -/
+def pontryaginDual_eval : G →ₜ* PontryaginDual (PontryaginDual G) := by
+  have hEval : Continuous (fun p : PontryaginDual G × G ↦ p.1 p.2) :=
+    (continuous_eval (F := C(G, Circle))).comp
+      (((ContinuousMonoidHom.isInducing_toContinuousMap G Circle).continuous.comp
+        continuous_fst).prodMk continuous_snd)
+  let atPoint (x : G) : PontryaginDual (PontryaginDual G) :=
+    { toFun := fun χ ↦ χ x
+      map_one' := rfl
+      map_mul' := fun _ _ ↦ rfl
+      continuous_toFun := hEval.comp (continuous_id.prodMk continuous_const) }
+  refine
+    { toFun := atPoint
+      map_one' := PontryaginDual.ext fun χ ↦ map_one χ
+      map_mul' := fun x y ↦ PontryaginDual.ext fun χ ↦ map_mul χ x y
+      continuous_toFun := ?_ }
+  exact ContinuousMonoidHom.continuous_of_continuous_uncurry atPoint
+    (hEval.comp (continuous_snd.prodMk continuous_fst))
+
+/-- Paper: Theorem D.1.1.1(2), p. 746. Every identity neighborhood contains the points
+where a suitable compact set of characters is uniformly within distance `1 / 4` of `1`.
+One can use a positive-definite bump supported in the neighborhood and a compact set
+carrying most of its Bochner measure. -/
+theorem exists_pontryaginDual_compact_test {U : Set G} (hU : U ∈ 𝓝 (1 : G)) :
+    ∃ K : Set (PontryaginDual G), IsCompact K ∧
+      ∀ x : G, (∀ χ ∈ K, dist (χ x) 1 < 1 / 4) → x ∈ U := by
+  sorry
+
+/-- Paper: Theorem D.1.1.1(2), p. 746. Evaluation embeds the group as a closed subgroup
+of its bidual. -/
+theorem isClosedEmbedding_pontryaginDual_eval :
+    IsClosedEmbedding (pontryaginDual_eval (G := G)) := by
+  let e := pontryaginDual_eval (G := G)
+  have hInducing : IsInducing e := by
+    rw [IsTopologicalGroup.isInducing_iff_nhds_one]
+    refine le_antisymm ?_ ?_
+    · have h : Tendsto e (𝓝 1) (𝓝 (e 1)) := e.continuous.tendsto 1
+      rw [map_one] at h
+      exact h.le_comap
+    · intro U hU
+      obtain ⟨K, hK, hTest⟩ := exists_pontryaginDual_compact_test hU
+      let V : Set (PontryaginDual (PontryaginDual G)) :=
+        {ψ | MapsTo ψ K (Metric.ball 1 (1 / 4))}
+      have hV : IsOpen V :=
+        (ContinuousMap.isOpen_setOfPred_mapsTo hK Metric.isOpen_ball).preimage
+          (ContinuousMonoidHom.isInducing_toContinuousMap (PontryaginDual G) Circle).continuous
+      refine Filter.mem_comap.mpr ⟨V, hV.mem_nhds ?_, fun x hx ↦ hTest x (fun χ hχ ↦ hx hχ)⟩
+      intro χ _
+      simp [Metric.mem_ball]
+  have hInjective : Function.Injective e := by
+    intro x y h
+    exact pontryaginDual_pairing_separates.1 (funext fun χ ↦ DFunLike.congr_fun h χ)
+  let : UniformSpace G := IsTopologicalGroup.rightUniformSpace G
+  let : UniformSpace (PontryaginDual (PontryaginDual G)) := IsTopologicalGroup.rightUniformSpace _
+  let : IsUniformGroup G := isUniformGroup_of_commGroup
+  let : IsUniformGroup (PontryaginDual (PontryaginDual G)) := isUniformGroup_of_commGroup
+  let : CompleteSpace G := IsRightUniformGroup.completeSpace_of_weaklyLocallyCompactSpace G
+  exact (MonoidHom.isUniformEmbedding_of_isEmbedding (f := e)
+    ⟨hInducing, hInjective⟩).isClosedEmbedding
+
+/-- For each identity neighborhood in the dual, there is an inner-regular probability
+measure on the group whose Fourier–Stieltjes transform vanishes off that neighborhood.
+One route is to take the autocorrelation of a bump on the dual and use Plancherel to
+represent it by the squared modulus of the inverse transform of the bump. -/
+theorem exists_pontryaginDual_localized_integral [MeasurableSpace G] [BorelSpace G]
+    {V : Set (PontryaginDual G)} (hV : V ∈ 𝓝 (1 : PontryaginDual G)) :
+    ∃ ν : Measure G, IsProbabilityMeasure ν ∧ ν.InnerRegular ∧
+      ∀ ψ ∉ V, ∫ x, (ψ x : ℂ) ∂ν = 0 := by
+  sorry
+
+open scoped Pointwise in
+omit [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] in
+/-- If a character of the dual is orthogonal to evaluations against a finite inner
+regular measure, it is orthogonal to every character of the dual. Evaluation functions
+form a point-separating self-adjoint algebra after taking their complex linear span. -/
+theorem pontryaginDual_integral_mul_eq_zero
+    [MeasurableSpace (PontryaginDual G)] [BorelSpace (PontryaginDual G)]
+    (ν : Measure (PontryaginDual G)) [IsFiniteMeasure ν] [ν.InnerRegular]
+    (η : PontryaginDual (PontryaginDual G))
+    (h : ∀ x : G, ∫ χ, (η χ : ℂ) * (χ x : ℂ) ∂ν = 0)
+    (ψ : PontryaginDual (PontryaginDual G)) : ∫ χ, (η χ : ℂ) * (ψ χ : ℂ) ∂ν = 0 := by
+  -- The space of abstract characters is compact in the pointwise topology.
+  let B : Set (G → Circle) := {f | f 1 = 1 ∧ ∀ x y, f (x * y) = f x * f y}
+  have hB : IsClosed B := by
+    rw [show B = {f : G → Circle | f 1 = 1} ∩
+      ⋂ x, ⋂ y, {f : G → Circle | f (x * y) = f x * f y} by ext; simp [B]]
+    exact (isClosed_eq (continuous_apply 1) continuous_const).inter
+      (isClosed_iInter fun x ↦ isClosed_iInter fun y ↦
+        isClosed_eq (continuous_apply (x * y)) ((continuous_apply x).mul (continuous_apply y)))
+  let : CompactSpace B := isCompact_iff_compactSpace.mp hB.isCompact
+  let emb : PontryaginDual G → B := fun χ ↦ ⟨χ, map_one χ, map_mul χ⟩
+  have hEmb : Continuous emb := by
+    apply Continuous.subtype_mk
+    exact continuous_pi fun x ↦ (continuous_eval_const (F := C(G, Circle)) x).comp
+      (ContinuousMonoidHom.isInducing_toContinuousMap G Circle).continuous
+  have hInj : Function.Injective emb := fun _ _ hEq ↦
+    DFunLike.coe_injective (congrArg Subtype.val hEq)
+  let coord : G →* C(B, ℂ) :=
+    { toFun := fun x ↦ ⟨fun b ↦ (b.1 x : ℂ),
+        continuous_subtype_val.comp ((continuous_apply x).comp continuous_subtype_val)⟩
+      map_one' := ContinuousMap.ext fun b ↦ by
+        show (b.1 1 : ℂ) = 1
+        rw [b.2.1, Circle.coe_one]
+      map_mul' := fun x y ↦ ContinuousMap.ext fun b ↦ by
+        show (b.1 (x * y) : ℂ) = _
+        rw [b.2.2, Circle.coe_mul]
+        rfl }
+  have hStar (x : G) : star (coord x) = coord x⁻¹ := by
+    ext b
+    change star (b.1 x : ℂ) = (b.1 x⁻¹ : ℂ)
+    have hInv : b.1 x⁻¹ = (b.1 x)⁻¹ := by
+      apply eq_inv_of_mul_eq_one_left
+      rw [← b.2.2, inv_mul_cancel, b.2.1]
+    rw [hInv, Circle.coe_inv_eq_conj, Complex.star_def]
+  let A := StarAlgebra.adjoin ℂ (Set.range coord)
+  have hSep : A.SeparatesPoints := by
+    intro a b hab
+    obtain ⟨x, hx⟩ : ∃ x, a.1 x ≠ b.1 x := by
+      by_contra! hEq
+      exact hab (Subtype.ext (funext hEq))
+    exact ⟨coord x, ⟨coord x, StarAlgebra.subset_adjoin _ _ (mem_range_self x), rfl⟩,
+      fun hEq ↦ hx (Subtype.ext hEq)⟩
+  have hSpan : A.toSubalgebra.toSubmodule ≤ Submodule.span ℂ (Set.range coord) := by
+    rw [StarAlgebra.adjoin_eq_span]
+    apply Submodule.span_mono
+    suffices Submonoid.closure (Set.range coord ∪ star (Set.range coord)) ≤
+        MonoidHom.mrange coord from this
+    apply Submonoid.closure_le.mpr
+    rintro z (hMem | hMem)
+    · exact hMem
+    · obtain ⟨x, hx⟩ := Set.mem_star.mp hMem
+      exact ⟨x⁻¹, (hStar x).symm.trans (by rw [hx, star_star])⟩
+  let test (F : C(B, ℂ)) (χ : PontryaginDual G) := (η χ : ℂ) * F (emb χ)
+  have hBound (F : C(B, ℂ)) (χ : PontryaginDual G) : ‖test F χ‖ ≤ ‖F‖ := by
+    simp [test, ContinuousMap.norm_coe_le_norm]
+  have hInt (F : C(B, ℂ)) : Integrable (test F) ν :=
+    Integrable.of_bound ((continuous_subtype_val.comp η.continuous).mul
+      (F.continuous.comp hEmb)).aestronglyMeasurable ‖F‖ (.of_forall (hBound F))
+  let L : C(B, ℂ) →L[ℂ] ℂ := LinearMap.mkContinuous
+    { toFun := fun F ↦ ∫ χ, test F χ ∂ν
+      map_add' := fun F H ↦ by
+        simp only [test, ContinuousMap.add_apply, mul_add]
+        exact integral_add (hInt F) (hInt H)
+      map_smul' := fun c F ↦ by
+        simp only [test, ContinuousMap.smul_apply, mul_smul_comm,
+          RingHom.id_apply, integral_smul] }
+    (ν.real univ) fun F ↦ by
+      simpa [mul_comm] using norm_integral_le_of_norm_le_const (μ := ν) (.of_forall (hBound F))
+  -- Stone–Weierstrass extends the vanishing from evaluations to all continuous tests.
+  have hL : ∀ F, L F = 0 := by
+    have hDense := ContinuousMap.starSubalgebra_topologicalClosure_eq_top_of_separatesPoints A hSep
+    intro F
+    have hClosed : IsClosed {H | L H = 0} := isClosed_eq L.continuous continuous_const
+    refine closure_minimal (s := (A : Set C(B, ℂ))) ?_ hClosed ?_
+    · intro H hH
+      have hKer : Submodule.span ℂ (Set.range coord) ≤ L.toLinearMap.ker :=
+        Submodule.span_le.mpr (fun _ ⟨x, hx⟩ ↦ hx ▸ h x)
+      exact hKer (hSpan hH)
+    · have hF : F ∈ A.topologicalClosure := hDense ▸ StarSubalgebra.mem_top
+      exact hF
+  let target (χ : PontryaginDual G) : ℂ := ψ χ
+  have hTarget : Continuous target := continuous_subtype_val.comp ψ.continuous
+  have hTargetInt : Integrable (fun χ ↦ (η χ : ℂ) * target χ) ν :=
+    Integrable.of_bound
+      ((continuous_subtype_val.comp η.continuous).mul hTarget).aestronglyMeasurable
+      1 (.of_forall fun χ ↦ by simp [target])
+  -- Extend the target from a compact set carrying nearly all the mass of ν.
+  by_contra hNe
+  let ε := ‖∫ χ, (η χ : ℂ) * target χ ∂ν‖
+  have hε : 0 < ε := norm_pos_iff.mpr hNe
+  obtain ⟨K, -, hK, hTail⟩ := MeasurableSet.univ.exists_isCompact_sdiff_lt
+    (μ := ν) (measure_ne_top ν _) (ENNReal.ofReal_pos.mpr (by positivity : 0 < ε / 3)).ne'
+  rw [← compl_eq_univ_sdiff] at hTail
+  have hTail' : ν.real Kᶜ < ε / 3 := by
+    simpa [measureReal_def, ENNReal.toReal_ofReal (by positivity : 0 ≤ ε / 3)] using
+      (ENNReal.toReal_lt_toReal (measure_ne_top ν _) ENNReal.ofReal_ne_top).mpr hTail
+  let : CompactSpace K := isCompact_iff_compactSpace.mp hK
+  let incl : K → B := emb ∘ Subtype.val
+  have hIncl : IsClosedEmbedding incl :=
+    (hEmb.comp continuous_subtype_val).isClosedEmbedding (hInj.comp Subtype.val_injective)
+  let re : C(K, ℝ) := ⟨fun χ ↦ (target χ.1).re,
+    Complex.continuous_re.comp (hTarget.comp continuous_subtype_val)⟩
+  let im : C(K, ℝ) := ⟨fun χ ↦ (target χ.1).im,
+    Complex.continuous_im.comp (hTarget.comp continuous_subtype_val)⟩
+  obtain ⟨R, hR, hRe⟩ := BoundedContinuousFunction.exists_extension_norm_eq_of_isClosedEmbedding
+    (BoundedContinuousFunction.mkOfCompact re) hIncl
+  obtain ⟨I, hI, hIm⟩ := BoundedContinuousFunction.exists_extension_norm_eq_of_isClosedEmbedding
+    (BoundedContinuousFunction.mkOfCompact im) hIncl
+  have hR₁ : ‖R‖ ≤ 1 := hR.le.trans <| (BoundedContinuousFunction.norm_le zero_le_one).2
+    fun χ ↦ (Complex.abs_re_le_norm (target χ.1)).trans (by simp [target])
+  have hI₁ : ‖I‖ ≤ 1 := hI.le.trans <| (BoundedContinuousFunction.norm_le zero_le_one).2
+    fun χ ↦ (Complex.abs_im_le_norm (target χ.1)).trans (by simp [target])
+  let F : C(B, ℂ) := ⟨fun b ↦ (R b : ℂ) + (I b : ℂ) * Complex.I, by fun_prop⟩
+  have hF (b : B) : ‖F b‖ ≤ 2 := by
+    refine (norm_add_le _ _).trans ?_
+    simpa [F, norm_mul, one_add_one_eq_two] using add_le_add
+      ((BoundedContinuousFunction.norm_coe_le_norm R b).trans hR₁)
+      ((BoundedContinuousFunction.norm_coe_le_norm I b).trans hI₁)
+  have hAgree : ∀ χ ∈ K, F (emb χ) = target χ := by
+    intro χ hχ
+    have hr := congrFun hRe ⟨χ, hχ⟩
+    have hi := congrFun hIm ⟨χ, hχ⟩
+    change R (emb χ) = (target χ).re at hr
+    change I (emb χ) = (target χ).im at hi
+    simp only [F, ContinuousMap.coe_mk, hr, hi, Complex.re_add_im]
+  have hDiff (χ : PontryaginDual G) : ‖(η χ : ℂ) * target χ - test F χ‖ ≤ 3 := by
+    change ‖(η χ : ℂ) * target χ - (η χ : ℂ) * F (emb χ)‖ ≤ 3
+    rw [← mul_sub, norm_mul, Circle.norm_coe, one_mul]
+    calc
+      _ ≤ ‖target χ‖ + ‖F (emb χ)‖ := norm_sub_le _ _
+      _ ≤ 1 + 2 := add_le_add (by simp [target]) (hF (emb χ))
+      _ = 3 := by norm_num
+  let diff (χ : PontryaginDual G) := (η χ : ℂ) * target χ - test F χ
+  have hDiffInt : Integrable diff ν := hTargetInt.sub (hInt F)
+  have hKZero : ∫ χ in K, diff χ ∂ν = 0 := by
+    calc
+      _ = ∫ _ in K, (0 : ℂ) ∂ν := by
+        exact setIntegral_congr_fun hK.isClosed.measurableSet fun χ hχ ↦ by
+          simp [diff, test, hAgree χ hχ]
+      _ = 0 := integral_zero _ _
+  have hFull : (∫ χ in Kᶜ, diff χ ∂ν) = ∫ χ, (η χ : ℂ) * target χ ∂ν := by
+    rw [← zero_add (∫ χ in Kᶜ, diff χ ∂ν), ← hKZero,
+      integral_add_compl hK.isClosed.measurableSet hDiffInt]
+    change (∫ χ, (η χ : ℂ) * target χ - test F χ ∂ν) = _
+    rw [integral_sub hTargetInt (hInt F)]
+    change _ - L F = _
+    rw [hL, sub_zero]
+  have hLe := norm_setIntegral_le_of_norm_le_const (f := diff) (measure_lt_top ν Kᶜ)
+    (fun χ _ ↦ hDiff χ)
+  rw [hFull] at hLe
+  linarith
+
 /-- Paper: Theorem D.1.1.1(2), p. 746. Evaluation gives the canonical topological
 group isomorphism with the double dual. -/
 theorem pontryaginDual_bidual :
     ∃ e : G ≃ₜ* PontryaginDual (PontryaginDual G),
-      ∀ x χ, e x χ = χ x := by sorry
+      ∀ x χ, e x χ = χ x := by
+  let e := pontryaginDual_eval (G := G)
+  have hEmb := isClosedEmbedding_pontryaginDual_eval (G := G)
+  have hSurj : Function.Surjective e := by
+    intro η
+    by_contra hη
+    -- Choose a transform that vanishes on the translate of the evaluation image by η⁻¹.
+    let V := ((η * ·) ⁻¹' Set.range e)ᶜ
+    have hV : V ∈ 𝓝 (1 : PontryaginDual (PontryaginDual G)) :=
+      (hEmb.isClosed_range.preimage (continuous_const.mul continuous_id)).isOpen_compl.mem_nhds
+        (by simpa [V] using hη)
+    let : MeasurableSpace (PontryaginDual G) := borel _
+    let : BorelSpace (PontryaginDual G) := ⟨rfl⟩
+    obtain ⟨ν, hν, hReg, hZero⟩ := exists_pontryaginDual_localized_integral hV
+    let := hν
+    let := hReg
+    have hTest (x : G) : ∫ χ, (η⁻¹ χ : ℂ) * (χ x : ℂ) ∂ν = 0 := by
+      have hx : η⁻¹ * e x ∉ V := by simp [V]
+      exact hZero _ hx
+    have hz := pontryaginDual_integral_mul_eq_zero ν η⁻¹ hTest η
+    have hProd (χ : PontryaginDual G) : (η⁻¹ χ : ℂ) * (η χ : ℂ) = 1 := by
+      rw [← Circle.coe_mul]
+      change ((η⁻¹ * η) χ : ℂ) = 1
+      rw [inv_mul_cancel, PontryaginDual.one_apply, Circle.coe_one]
+    simp [hProd] at hz
+  let equiv := MulEquiv.ofBijective e.toMonoidHom ⟨hEmb.injective, hSurj⟩
+  have hOpen := hEmb.isInducing.isOpenMap (by rw [hSurj.range_eq]; exact isOpen_univ)
+  exact ⟨equiv.toContinuousMulEquiv (fun _ ↦
+    (hOpen.isQuotientMap e.continuous hSurj).isCoinducing.isOpen_preimage),
+    fun _ _ ↦ rfl⟩
 
 /-- Paper: Theorem D.1.1.1(3), p. 746. A locally compact abelian group is compact
 exactly when its dual is discrete. -/
@@ -77,10 +343,14 @@ the complex conjugate of a character. -/
 def lcaFourier (μ : Measure G) (f : G → ℂ) (χ : PontryaginDual G) : ℂ :=
   ∫ x, f x * star (χ x : ℂ) ∂μ
 
+-- Retain the existing signature, including the unused integrability hypothesis.
+set_option linter.unusedSectionVars false in
+set_option linter.unusedVariables false in
 /-- Paper: (D.1.1.4), p. 746. At the trivial character the transform is the integral
 of the original function. -/
 theorem lcaFourier_one (f : G → ℂ) (hf : Integrable f μ) :
-    lcaFourier μ f 1 = ∫ x, f x ∂μ := by sorry
+    lcaFourier μ f 1 = ∫ x, f x ∂μ := by
+  simp [lcaFourier, PontryaginDual.one_apply]
 
 /-- Paper: (D.1.1.5), p. 746. Multiplicative convolution integrates the product with
 the left translate of the second function. -/

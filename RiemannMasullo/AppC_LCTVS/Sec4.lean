@@ -12,6 +12,7 @@ public import Mathlib.MeasureTheory.VectorMeasure.Integral
 public import Mathlib.Topology.Algebra.Group.Quotient
 import Mathlib.Analysis.Normed.Operator.Banach
 import Mathlib.MeasureTheory.Function.ConvergenceInMeasure
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
 
 /-!
 # Integration in the sense of Pettis
@@ -56,8 +57,9 @@ variable [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ
 /-- Paper: Lemma C.4.1.1, p. 709. The canonical weak-completion map embeds
 the weak topology on the source into the topology of pointwise convergence. -/
 theorem isEmbedding_toPettisWeakCompletion :
-    IsEmbedding (fun x : WeakSpace ℂ E ↦ toPettisWeakCompletion E ((toWeakSpace ℂ E).symm x)) :=
-  by sorry
+    IsEmbedding (fun x : WeakSpace ℂ E ↦ toPettisWeakCompletion E ((toWeakSpace ℂ E).symm x)) := by
+  letI := polynormableSpace_separatingDual ℂ E
+  exact IsInducing.isEmbedding ⟨induced_compose.symm⟩
 
 /-- Paper: Lemma C.4.1.1(1), p. 709. The canonical map into the weak
 completion is also continuous for the given topology on the source. -/

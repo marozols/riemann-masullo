@@ -68,7 +68,8 @@ def regularTranslate (g : G) (f : RegularL2 ν) : RegularL2 ν :=
 /-- Paper: (4.3.1.4), p. 175. Left translation has the stated representative
 almost everywhere. -/
 theorem regularTranslate_ae_eq (g : G) (f : RegularL2 ν) :
-    (regularTranslate ν g f : G → ℂ) =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by sorry
+    (regularTranslate ν g f : G → ℂ) =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by
+  exact DomMulAct.smul_Lp_ae_eq (DomMulAct.mk g⁻¹) f
 
 /-- Paper: Lemma 4.3.1.5(2), p. 176. Translation extends to a unique strongly
 continuous linear action on Haar L². Its values on compactly supported
@@ -122,10 +123,32 @@ local notation "K" => m.toMonoidHom.ker
 -- TODO(paper-gap): The Tamagawa measure reference after (4.3.2.1) is printed
 -- as “Definition ??”. The statements use specified Haar measures instead.
 
+omit [T2Space G] in
+/-- Left translation by the kernel variable preserves square integrability on the product. -/
+private theorem regularTranslate_memLp_prod (f : RegularL2 ν) :
+    MemLp (fun p : K × G ↦ f ((p.1 : G)⁻¹ * p.2)) 2 (ν₁.prod ν) := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have hshift : MeasurePreserving (fun p : K × G ↦ (p.1, (p.1 : G)⁻¹ * p.2))
+      (ν₁.prod ν) (ν₁.prod ν) :=
+    (MeasurePreserving.id ν₁).skew_product (g := fun k x ↦ (k : G)⁻¹ * x)
+      (by unfold uncurry; fun_prop)
+      (ae_of_all _ fun k ↦ (measurePreserving_mul_left ν (k : G)⁻¹).map_eq)
+  exact ((Lp.memLp f).comp_snd ν₁).comp_measurePreserving hshift
+
 /-- Paper: (4.3.2.1), p. 178. The character-weighted translate of an L²
 representative is integrable on almost every norm-one fiber. -/
 theorem regularIsotypic_ae_integrable (ω : PontryaginDual K) (f : RegularL2 ν) :
-    ∀ᵐ x ∂ν, Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁ := by sorry
+    ∀ᵐ x ∂ν, Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have hsq := (regularTranslate_memLp_prod m hm ν ν₁ f).norm.integrable_sq
+  filter_upwards [hsq.prod_left_ae] with x hx
+  have hmeas : StronglyMeasurable (fun k : K ↦ f ((k : G)⁻¹ * x)) :=
+    (Lp.stronglyMeasurable f).comp_measurable (by fun_prop)
+  have h₂ := (memLp_two_iff_integrable_sq_norm hmeas.aestronglyMeasurable).2 hx
+  exact (h₂.integrable (by norm_num)).bdd_mul (c := 1)
+    (by fun_prop) (ae_of_all _ fun k ↦ by simp)
 
 /-- Paper: (4.3.2.1), p. 178. Fiber averaging defines a continuous linear
 operator on Haar L² with its stated almost-everywhere formula. -/

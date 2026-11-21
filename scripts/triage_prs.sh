@@ -18,6 +18,9 @@ main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 cd "$main"
 apply=0; [ "${1:-}" = --apply ] && apply=1
 mkdir -p .agent/pr-checks
+# One triage at a time: two would check the same pull request in the same scratch worktree.
+exec 9>.agent/pr-checks/.lock
+flock -n 9 || { echo "another triage is running; try again when it has finished"; exit 0; }
 list=$(gh api --paginate "repos/{owner}/{repo}/pulls?state=open&per_page=100" --jq \
   '.[] | select(.draft | not) | select(.author_association | IN("OWNER","MEMBER","COLLABORATOR") | not)
        | "\(.number) \(.head.sha) \(.user.login)"')
@@ -37,7 +40,9 @@ export -f check_one
 awk '{print $1, $2}' <<<"$list" | xargs -P 6 -L 1 bash -c 'check_one "$0" "$1"'
 
 # Added lines that make a pull request worth reading before it is merged.
-eyes='^\+[[:space:]]*(#|@\[|import |open Lean|set_option|attribute|macro|syntax|notation|elab|initialize|unsafe|instance|def |abbrev |structure|class |inductive|axiom|opaque|noncomputable)|run_|by_elab|simproc|Lean\.|Elab|Meta\.|IO\.|extern|implemented_by|native'
+# Importing Mathlib or this library, and silencing a linter, are routine and are not flagged.
+eyes='^\+[[:space:]]*(#|@\[|open Lean|attribute|macro|syntax|notation|elab|initialize|unsafe|instance|def |abbrev |structure|class |inductive|axiom|opaque|noncomputable)|run_|by_elab|simproc|Lean\.|Elab|Meta\.|IO\.|extern|implemented_by|native'
+routine='^\+[[:space:]]*((public )?import (Mathlib|RiemannMasullo)\.[A-Za-z0-9_.]+[[:space:]]*$|set_option linter\.[A-Za-z0-9_.]+ (true|false) in[[:space:]]*$)'
 merged=0
 while read -r n sha who; do
   out=".agent/pr-checks/$n-$sha.txt"
@@ -49,7 +54,8 @@ while read -r n sha who; do
     why=""
     grep -qw sorry <<<"$added" && why="adds a sorry"
     [ -z "$newfiles" ] || why="${why:+$why, }new file"
-    grep -qE "$eyes" <<<"$added" && why="${why:+$why, }not plain proof text"
+    rest=$(grep -vE "$routine" <<<"$added" || true)
+    grep -qE "$eyes|^\+[[:space:]]*(import|set_option) " <<<"$rest" && why="${why:+$why, }not plain proof text"
     if [ -z "$why" ]; then
       echo "merge  #$n  $who  $title"
       if [ $apply = 1 ]; then gh pr merge "$n" --squash >/dev/null 2>&1 && merged=$((merged+1)) || echo "       could not merge (conflict with a merge made meanwhile?)"; fi

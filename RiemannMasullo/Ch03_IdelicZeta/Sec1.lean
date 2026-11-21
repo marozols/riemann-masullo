@@ -713,7 +713,19 @@ theorem sIdeleQuotientNorm_exists_section :
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
-  sorry
+  let n := ideleClassNorm F
+  let : CompactSpace n.ker := (ideleClassGroup_finiteness F).2.1
+  obtain ⟨_, _, _, _, _, _, _, _, hn, _, ⟨s, hs, hsn⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  let f (p : n.ker × ℝ≥0ˣ) := p.1.val * s p.2
+  have hf : Continuous f := (continuous_subtype_val.comp continuous_fst).mul (hs.comp continuous_snd)
+  have hcomp : n ∘ f = Prod.snd := by
+    funext p
+    change n (p.1.val * s p.2) = p.2
+    rw [map_mul, MonoidHom.mem_ker.mp p.1.property, hsn, one_mul]
+  apply isProperMap_of_comp_of_surj hf hn (hcomp ▸ isProperMap_snd_of_compactSpace)
+  intro g
+  refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
+  exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
 
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
@@ -724,13 +736,27 @@ theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) :=
 passing to idele classes is continuous. -/
 theorem continuous_ideleClass_ofAdicCompletion (v : Primes(F)) :
     Continuous (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  apply continuous_const.prodMk
+  apply continuous_restrictedProduct_of_uniform
+  · intro w
+    exact (continuous_apply w).comp (continuous_mulSingle (A := fun u : Primes(F) ↦
+      u.adicCompletion F) v)
+  · filter_upwards [Filter.eventually_cofinite_ne v] with w hw x
+    change Pi.mulSingle v x w ∈ w.adicCompletionIntegers F
+    rw [Pi.mulSingle_eq_of_ne hw]
+    exact (w.adicCompletionIntegers F).one_mem
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting an infinite local multiplicative group
 into the idele class group is continuous. -/
 theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
     Continuous (IdeleClassGroup.ofCompletion (𝓞 F) F w) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
 
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
@@ -1004,7 +1030,35 @@ theorem sIdeleInsertion_apply (g : (SAdeleRing F S)ˣ) :
 
 /-- Paper: Equation (3.1.2.7), p. 121. Extension by one is a closed topological embedding. -/
 theorem isClosedEmbedding_sIdeleInsertion : IsClosedEmbedding (sIdeleInsertion F S) := by
-  sorry
+  let : T2Space (IdeleGroup (𝓞 F) F) := (ideleGroup_topology F).1
+  let j := sIdeleInsertion F S
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := by
+    apply Continuous.units_map
+    exact continuous_fst.prodMk (continuous_pi fun v ↦
+      (RestrictedProduct.continuous_eval v.val).comp continuous_snd)
+  have hleft : LeftInverse p j := by
+    intro g
+    apply Units.ext
+    exact Prod.ext (sIdeleInsertion_apply F S g).1 (funext (sIdeleInsertion_apply F S g).2.1)
+  have hval : Continuous (fun g ↦ (j g).val) := by
+    apply Continuous.prodMk
+    · exact (continuous_fst.comp Units.continuous_val).congr fun g ↦
+        (sIdeleInsertion_apply F S g).1.symm
+    · apply continuous_restrictedProduct_of_uniform
+      · intro v
+        by_cases hv : v ∈ S
+        · exact ((continuous_apply (⟨v, hv⟩ : S)).comp
+            (continuous_snd.comp Units.continuous_val)).congr fun g ↦
+              ((sIdeleInsertion_apply F S g).2.1 ⟨v, hv⟩).symm
+        · exact continuous_const.congr fun g ↦ ((sIdeleInsertion_apply F S g).2.2 v hv).symm
+      · filter_upwards [S.eventually_cofinite_notMem] with v hv g
+        change (sIdeleInsertion F S g).val.2 v ∈ v.adicCompletionIntegers F
+        rw [(sIdeleInsertion_apply F S g).2.2 v hv]
+        exact (v.adicCompletionIntegers F).one_mem
+  apply hleft.isClosedEmbedding hp
+  refine Units.continuous_iff.mpr ⟨hval, (hval.comp continuous_inv).congr fun g ↦ ?_⟩
+  exact congrArg Units.val (map_inv j g)
 
 local notation "pullbackS(" c ")" => MonoidHom.comp (ContinuousMonoidHom.toMonoidHom c)
   (MonoidHom.comp (QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 F) F)) (sIdeleInsertion F S))
@@ -1013,7 +1067,70 @@ local notation "pullbackS(" c ")" => MonoidHom.comp (ContinuousMonoidHom.toMonoi
 along insertion kills the projected diagonal S-units. -/
 theorem sIdeleRestriction_descent (c : unramifiedOutside F S) :
     projectedDiagonal ≤ (pullbackS(c.val)).ker := by
-  sorry
+  classical
+  rw [MonoidHom.map_range]
+  rintro _ ⟨u, rfl⟩
+  let g := Units.map (integralAdeleDiagonal F S).toMonoidHom u
+  let i := (integralAdelesOutside F S).subtype
+  let a := Units.map i.toMonoidHom g
+  let s := Units.map ((adeleProjection F S).comp i).toMonoidHom g
+  let q := QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 F) F)
+  let localEval (v : Primes(F)) (hv : v ∉ S) : integralAdelesOutside F S →+* LocalIntegers(v) :=
+    (((RestrictedProduct.evalRingHom _ v).comp (RingHom.snd _ _)).comp i).codRestrict _
+      (fun x => by
+        have hx := x.property
+        simp only [integralAdelesOutside, Subring.mem_iInf] at hx
+        exact hx v hv)
+  let outsideUnits (v : Primes(F)) : LocalUnits(v) :=
+    if hv : v ∈ S then 1 else Units.map (localEval v hv).toMonoidHom g
+  -- Continuity extends triviality on the single-coordinate factors to the whole family.
+  have hb : c.val (finiteIntegerUnitInsertion F outsideUnits) = 1 := by
+    let χ := c.val.comp (finiteIntegerUnitInsertion F)
+    have hp : HasProd (fun v => Pi.mulSingle v (outsideUnits v)) outsideUnits := by
+      refine Pi.hasProd.mpr fun w => ?_
+      convert hasProd_pi_single w (outsideUnits w) using 1
+      funext v
+      rcases eq_or_ne v w with rfl | hv
+      · simp
+      · simp [hv, hv.symm]
+    refine (hp.map χ χ.continuous).unique (hasProd_one.congr_fun fun v => ?_)
+    change c.val (finiteIntegerUnitInsertion F (Pi.mulSingle v (outsideUnits v))) = 1
+    by_cases hv : v ∈ S
+    · simp [outsideUnits, hv]
+    · rw [finiteIntegerUnitInsertion_mulSingle]
+      have hc : ∀ v ∉ S, c.val.IsUnramifiedAt v := c.property
+      have h := (hc v hv).restrict_apply_unit_eq_one (outsideUnits v)
+      change c.val.restrict v ↑(Units.map (LocalIntegers(v)).subtype.toMonoidHom (outsideUnits v)) = 1 at h
+      rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe] at h
+      exact h
+  have hfactor : q a = q (sIdeleInsertion F S s) * finiteIntegerUnitInsertion F outsideUnits := by
+    change q a = q (sIdeleInsertion F S s) * q _
+    rw [← map_mul]
+    apply congrArg q
+    apply Units.ext
+    obtain ⟨hinf, hin, hout⟩ := sIdeleInsertion_apply F S s
+    refine Prod.ext ?_ ?_
+    · change a.val.1 = (sIdeleInsertion F S s).val.1 * 1
+      rw [mul_one, hinf]
+      rfl
+    · apply RestrictedProduct.ext
+      intro v
+      change a.val.2 v =
+        (sIdeleInsertion F S s).val.2 v * ((outsideUnits v).val : v.adicCompletion F)
+      by_cases hv : v ∈ S
+      · rw [hin ⟨v, hv⟩]
+        change a.val.2 v = a.val.2 v * ((outsideUnits v).val : v.adicCompletion F)
+        simp [outsideUnits, hv]
+      · rw [hout v hv, one_mul]
+        dsimp [outsideUnits]
+        rw [dite_eq_right hv]
+        rfl
+  have ha : q a = 1 := (QuotientGroup.eq_one_iff a).mpr
+    ⟨Units.map ((S : Set (Primes(F))).integer F).val.toRingHom.toMonoidHom u, Units.ext rfl⟩
+  change c.val (q (sIdeleInsertion F S s)) = 1
+  have h := congrArg c.val hfactor
+  rw [map_mul, hb, mul_one, ha, map_one] at h
+  exact h.symm
 
 /-- Paper: Equation (3.1.2.9), p. 121. The S-local restriction is the quotient lift of
 the pullback from idele classes. Its domain carries the open subspace topology. -/
