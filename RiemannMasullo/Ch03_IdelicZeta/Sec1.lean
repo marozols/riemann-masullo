@@ -647,6 +647,7 @@ theorem quasiCharacterAbscissa_dual [IsTopologicalGroup G] (hm : IsProperMap m)
   rw [map_inv, ← div_eq_mul_inv, norm_div, Complex.norm_of_nonneg hmod.le,
     Real.log_div hmod.ne' hnorm, sub_div, div_self hlog]
 
+open Filter in
 /-- Paper: Equation (3.1.1.4), p. 119. The duality map is an analytic automorphism and
 serves as its own inverse. -/
 theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous m)
@@ -654,7 +655,56 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
     letI := quasiCharacterChartedSpace m h
     ∃ e : Diffeomorph 𝓘(ℂ) 𝓘(ℂ) (QuasiCharacter G) (QuasiCharacter G) ω,
       (∀ c, e c = dualQuasiCharacter m hm c) ∧ ∀ c, e.symm c = dualQuasiCharacter m hm c := by
-  sorry
+  let := quasiCharacterChartedSpace m h
+  let D := dualQuasiCharacter m hm
+  have hD (c : QuasiCharacter G) (g : G) : D c g = (modℝ g : ℂ) / c g := by
+    change (modℝ g : ℂ) * c g⁻¹ = _
+    rw [map_inv, div_eq_mul_inv]
+  have hn (g : G) : (modℝ g : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
+  have hinv : Function.Involutive D := by
+    intro c
+    ext1 g
+    rw [hD, hD]
+    field_simp [hn g, ((Group.isUnit g).map c).ne_zero]
+  have hsmooth : ContMDiff 𝓘(ℂ) 𝓘(ℂ) ω D := by
+    intro c
+    let a := (h c).choose
+    let b := (h (D c)).choose
+    obtain ⟨ha, ha0, htwist⟩ := (h c).choose_spec
+    obtain ⟨hb, hb0, hdual⟩ := (h (D c)).choose_spec
+    have ht : -(a c) ∈ b.target := by
+      change -((h c).choose c) ∈ b.target
+      rw [ha0, neg_zero, ← hb0]
+      exact b.map_source hb
+    have hnear : ∀ᶠ z in 𝓝 (a c), z ∈ a.target ∧ -z ∈ b.target := by
+      filter_upwards [a.open_target.mem_nhds (a.map_source ha),
+        continuous_neg.continuousAt.preimage_mem_nhds (b.open_target.mem_nhds ht)] with z hz hz'
+      exact ⟨hz, hz'⟩
+    -- Duality sends a twist by z to a twist by -z in the chart at the dual character.
+    have hchart : D ∘ a.symm =ᶠ[𝓝 (a c)] b.symm ∘ Neg.neg := by
+      filter_upwards [hnear] with z hz
+      ext1 g
+      change D (a.symm z) g = b.symm (-z) g
+      rw [hD, htwist z hz.1 g, hdual (-z) hz.2 g, hD, Complex.cpow_neg]
+      simp only [div_eq_mul_inv, mul_inv_rev]
+      ring
+    apply contMDiffAt_iff.mpr
+    constructor
+    · apply (a.symm.continuousAt_iff_continuousAt_comp_right ha).mpr
+      exact ((b.continuousAt_symm ht).comp continuous_neg.continuousAt).congr_of_eventuallyEq hchart
+    · change ContDiffWithinAt ℂ ω (b ∘ D ∘ a.symm) (Set.range id) (a c)
+      apply ContDiffAt.contDiffWithinAt
+      apply (contDiff_neg.contDiffAt : ContDiffAt ℂ ω Neg.neg (a c)).congr_of_eventuallyEq
+      filter_upwards [hchart, hnear] with z he hz
+      exact (congrArg b he).trans (b.right_inv hz.2)
+  exact ⟨{
+    toFun := D
+    invFun := D
+    left_inv := hinv
+    right_inv := hinv
+    contMDiff_toFun := hsmooth
+    contMDiff_invFun := hsmooth }, fun _ ↦ rfl, fun _ ↦ rfl⟩
 
 end Generalities
 
