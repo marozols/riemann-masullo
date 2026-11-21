@@ -191,7 +191,11 @@ theorem ForwardSemiExponentialDecay.deriv (f : 𝓢(ℝ, ℂ)) (hf : ForwardSemi
 /-- Paper: Lemma B.2.1.4(4), p. 593. Logarithmic differentiation preserves
 backward semi-exponential decay. -/
 theorem BackwardSemiExponentialDecay.deriv (f : 𝓢(ℝ, ℂ)) (hf : BackwardSemiExponentialDecay f) :
-    BackwardSemiExponentialDecay (SchwartzMap.derivCLM ℂ ℂ f) := by sorry
+    BackwardSemiExponentialDecay (SchwartzMap.derivCLM ℂ ℂ f) := by
+  intro j A hA
+  rw [show (⇑(SchwartzMap.derivCLM ℂ ℂ f) : ℝ → ℂ) = _root_.deriv f from
+    funext (SchwartzMap.derivCLM_apply ℂ f), ← iteratedDeriv_succ']
+  exact hf (j + 1) A hA
 
 /-- Paper: Lemma B.2.1.4(4), p. 593. Logarithmic differentiation preserves
 exponential decay. -/
