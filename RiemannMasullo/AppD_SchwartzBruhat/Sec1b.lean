@@ -8,6 +8,9 @@ public import Mathlib.Topology.MetricSpace.Ultra.Basic
 import RiemannMasullo.ForMathlib.Algebra.Module.ZLattice.Quotient
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Divisible
 import Mathlib.Geometry.Manifold.HasGroupoid
+import Mathlib.Analysis.Normed.Module.Connected
+import Mathlib.Order.WellQuasiOrder
+import Mathlib.Topology.Homotopy.Lifting
 
 /-!
 # Structure of locally compact abelian groups and their Schwartz–Bruhat spaces
@@ -164,15 +167,306 @@ theorem lca_equiv_real_torus_discrete (hG : IsLocallyEuclidean G) :
     continuous_invFun := split.continuous_invFun.comp
       ((eH.continuous_invFun.prodMap continuous_id).comp assoc.symm.continuous) }⟩⟩
 
+omit [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] in
+/-- The compact-open neighborhoods of the trivial character test values on compact sets. -/
+private theorem pontryaginDual_nhds_one_hasBasis :
+    (𝓝 (1 : PontryaginDual G)).HasBasis
+      (fun p : Set G × Set Circle ↦ IsCompact p.1 ∧ p.2 ∈ 𝓝 (1 : Circle))
+      (fun p ↦ {χ | MapsTo χ p.1 p.2}) := by
+  let f : PontryaginDual G → C(G, Circle) := ContinuousMonoidHom.toContinuousMap
+  have hf : IsInducing f := ContinuousMonoidHom.isInducing_toContinuousMap G Circle
+  rw [hf.nhds_eq_comap]
+  exact ((𝓝 (1 : Circle)).basis_sets.nhds_continuousMapConst (X := G)).comap f
+
+/-- Paper: Theorem D.1.4.3(1), p. 757. A locally compact Hausdorff abelian group
+with a continuous homomorphism to a finite-dimensional torus and discrete kernel
+is locally Euclidean.
+Deviation: This isolates the local chart construction. On a sufficiently small
+compact identity neighborhood the homomorphism is an embedding. In logarithm
+coordinates its image near zero is a relatively closed local additive subgroup
+of a finite-dimensional real vector space, hence locally a linear subspace.
+Translation gives charts at every point. -/
+theorem isLocallyEuclidean_of_discrete_torus_kernel {ι : Type*} [Finite ι]
+    (f : G →ₜ* (ι → Circle)) (hf : DiscreteTopology f.toMonoidHom.ker) :
+    IsLocallyEuclidean G := by
+  sorry
+
+open scoped Pointwise in
+/-- A neighborhood containing no nontrivial cyclic subgroup lets finitely many
+characters detect the identity locally. -/
+private theorem isLocallyEuclidean_of_noSmallCyclicSubgroups
+    {W : Set G} (hW : W ∈ 𝓝 (1 : G))
+    (hPow : ∀ x : G, (∀ k : ℕ, x ^ k ∈ W) → x = 1) : IsLocallyEuclidean G := by
+  classical
+  obtain ⟨K, hK, hKnhds⟩ := exists_compact_mem_nhds (1 : G)
+  obtain ⟨V, hV, hOne, hVV⟩ := exists_open_nhds_one_mul_subset (inter_mem hKnhds hW)
+  have hVW : V ⊆ W := fun x hx ↦ (hVV (mul_one x ▸ Set.mul_mem_mul hx hOne)).2
+  let S (χ : PontryaginDual G) : Set G := {x | χ x ≠ 1}
+  have hCover : K \ V ⊆ ⋃ χ, S χ := by
+    intro x hx
+    have hx1 : x ≠ 1 := fun h ↦ hx.2 (h ▸ hOne)
+    have hSep := (pontryaginDual_pairing_separates (G := G)).1
+    obtain ⟨χ, hχ⟩ : ∃ χ : PontryaginDual G, χ x ≠ 1 := by
+      by_contra! hn
+      exact hx1 (hSep (funext fun χ ↦ (hn χ).trans (map_one χ).symm))
+    exact mem_iUnion.mpr ⟨χ, hχ⟩
+  obtain ⟨t, ht⟩ := (hK.diff hV).elim_finite_subcover S
+    (fun χ ↦ (isClosed_eq χ.continuous continuous_const).isOpen_compl) hCover
+  let f : G →ₜ* (t → Circle) :=
+    { toFun := fun x χ ↦ χ.val x
+      map_one' := funext fun χ ↦ map_one χ.val
+      map_mul' := fun x y ↦ funext fun χ ↦ map_mul χ.val x y
+      continuous_toFun := continuous_pi fun χ ↦ χ.val.continuous }
+  refine isLocallyEuclidean_of_discrete_torus_kernel f
+    (discreteTopology_of_isOpen_singleton_one ?_)
+  have hKer (x : f.toMonoidHom.ker) (hx : (x : G) ∈ V) : x = 1 := by
+    have hr (k : ℕ) : (x : G) ^ k ∈ V := by
+      induction k with
+      | zero => simpa using hOne
+      | succ k ih =>
+        have hKmem : (x : G) ^ (k + 1) ∈ K :=
+          (hVV (pow_succ (x : G) k ▸ Set.mul_mem_mul ih hx)).1
+        by_contra hn
+        obtain ⟨χ, hχt, hχ⟩ := mem_iUnion₂.mp (ht ⟨hKmem, hn⟩)
+        have hχx : χ (x : G) = 1 :=
+          congrFun (MonoidHom.mem_ker.mp x.property) ⟨χ, hχt⟩
+        exact hχ (by rw [map_pow, hχx, one_pow])
+    exact Subtype.ext (hPow x fun k ↦ hVW (hr k))
+  have hPreimage : (Subtype.val : f.toMonoidHom.ker → G) ⁻¹' V = {1} := by
+    ext x
+    exact ⟨fun hx ↦ mem_singleton_iff.mpr (hKer x hx), by
+      rintro (rfl : x = 1)
+      exact hOne⟩
+  exact hPreimage ▸ hV.preimage continuous_subtype_val
+
+open scoped Pointwise in
+/-- Circle-valued characters lift to real logarithms on a simply connected chart.
+These logarithms rule out nontrivial cyclic subgroups in a smaller neighborhood. -/
+private theorem exists_nhds_one_of_isLocallyEuclidean (hG : IsLocallyEuclidean G) :
+    ∃ W ∈ 𝓝 (1 : G), ∀ x : G, (∀ k : ℕ, x ^ k ∈ W) → x = 1 := by
+  obtain ⟨n, ⟨charts⟩⟩ := hG
+  let E := EuclideanSpace ℝ (Fin n)
+  let e := chartAt E (1 : G)
+  have he : (1 : G) ∈ e.source := mem_chart_source E 1
+  obtain ⟨r, hr, hrb⟩ := Metric.mem_nhds_iff.mp (e.open_target.mem_nhds (e.map_source he))
+  -- Pull back a ball to obtain a simply connected identity neighborhood.
+  let B := Metric.ball (e 1) r
+  let U := e.symm '' B
+  have hU : IsOpen U := (e.symm.isOpen_image_iff_of_subset_source hrb).mpr Metric.isOpen_ball
+  have h1U : (1 : G) ∈ U :=
+    ⟨e 1, Metric.mem_ball_self hr, e.left_inv he⟩
+  let b : B ≃ₜ U := e.symm.homeomorphOfImageSubsetSource hrb rfl
+  let : ContractibleSpace B := (convex_ball _ _).contractibleSpace ⟨_, Metric.mem_ball_self hr⟩
+  let : SimplyConnectedSpace U := b.symm.toHomotopyEquiv.simplyConnectedSpace
+  let : LocallyPathConnectedSpace B := Metric.isOpen_ball.locallyPathConnectedSpace
+  let : LocallyPathConnectedSpace U := b.locallyPathConnectedSpace
+  let : LocallyConnectedSpace G := ChartedSpace.locallyConnectedSpace E G
+  obtain ⟨V₀, hV₀, h1V₀, hprod⟩ := exists_open_nhds_one_mul_subset (hU.mem_nhds h1U)
+  obtain ⟨V, ⟨hV, h1V, hVconn⟩, hVsub⟩ :=
+    (LocallyConnectedSpace.open_connected_basis (1 : G)).mem_iff.mp (hV₀.mem_nhds h1V₀)
+  have hVV : V * V ⊆ U := (Set.mul_subset_mul hVsub hVsub).trans hprod
+  have hVU : V ⊆ U := fun x hx ↦ hVV (mul_one x ▸ Set.mul_mem_mul hx h1V)
+  obtain ⟨K, hK, hKV, hKc⟩ := local_compact_nhds (hV.mem_nhds h1V)
+  refine ⟨K, hK, fun x hx ↦ ?_⟩
+  apply (pontryaginDual_pairing_separates (G := G)).1
+  funext χ
+  let χU : C(U, Circle) := ⟨fun u ↦ χ u, χ.continuous.comp continuous_subtype_val⟩
+  let oneU : U := ⟨1, h1U⟩
+  let oneV : V := ⟨1, h1V⟩
+  obtain ⟨L, ⟨hL0, hL⟩, _⟩ := Circle.isCoveringMap_exp.existsUnique_continuousMap_lifts
+    χU oneU 0 (Circle.exp_zero.trans (map_one χ).symm)
+  have hl (u : U) : Circle.exp (L u) = χ u := congrFun hL u
+  let incl (v : V) : U := ⟨v, hVU v.property⟩
+  let mul (p : V × V) : U := ⟨p.1 * p.2, hVV (Set.mul_mem_mul p.1.property p.2.property)⟩
+  let : ConnectedSpace V := isConnected_iff_connectedSpace.mp hVconn
+  -- Uniqueness of lifts makes the logarithm additive on pairs from the smaller neighborhood.
+  have hAdd (a b : V) : L (mul (a, b)) = L (incl a) + L (incl b) := by
+    have hMul : Continuous mul :=
+      (continuous_subtype_val.comp continuous_fst).mul
+        (continuous_subtype_val.comp continuous_snd) |>.subtype_mk _
+    have hIncl : Continuous incl := continuous_subtype_val.subtype_mk _
+    have hAgree : Circle.exp ∘ (fun p : V × V ↦ L (mul p)) =
+        Circle.exp ∘ (fun p : V × V ↦ L (incl p.1) + L (incl p.2)) := by
+      funext p
+      simp [Circle.exp_add, hl, mul, incl, map_mul]
+    have hStart : L (mul (oneV, oneV)) = L (incl oneV) + L (incl oneV) := by
+      have hmul : mul (oneV, oneV) = oneU := Subtype.ext (one_mul 1)
+      have hincl : incl oneV = oneU := rfl
+      simp [hmul, hincl, hL0]
+    exact congrFun (Circle.isCoveringMap_exp.eq_of_comp_eq (L.continuous.comp hMul)
+      ((L.continuous.comp (hIncl.comp continuous_fst)).add
+        (L.continuous.comp (hIncl.comp continuous_snd))) hAgree (oneV, oneV) hStart) (a, b)
+  -- A nonzero logarithm would grow without bound along the powers inside the compact set.
+  let z (k : ℕ) : V := ⟨x ^ k, hKV (hx k)⟩
+  have hPow (k : ℕ) : L (incl (z k)) = k * L (incl (z 1)) := by
+    induction k with
+    | zero =>
+      have hz : incl (z 0) = oneU := Subtype.ext (pow_zero x)
+      simpa [hz] using hL0
+    | succ k ih =>
+      have hz : incl (z (k + 1)) = mul (z k, z 1) := Subtype.ext (by simp [incl, mul, z, pow_succ])
+      rw [hz, hAdd, ih, Nat.cast_succ, add_mul, one_mul]
+  have hKb : IsCompact (Subtype.val ⁻¹' K : Set U) := by
+    exact IsEmbedding.subtypeVal.isInducing.isCompact_preimage' hKc
+      (Subtype.range_coe.symm ▸ hKV.trans hVU)
+  obtain ⟨M, hM⟩ := (hKb.image L.continuous).isBounded.exists_norm_le
+  have hZero : L (incl (z 1)) = 0 := by
+    by_contra hNe
+    obtain ⟨k, hk⟩ := exists_nat_gt (M / ‖L (incl (z 1))‖)
+    have hLe := hM _ (mem_image_of_mem L (show incl (z k) ∈ Subtype.val ⁻¹' K from hx k))
+    rw [hPow, norm_mul, Real.norm_natCast] at hLe
+    exact (not_lt_of_ge hLe) ((div_lt_iff₀ (norm_pos_iff.mpr hNe)).mp hk)
+  have hValue := hl (incl (z 1))
+  rw [hZero, Circle.exp_zero] at hValue
+  simpa [incl, z] using hValue.symm
+
+omit [T2Space G] in
+/-- If the dual is locally Euclidean, the subgroup generated by a suitable compact
+neighborhood has no nontrivial characters on its quotient, so it equals the whole group. -/
+private theorem isCompactlyGeneratedGroup_of_dual_locallyEuclidean
+    (h : IsLocallyEuclidean (PontryaginDual G)) : IsCompactlyGeneratedGroup G := by
+  obtain ⟨W, hW, hPow⟩ := exists_nhds_one_of_isLocallyEuclidean h
+  obtain ⟨⟨K, U⟩, ⟨hK, hU⟩, hSub⟩ := pontryaginDual_nhds_one_hasBasis.mem_iff.mp hW
+  obtain ⟨L, hL, hLnhds⟩ := exists_compact_mem_nhds (1 : G)
+  let H := Subgroup.closure (K ∪ L)
+  refine ⟨K ∪ L, mem_of_superset hLnhds subset_union_right, hK.union hL, ?_⟩
+  have hH : IsOpen (H : Set G) := H.isOpen_of_mem_nhds
+    (mem_of_superset hLnhds (subset_union_right.trans Subgroup.subset_closure))
+  let : DiscreteTopology (G ⧸ H) := QuotientGroup.discreteTopology hH
+  let q : G →ₜ* (G ⧸ H) := ⟨QuotientGroup.mk' H, QuotientGroup.continuous_mk⟩
+  have hKill (ψ : PontryaginDual (G ⧸ H)) : PontryaginDual.map q ψ = 1 := by
+    let φ : G →ₜ* Circle := PontryaginDual.map q ψ
+    apply hPow
+    intro k
+    apply hSub
+    intro x hx
+    have hqx : q x = 1 := (QuotientGroup.eq_one_iff x).mpr
+      (Subgroup.subset_closure (Or.inl hx))
+    change (φ ^ k) x ∈ U
+    rw [ContinuousMonoidHom.pow_apply]
+    change (PontryaginDual.map q ψ x) ^ k ∈ U
+    rw [PontryaginDual.map_apply, hqx, map_one, one_pow]
+    exact mem_of_mem_nhds hU
+  refine eq_top_iff.mpr fun x _ ↦ (QuotientGroup.eq_one_iff x).mp ?_
+  apply (pontryaginDual_pairing_separates (G := G ⧸ H)).1
+  funext ψ
+  exact DFunLike.congr_fun (hKill ψ) x |>.trans (map_one ψ).symm
+
+-- Retain `T2Space G` in the existing signature.
+set_option linter.unusedSectionVars false in
 /-- Paper: Theorem D.1.4.3(1), p. 757. An LCA group is compactly generated
 exactly when its dual is locally Euclidean. -/
 theorem isCompactlyGeneratedGroup_iff_dual_locallyEuclidean :
-    IsCompactlyGeneratedGroup G ↔ IsLocallyEuclidean (PontryaginDual G) := by sorry
+    IsCompactlyGeneratedGroup G ↔ IsLocallyEuclidean (PontryaginDual G) := by
+  constructor
+  · rintro ⟨K, _, hK, hGen⟩
+    have hC : Circle.centeredArc (Real.pi / 2) ∈ 𝓝 (1 : Circle) := by
+      simpa using Circle.hasBasis_centeredArc_div_two_pow.mem_of_mem (i := 0) trivial
+    refine isLocallyEuclidean_of_noSmallCyclicSubgroups
+      (pontryaginDual_nhds_one_hasBasis.mem_of_mem (i := (K, _)) ⟨hK, hC⟩) ?_
+    intro χ hχ
+    have hTrivial : K ⊆ (χ : G →ₜ* Circle).toMonoidHom.ker := by
+      intro x hx
+      apply MonoidHom.mem_ker.mpr
+      apply Circle.eq_one_of_forall_pow_mem_centeredArc_pi_div_two
+      intro k _
+      let φ : G →ₜ* Circle := χ
+      change φ x ^ k ∈ Circle.centeredArc (Real.pi / 2)
+      rw [← ContinuousMonoidHom.pow_apply]
+      exact hχ k hx
+    have hTop : ⊤ ≤ (χ : G →ₜ* Circle).toMonoidHom.ker :=
+      hGen ▸ (Subgroup.closure_le _).mpr hTrivial
+    exact PontryaginDual.ext fun x ↦ MonoidHom.mem_ker.mp (hTop (Subgroup.mem_top x))
+  · exact isCompactlyGeneratedGroup_of_dual_locallyEuclidean
 
+open scoped Pointwise in
+-- Retain the Hausdorff and local compactness assumptions in the existing signature.
+set_option linter.unusedSectionVars false in
 /-- Paper: Theorem D.1.4.3(1), p. 757. A closed subgroup of a compactly generated
 LCA group is compactly generated. -/
 theorem isCompactlyGeneratedGroup_closedSubgroup (hG : IsCompactlyGeneratedGroup G)
-    (H : Subgroup G) (hH : IsClosed (H : Set G)) : IsCompactlyGeneratedGroup H := by sorry
+    (H : Subgroup G) (hH : IsClosed (H : Set G)) : IsCompactlyGeneratedGroup H := by
+  classical
+  obtain ⟨U, hU, hUc, hGen⟩ := hG
+  -- Write every element as a product of finitely many fixed directions and a remainder in U.
+  obtain ⟨t, ht⟩ := compact_covered_by_mul_left_translates
+    ((hUc.union hUc.inv).mul hUc) ⟨1, mem_interior_iff_mem_nhds.mpr hU⟩
+  let a (n : t → ℕ) : G := ∏ i : t, ((i : G)⁻¹) ^ n i
+  have ha0 : a 0 = 1 := by simp [a]
+  have haAdd (m n : t → ℕ) : a (m + n) = a m * a n := by
+    simp only [a, Pi.add_apply, pow_add, Finset.prod_mul_distrib]
+  have haSingle (i : t) : a (Pi.single i 1) = (i : G)⁻¹ := by
+    unfold a
+    rw [Finset.prod_eq_single i (fun j _ hj ↦ by rw [Pi.single_eq_of_ne hj, pow_zero])
+      (fun hi ↦ (hi (Finset.mem_univ i)).elim), Pi.single_eq_same, pow_one]
+  have hStep (x : G) (hx : x ∈ U ∪ U⁻¹) (y : G)
+      (hy : ∃ n : t → ℕ, ∃ u ∈ U, y = a n * u) :
+      ∃ n : t → ℕ, ∃ u ∈ U, x * y = a n * u := by
+    obtain ⟨n, u, hu, rfl⟩ := hy
+    obtain ⟨i, hi, hiu⟩ := mem_iUnion₂.mp (ht (Set.mul_mem_mul hx hu))
+    change i * (x * u) ∈ U at hiu
+    refine ⟨n + Pi.single ⟨i, hi⟩ 1, i * (x * u), hiu, ?_⟩
+    rw [haAdd, haSingle]
+    simp [mul_assoc, mul_left_comm]
+  have hRepresent (x : G) : ∃ n : t → ℕ, ∃ u ∈ U, x = a n * u := by
+    have hx : x ∈ Subgroup.closure U := hGen.symm ▸ Subgroup.mem_top x
+    refine Subgroup.closure_induction_left (p := fun z _ ↦ ∃ n : t → ℕ, ∃ u ∈ U, z = a n * u)
+      ⟨0, 1, mem_of_mem_nhds hU, by simp [ha0]⟩ ?_ ?_ hx
+    · exact fun z hz y _ ↦ hStep z (Or.inl hz) y
+    · exact fun z hz y _ ↦ hStep z⁻¹ (Or.inr (by simpa using hz)) y
+  obtain ⟨V, hV, _, hVinv, hVV⟩ := exists_closed_nhds_one_inv_eq_mul_subset hU
+  obtain ⟨s, hs⟩ := compact_covered_by_mul_left_translates hUc
+    ⟨1, mem_interior_iff_mem_nhds.mpr hV⟩
+  -- For each translate, Dickson's lemma bounds the minimal nonzero exponent vectors.
+  let P (i : s) (n : t → ℕ) : Prop :=
+    n ≠ 0 ∧ ∃ u ∈ U, (i : G) * u ∈ V ∧ a n * u ∈ H
+  let M : Set (t → ℕ) := {0} ∪ ⋃ i : s, {n | Minimal (P i) n}
+  have hM : M.Finite := (finite_singleton 0).union (finite_iUnion fun i ↦
+    WellQuasiOrderedLE.finite_of_isAntichain (setOfPred_minimal_antichain (P i)))
+  let K : Set G := (a '' M) * U
+  let S : Set H := Subtype.val ⁻¹' K
+  let J : Subgroup G := (Subgroup.closure S).map H.subtype
+  have hK : IsCompact K := (hM.image a).isCompact.mul hUc
+  have hUK : U ⊆ K := by
+    intro u hu
+    rw [← one_mul u, ← ha0]
+    exact Set.mul_mem_mul (mem_image_of_mem a (Or.inl rfl)) hu
+  have hMem (x : G) (hx : x ∈ H) (hxK : x ∈ K) : x ∈ J :=
+    Subgroup.mem_map.mpr ⟨⟨x, hx⟩, Subgroup.subset_closure hxK, rfl⟩
+  have hReduce (n : t → ℕ) : ∀ u ∈ U, a n * u ∈ H → a n * u ∈ J := by
+    refine wellFounded_lt.induction (C := fun m ↦ ∀ u ∈ U, a m * u ∈ H → a m * u ∈ J) n ?_
+    clear n
+    intro n ih u hu hnu
+    by_cases hn : n = 0
+    · exact hMem _ hnu (Set.mul_mem_mul (mem_image_of_mem a (Or.inl hn)) hu)
+    obtain ⟨i, hi, hiu⟩ := mem_iUnion₂.mp (hs hu)
+    let j : s := ⟨i, hi⟩
+    obtain ⟨m, hmn, hm⟩ := exists_minimal_le_of_wellFoundedLT (P j) n
+      ⟨hn, u, hu, hiu, hnu⟩
+    obtain ⟨hm0, v, hv, hiv, hmv⟩ := hm.prop
+    obtain ⟨d, hd⟩ := exists_add_of_le hmn
+    have hdn : d < n := by
+      rw [hd]
+      exact lt_add_of_pos_left d (lt_of_le_of_ne (fun i ↦ Nat.zero_le (m i)) hm0.symm)
+    have huv : u / v ∈ U := by
+      have hInv : (i * v)⁻¹ ∈ V := hVinv ▸ Set.mem_inv.mpr (by simpa using hiv)
+      have hMul := hVV (Set.mul_mem_mul hiu hInv)
+      simpa [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm] using hMul
+    have hFactor : a n * u = (a m * v) * (a d * (u / v)) := by
+      rw [hd, haAdd]
+      simp [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm]
+    have hdH : a d * (u / v) ∈ H := by
+      simpa only [hFactor, inv_mul_cancel_left] using H.mul_mem (H.inv_mem hmv) hnu
+    rw [hFactor]
+    exact J.mul_mem (hMem _ hmv (Set.mul_mem_mul (mem_image_of_mem a
+      (Or.inr (mem_iUnion.mpr ⟨j, hm⟩))) hv)) (ih d hdn (u / v) huv hdH)
+  refine ⟨S, continuous_subtype_val.continuousAt.preimage_mem_nhds (mem_of_superset hU hUK),
+    hH.isClosedEmbedding_subtypeVal.isCompact_preimage hK, eq_top_iff.mpr ?_⟩
+  intro x _
+  obtain ⟨n, u, hu, hx⟩ := hRepresent x
+  have hxJ : (x : G) ∈ J := hx ▸ hReduce n u hu (hx ▸ x.property)
+  obtain ⟨y, hy, hyx⟩ := Subgroup.mem_map.mp hxJ
+  exact (Subtype.ext hyx : y = x) ▸ hy
 
 /-- Paper: Theorem D.1.4.3(1), p. 757. The quotient of a compactly generated LCA
 group by a closed subgroup is compactly generated. -/

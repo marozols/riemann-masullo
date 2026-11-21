@@ -8,6 +8,7 @@ public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
 
 import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.NumberTheory.LSeries.Convergence
@@ -118,7 +119,16 @@ theorem realHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F) (hv : v.
     ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm.toMonoidHom x) =
-        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by sorry
+        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
+  let e := (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm
+  let i : ℝˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_realUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equation (3.2.1.5), p. 123. A complex local unitary character has a
 unique imaginary radial exponent and integer angular weight.
@@ -128,7 +138,16 @@ theorem complexHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F)
     ∃! a : ℂ × ℤ, a.1.re = 0 ∧ ∀ x : ℂˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm.toMonoidHom x) =
-        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by sorry
+        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by
+  let e := (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm
+  let i : ℂˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_complexUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equations (3.2.1.3)–(3.2.1.5), p. 123. The global gamma factor
 multiplies the real and complex local gamma factors, using the local radial
@@ -150,7 +169,27 @@ one unshifted real or complex gamma factor at each infinite place. -/
 theorem heckeGammaFactor_one (s : ℂ) :
     heckeGammaFactor (1 : U[F]) s =
       Complex.Gammaℝ s ^ InfinitePlace.nrRealPlaces F *
-        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F := by sorry
+        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F := by
+  classical
+  have hR (v : InfinitePlace F) (hv : v.IsReal) :
+      (realHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose = (0, 0) := by
+    apply (realHeckeCharacter_parameters (1 : U[F]) v hv).unique
+      (realHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose_spec
+    refine ⟨rfl, fun x ↦ ?_⟩
+    change (1 : ℂ) * _ ^ (0 : ℂ) = (‖(x : ℝ)‖ : ℂ) ^ (0 : ℂ) * _ ^ (0 : ℕ)
+    simp
+  have hC (v : InfinitePlace F) (hv : v.IsComplex) :
+      (complexHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose = (0, 0) := by
+    apply (complexHeckeCharacter_parameters (1 : U[F]) v hv).unique
+      (complexHeckeCharacter_parameters (1 : U[F]) v hv).exists.choose_spec
+    refine ⟨rfl, fun x ↦ ?_⟩
+    change (1 : ℂ) * _ ^ (0 : ℂ) = ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ (0 : ℂ) * _ ^ (0 : ℤ)
+    simp
+  unfold heckeGammaFactor
+  simp_rw [hR, hC]
+  simp only [Fin.val_zero, Int.natAbs_zero, Nat.cast_zero, zero_div, add_zero, dite_eq_ite]
+  rw [Finset.prod_ite]
+  simp only [Finset.prod_const, ← Fintype.card_subtype, InfinitePlace.not_isReal_iff_isComplex]
 
 /-- The value of a unitary Hecke character on a local uniformizer has norm one. -/
 theorem norm_ideleClassNormTwist_zero_localValue (χ : U[F]) (v : HeightOneSpectrum (𝓞 F)) :
@@ -217,15 +256,6 @@ theorem finiteHeckeEulerFactor_summableUniformlyOn (χ : U[F])
   intro v s hs
   rw [Real.norm_of_nonneg (norm_nonneg _)]
   exact norm_finiteHeckeEulerFactor_sub_one_le χ v hr (hmin s hs)
-
-/-- Paper: Lemma 3.2.1.1, p. 123. The Euler product multiplied by the archimedean
-gamma factor converges uniformly on compact subsets of the open half-plane. -/
-theorem completedHeckeEulerProduct_hasProdUniformlyOn (χ : U[F])
-    (K : Set ℂ) (hK : IsCompact K) (h : K ⊆ halfPlane) :
-    TendstoUniformlyOn
-      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦
-        fun s ↦ heckeGammaFactor χ s * ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
-      (fun s ↦ heckeGammaFactor χ s * χ₀(χ).LSeries s) atTop K := by sorry
 
 /-- Paper: Definition 3.2.1.2, p. 123. The Hecke L-function on the half-plane
 is the archimedean gamma factor times Mathlib's finite Hecke L-series. -/
@@ -354,6 +384,87 @@ theorem finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane (χ : U[F]) {a : �
     (LSeriesHasSum_finset_prod f _ s (fun v ↦ LSeriesHasSum_finiteHeckeEulerFactor χ v
       (ha.trans_le hs)) S).LSeries_eq
 
+/-- The reciprocal archimedean factor is entire, including at the poles of the gamma factors. -/
+theorem differentiable_inv_heckeGammaFactor (χ : U[F]) :
+    Differentiable ℂ (fun s ↦ (heckeGammaFactor χ s)⁻¹) := by
+  classical
+  unfold heckeGammaFactor
+  simp_rw [← Finset.prod_inv_distrib]
+  apply Differentiable.fun_finsetProd
+  intro v _
+  by_cases hv : v.IsReal
+  · simp only [dite_eq_left hv]
+    apply Complex.differentiable_Gammaℝ_inv.comp
+    fun_prop
+  · simp only [dite_eq_right hv, div_eq_mul_inv, mul_inv_rev, inv_inv]
+    apply Differentiable.const_mul
+    apply Complex.differentiable_Gammaℂ_inv.comp
+    fun_prop
+
+/-- No archimedean gamma factor vanishes on the positive half-plane. -/
+theorem heckeGammaFactor_ne_zero_of_re_pos (χ : U[F]) {s : ℂ} (hs : 0 < s.re) :
+    heckeGammaFactor χ s ≠ 0 := by
+  classical
+  unfold heckeGammaFactor
+  apply Finset.prod_ne_zero_iff.mpr
+  intro v _
+  by_cases hv : v.IsReal
+  · simp only [dite_eq_left hv]
+    apply Complex.Gammaℝ_ne_zero_of_re_pos
+    have ha := (realHeckeCharacter_parameters χ v hv).exists.choose_spec.1
+    simp only [Complex.add_re, Complex.natCast_re, ha, add_zero]
+    positivity
+  · simp only [dite_eq_right hv]
+    apply (div_ne_zero · two_ne_zero)
+    rw [← Complex.Gammaℝ_mul_Gammaℝ_add_one]
+    have hv' := InfinitePlace.not_isReal_iff_isComplex.mp hv
+    let a := (complexHeckeCharacter_parameters χ v hv').exists.choose
+    have ha : a.1.re = 0 := (complexHeckeCharacter_parameters χ v hv').exists.choose_spec.1
+    have ht : 0 < (s + a.1 + (a.2.natAbs : ℂ) / 2).re := by
+      simp only [Complex.add_re, Complex.div_ofNat_re, Complex.natCast_re, ha, add_zero]
+      positivity
+    exact mul_ne_zero (Complex.Gammaℝ_ne_zero_of_re_pos ht)
+      (Complex.Gammaℝ_ne_zero_of_re_pos (by
+        simpa only [Complex.add_re, Complex.one_re] using
+          (add_pos ht zero_lt_one)))
+
+/-- The archimedean factor is holomorphic on the positive half-plane. -/
+theorem differentiableAt_heckeGammaFactor_of_re_pos (χ : U[F]) {s : ℂ} (hs : 0 < s.re) :
+    DifferentiableAt ℂ (heckeGammaFactor χ) s := by
+  have h := (differentiable_inv_heckeGammaFactor χ).differentiableAt (x := s)
+  have hd : DifferentiableAt ℂ (fun t ↦ ((heckeGammaFactor χ t)⁻¹)⁻¹) s :=
+    h.inv (inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ hs))
+  simpa only [inv_inv] using hd
+
+/-- Paper: Lemma 3.2.1.1, p. 123. The Euler product multiplied by the archimedean
+gamma factor converges uniformly on compact subsets of the open half-plane. -/
+theorem completedHeckeEulerProduct_hasProdUniformlyOn (χ : U[F])
+    (K : Set ℂ) (hK : IsCompact K) (h : K ⊆ halfPlane) :
+    TendstoUniformlyOn
+      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦
+        fun s ↦ heckeGammaFactor χ s * ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
+      (fun s ↦ heckeGammaFactor χ s * χ₀(χ).LSeries s) atTop K := by
+  rcases K.eq_empty_or_nonempty with rfl | hne
+  · exact tendstoUniformlyOn_empty
+  obtain ⟨s₀, hs₀, hmin⟩ := hK.exists_isMinOn hne Complex.continuous_re.continuousOn
+  have hu := (finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s₀.re) (h hs₀)).mono
+    (fun s hs ↦ hmin hs : K ⊆ {s : ℂ | s₀.re ≤ s.re})
+  have hc : ContinuousOn (fun s ↦ ‖heckeGammaFactor χ s‖) K := fun s hs ↦
+    (differentiableAt_heckeGammaFactor_of_re_pos χ (zero_lt_one.trans (h hs))).continuousAt.norm.continuousWithinAt
+  obtain ⟨b, _, hb⟩ := hK.exists_isMaxOn hne hc
+  let B := ‖heckeGammaFactor χ b‖ + 1
+  have hB : 0 < B := by dsimp [B]; positivity
+  apply Metric.tendstoUniformlyOn_iff.mpr
+  intro ε hε
+  filter_upwards [Metric.tendstoUniformlyOn_iff.mp hu (ε / B) (div_pos hε hB)] with T hT
+  intro s hs
+  have hbound : ‖heckeGammaFactor χ s‖ ≤ B := (hb hs).trans (by dsimp [B]; linarith)
+  rw [dist_eq_norm, ← mul_sub, norm_mul]
+  have hsmall := hT s hs
+  rw [dist_eq_norm] at hsmall
+  exact (mul_le_mul_of_nonneg_right hbound (norm_nonneg _)).trans_lt
+    ((mul_lt_mul_of_pos_left hsmall hB).trans_eq (mul_div_cancel₀ _ hB.ne'))
+
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Hecke L-function
 is the value of the convergent Euler product with the ramified factors omitted. -/
 theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
@@ -364,8 +475,14 @@ theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
 theorem finiteHeckeL_hasProdUniformlyOn (χ : U[F]) (K : Set halfPlane) (hK : IsCompact K) :
-    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K :=
-  by sorry
+    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K := by
+  apply hasProdUniformlyOn_iff_tendstoUniformlyOn.mpr
+  rcases K.eq_empty_or_nonempty with rfl | hne
+  · exact tendstoUniformlyOn_empty
+  · obtain ⟨s₀, _, hmin⟩ := hK.exists_isMinOn hne
+      (Complex.continuous_re.comp continuous_subtype_val).continuousOn
+    have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s₀.val.re) s₀.property
+    exact (h.comp (fun s : halfPlane ↦ s.val)).mono fun s hs ↦ hmin hs
 
 /-- Paper: Definition 3.2.1.4, p. 124. The finite Hecke L-function admits
 a meromorphic continuation to the complex plane. -/
@@ -423,11 +540,18 @@ def ideleNormBand (F : Type*) [Field F] [NumberField F] (a b : ℝ) : Set 𝕀[F
 /-- Paper: §3.2.2, p. 124. The identity lies in a closed norm band precisely
 when the band contains one. -/
 theorem one_mem_ideleNormBand (a b : ℝ) :
-    (1 : 𝕀[F]) ∈ ideleNormBand F a b ↔ a ≤ 1 ∧ 1 ≤ b := by sorry
+    (1 : 𝕀[F]) ∈ ideleNormBand F a b ↔ a ≤ 1 ∧ 1 ≤ b := by
+  simp [ideleNormBand]
 
 /-- Paper: §3.2.2, p. 124. The surjective idele class norm takes values
 other than one, so its abscissa is defined. -/
-theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by sorry
+theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  let t := Units.mk0 (2 : ℝ≥0) (by norm_num)
+  obtain ⟨g, hg⟩ := hsurj t
+  refine ⟨g, fun h ↦ ?_⟩
+  have ht := congrArg Units.val (hg.symm.trans h)
+  norm_num [t] at ht
 
 local notation "rightHalf" =>
   (relativeRightHalfPlane (ideleClassNorm F) (isProperMap_ideleClassNorm F)

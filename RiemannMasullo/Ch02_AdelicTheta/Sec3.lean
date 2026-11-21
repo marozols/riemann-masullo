@@ -265,7 +265,10 @@ def sLocalAdelicThetaOnClasses (f : ℬₛ) : C(Jₛ, ℂ) :=
 /-- Paper: Proposition 2.3.1.2(1), p. 100. The descended function at the
 class of an S-idele agrees with theta at that S-idele. -/
 theorem sLocalAdelicThetaOnClasses_mk (f : ℬₛ) (g : Iₛ) :
-    sLocalAdelicThetaOnClasses F S f (classOf g) = sLocalAdelicTheta F S f g := by sorry
+    sLocalAdelicThetaOnClasses F S f (classOf g) = sLocalAdelicTheta F S f g :=
+  DFunLike.congr_fun (IsQuotientMap.lift_comp (f := ⟨classOf, QuotientGroup.continuous_mk⟩)
+    (QuotientGroup.isQuotientMap_mk _) (sLocalAdelicTheta F S f)
+    (sLocalAdelicTheta_factorsThrough F S f)) g
 
 -- TODO(paper-gap): The support argument before (2.3.1.5) bounds only the finite
 -- coordinates. On p. 104 the argument also switches to test functions on the

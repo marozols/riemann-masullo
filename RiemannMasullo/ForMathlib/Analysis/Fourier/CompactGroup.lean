@@ -50,6 +50,16 @@ private theorem integral_character_pair_zero {χ ψ : PontryaginDual K} (hne : �
     exact integral_congr_ae (ae_of_all _ fun a ↦ (hF a).symm)
   exact (mul_eq_mul_right_iff.mp h).resolve_left hne'
 
+omit [CompactSpace K] [IsFiniteMeasure μ] [NeZero μ] in
+/-- The Haar integral of the product of two characters, with the first conjugated,
+is zero off the diagonal and the full Haar mass on the diagonal. -/
+theorem integral_character_pair [DecidableEq (PontryaginDual K)] (χ ψ : PontryaginDual K) :
+    ∫ a, star (χ a : ℂ) * (ψ a : ℂ) ∂μ = if χ = ψ then (μ.real univ : ℂ) else 0 := by
+  by_cases h : χ = ψ
+  · subst ψ
+    simp [← Circle.coe_inv_eq_conj, Complex.real_smul]
+  · simpa [h] using integral_character_pair_zero μ h
+
 /-- Bessel's inequality for continuous characters on a compact abelian group with
 finite nonzero invariant measure, including its total-mass factor. -/
 theorem sum_sq_character_integral_le {u : K → ℂ} (hu : MemLp u 2 μ)
