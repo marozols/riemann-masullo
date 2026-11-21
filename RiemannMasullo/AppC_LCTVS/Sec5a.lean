@@ -907,7 +907,9 @@ preserves weak differentiability. -/
 theorem WeaklyDifferentiableOn.comp {Ω₁ Ω₂ : Set V} (hΩ₁ : IsOpen Ω₁) (hΩ₂ : IsOpen Ω₂)
     {f : V → E} {g : V → V} (hf : WeaklyDifferentiableOn k f Ω₂)
     (hg : DifferentiableOn k g Ω₁) (hmap : MapsTo g Ω₁ Ω₂) :
-    WeaklyDifferentiableOn k (f ∘ g) Ω₁ := by sorry
+    WeaklyDifferentiableOn k (f ∘ g) Ω₁ := by
+  intro φ
+  exact (hf φ).comp hg hmap
 
 -- TODO(paper-gap): In C.5.1.17(2), taking f to be the scalar inclusion and g(t) =
 -- t² sin(1/t) (with g(0) = 0) disproves continuous differentiability of the composite.
