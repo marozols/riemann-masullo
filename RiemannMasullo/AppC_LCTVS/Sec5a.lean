@@ -7,7 +7,7 @@ public import Mathlib.Analysis.InnerProductSpace.PiL2
 public import Mathlib.Topology.Compactness.Paracompact
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 public import Mathlib.Topology.Sets.Compacts
-public import Mathlib.Topology.UniformSpace.CompactConvergence
+public import RiemannMasullo.ForMathlib.Topology.UniformSpace.CompactConvergence
 
 /-!
 # Vector-valued continuous and differentiable functions
@@ -157,7 +157,11 @@ theorem continuousMap_polynormable :
 quasi-complete locally convex target is quasi-complete. Mathlib supplies Hausdorffness. -/
 theorem continuousMap_quasiComplete :
     letI := IsTopologicalAddGroup.rightUniformSpace E
-    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C(X, E) := by sorry
+    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C(X, E) := by
+  let := IsTopologicalAddGroup.rightUniformSpace E
+  intro hE
+  refine ⟨fun {s} hb hs ↦ isComplete_continuousMap_of_isComplete_eval hs fun x ↦ ?_⟩
+  exact hE.quasiComplete (hb.image (ContinuousMap.evalCLM ℂ x)).closure isClosed_closure
 
 /-- Paper: Example C.5.1.5, p. 722. Positive integer translates of a nonzero continuous
 map supported in the unit interval converge to zero in the compact-open topology.
