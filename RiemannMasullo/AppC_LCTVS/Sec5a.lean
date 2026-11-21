@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.AppC_LCTVS.Sec4
 public import Mathlib.Analysis.Calculus.ContDiff.Basic
 public import Mathlib.Analysis.Calculus.Deriv.Basic
+import Mathlib.Analysis.Calculus.Deriv.Slope
 public import Mathlib.Analysis.InnerProductSpace.PiL2
 public import Mathlib.Topology.Compactness.Paracompact
 public import RiemannMasullo.ForMathlib.Topology.ContinuousMap.CompactlySupported
@@ -879,11 +880,37 @@ theorem weaklyContDiffOn_iff_continuous_weakPartials {Ω : Set V} (hΩ : IsOpen 
       ∀ i : Fin d, ∃ D : Ω → PettisWeakCompletion E, HasWeakPartialOn i f D ∧ Continuous D :=
   by sorry
 
+/-- Paper: Lemma C.5.1.16(1), p. 729. Evaluating a weak directional limit at a
+continuous functional gives the scalar line derivative in that direction. -/
+theorem HasWeakDirectionalDerivativesOn.hasDerivWithinAt
+    {W : Type*} [NormedAddCommGroup W] [NormedSpace k W] {Ω : Set W}
+    {f : W → E} {D : Ω × W → PettisWeakCompletion E}
+    (hD : HasWeakDirectionalDerivativesOn (k := k) f D)
+    (φ : StrongDual ℂ E) (x : Ω) (v : W) :
+    HasDerivWithinAt (fun t : k ↦ φ (f ((x : W) + t • v)))
+      ((show Module.Dual ℂ (StrongDual ℂ E) from D (x, v)) φ)
+      ((fun t : k ↦ (x : W) + t • v) ⁻¹' Ω) 0 := by
+  apply hasDerivWithinAt_iff_tendsto_slope.mpr
+  have h := (WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).1 (hD x v) φ
+  change Tendsto (fun h : k ↦ algebraMap k ℂ h⁻¹ * φ (f ((x : W) + h • v) - f x))
+    (𝓝[{h : k | h ≠ 0 ∧ (x : W) + h • v ∈ Ω}] 0)
+    (𝓝 ((show Module.Dual ℂ (StrongDual ℂ E) from D (x, v)) φ)) at h
+  have hs : ((fun t : k ↦ (x : W) + t • v) ⁻¹' Ω) \ {0} =
+      {t : k | t ≠ 0 ∧ (x : W) + t • v ∈ Ω} := by
+    ext t
+    simp [and_comm]
+  rw [hs, slope_fun_def]
+  simpa only [sub_zero, vsub_eq_sub, zero_smul, add_zero, Algebra.smul_def,
+    map_sub] using! h
+
 /-- Paper: Lemma C.5.1.16(1), p. 729. Weak Gâteaux differentiability gives weak
 differentiability in each standard coordinate direction. -/
 theorem WeakGateauxDifferentiableOn.weaklyPartialDifferentiableOn {Ω : Set V}
     (hΩ : IsOpen Ω) {f : V → E} (hf : WeakGateauxDifferentiableOn (k := k) Ω f) (i : Fin d) :
-    WeaklyPartialDifferentiableOn i f Ω := by sorry
+    WeaklyPartialDifferentiableOn i f Ω := by
+  obtain ⟨D, hD⟩ := hf
+  intro φ x
+  exact (hD.hasDerivWithinAt φ x (EuclideanSpace.single i 1)).differentiableWithinAt
 
 /-- Paper: Lemma C.5.1.16(2), p. 729. A jointly continuous weak Gâteaux derivative
 is the weak differential. -/
