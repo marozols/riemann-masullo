@@ -152,7 +152,8 @@ def cyclicSchwartzPeriodization : 𝓢(ℝ, ℂ) →L[ℂ] S where
 has the same absolutely convergent orbit sum on a logarithmic lift. -/
 theorem cyclicSchwartzPeriodization_hasSum (f : 𝓢(ℝ, ℂ)) (x : ℝ) :
     HasSum (fun k : ℤ ↦ f (x + (k : ℝ) * Real.log γ))
-      (cyclicSchwartzPeriodization γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by sorry
+      (cyclicSchwartzPeriodization γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by
+  exact cyclicPeriodizationValue_hasSum γ hγ f x
 
 /-- Paper: Definition 4.2.1.1, p. 162. Periodization of an exponentially
 decaying Schwartz function sums its translates by integer powers of γ.
