@@ -5,7 +5,7 @@ import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
 import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
-import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Montel
 import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
 import Mathlib.Analysis.SpecialFunctions.ExpDeriv
 
@@ -574,7 +574,24 @@ theorem positiveRealExponentialDecay_nuclear (hInt : OrdConnected I) (hne : I.No
 /-- Paper: Lemma D.3.2.3(1), p. 801. The positive-real decay space has the
 Montel property and is barrelled. -/
 theorem positiveRealExponentialDecay_montel (hInt : OrdConnected I) (hne : I.Nonempty) :
-    BarrelledSpace ℂ E ∧ MontelSpace ℂ E := by sorry
+    BarrelledSpace ℂ E ∧ MontelSpace ℂ E := by
+  have : MetrizableSpace E := exponentialDecay_metrizable I hInt hne
+  have : CompleteSpace E := positiveRealExponentialDecay_complete I hne
+  have : (uniformity E).IsCountablyGenerated := IsUniformAddGroup.uniformity_countably_generated
+  have : MontelSpace ℂ 𝓢(ℝ, ℂ) := schwartzMap_real_montel
+  refine ⟨inferInstance, ⟨fun S hclosed hS ↦ ?_⟩⟩
+  let T : E →ₗ[ℂ] (I → 𝓢(ℝ, ℂ)) := LinearMap.pi (logExponentialDecayTwist I)
+  have hT : IsEmbedding T := positiveRealExponentialDecay_isEmbedding I hne
+  have hu := AddMonoidHom.isUniformInducing_of_isInducing (f := T.toAddMonoidHom) hT.isInducing
+  let K (a : I) := closure (logExponentialDecayTwist I a '' S)
+  have hK (a : I) : IsCompact (K a) := by
+    let L : E →L[ℂ] 𝓢(ℝ, ℂ) := ⟨logExponentialDecayTwist I a, (continuous_apply a).comp hT.continuous⟩
+    exact MontelSpace.isCompact_of_isClosed_of_isVonNBounded ℂ isClosed_closure (hS.image L).closure
+  apply TotallyBounded.isCompact_of_isClosed _ hclosed
+  apply (totallyBounded_image_iff hu).mp
+  apply (isCompact_univ_pi hK).totallyBounded.subset
+  rintro _ ⟨f, hf, rfl⟩ a _
+  exact subset_closure (mem_image_of_mem _ hf)
 
 /-- Paper: Lemma D.3.2.3(2), p. 801. The strong dual is complete. -/
 theorem positiveRealExponentialDecay_strongDual_complete (hInt : OrdConnected I) (hne : I.Nonempty) :
