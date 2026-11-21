@@ -57,7 +57,37 @@ norm-one subgroup and the image of the module with the original group. -/
 theorem IsModulation.exists_prod_equiv {m : G →ₜ* ℝ≥0ˣ} (hm : IsModulation m)
     (τ : m.toMonoidHom.range →ₜ* G) (hτ : ∀ t, m (τ t) = (t : ℝ≥0ˣ)) :
     ∃ e : (m.toMonoidHom.ker × m.toMonoidHom.range) ≃ₜ* G,
-      ∀ k t, e (k, t) = (k : G) * τ t := by sorry
+      ∀ k t, e (k, t) = (k : G) * τ t := by
+  let r := m.toMonoidHom.rangeRestrict
+  have hr : Continuous r := m.continuous.subtype_mk _
+  have hsplit (k : m.toMonoidHom.ker) (t : m.toMonoidHom.range) : r ((k : G) * τ t) = t := by
+    apply Subtype.ext
+    change m ((k : G) * τ t) = (t : ℝ≥0ˣ)
+    rw [map_mul, hτ, show m k = 1 from k.property, one_mul]
+  refine ⟨{ toFun := fun p ↦ (p.1 : G) * τ p.2
+            invFun := fun g ↦ (⟨g / τ (r g), ?_⟩, r g)
+            left_inv := ?_
+            right_inv := ?_
+            map_mul' := ?_
+            continuous_toFun := ?_
+            continuous_invFun := ?_ }, fun _ _ ↦ rfl⟩
+  · change m (g / τ (r g)) = 1
+    rw [map_div, hτ]
+    exact div_self' (m g)
+  · rintro ⟨k, t⟩
+    apply Prod.ext
+    · apply Subtype.ext
+      change (k : G) * τ t / τ (r ((k : G) * τ t)) = k
+      rw [hsplit, mul_div_cancel_right]
+    · exact hsplit k t
+  · intro g
+    exact div_mul_cancel _ _
+  · rintro ⟨k, t⟩ ⟨l, u⟩
+    change ((k : G) * l) * τ (t * u) = ((k : G) * τ t) * ((l : G) * τ u)
+    rw [map_mul]
+    ac_rfl
+  · fun_prop
+  · exact (continuous_id.div' (τ.continuous.comp hr)).subtype_mk _ |>.prodMk hr
 
 end Modulation
 
