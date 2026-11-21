@@ -7,7 +7,7 @@ public import Mathlib.NumberTheory.NumberField.HeckeLFunction
 public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
-import all Mathlib.Geometry.Manifold.LocalDiffeomorph
+import RiemannMasullo.ForMathlib.Geometry.Manifold.LocalDiffeomorph
 import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 import RiemannMasullo.AppA_AlgebraicNT.Sec2
@@ -518,38 +518,25 @@ theorem quasiCharacter_comp_isLocalDiffeomorph {H : Type*} [CommGroup H] [Topolo
   let := quasiCharacterChartedSpace n hH
   let := quasiCharacter_isManifold m hG
   let := quasiCharacter_isManifold n hH
-  intro c
-  let d := c.comp i
-  let a := (hG c).choose
-  let b := (hH d).choose
-  let e := a.trans b.symm
-  have ha : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω a a.source := contMDiffOn_chart (x := c)
-  have ha' : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω a.symm a.target := contMDiffOn_chart_symm (x := c)
-  have hb : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω b b.source := contMDiffOn_chart (x := d)
-  have hb' : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω b.symm b.target := contMDiffOn_chart_symm (x := d)
-  let φ : PartialDiffeomorph 𝓘(ℂ) 𝓘(ℂ) (QuasiCharacter G) (QuasiCharacter H) ω :=
-    { toPartialEquiv := e.toPartialEquiv
-      open_source := e.open_source
-      open_target := e.open_target
-      contMDiffOn_toFun := hb'.comp (ha.mono Set.inter_subset_left) Set.inter_subset_right
-      contMDiffOn_invFun := ha'.comp (hb.mono Set.inter_subset_left) Set.inter_subset_right }
-  obtain ⟨hc, hc0, hct⟩ := (hG c).choose_spec
-  obtain ⟨hd, hd0, hdt⟩ := (hH d).choose_spec
-  rw [IsLocalDiffeomorphAt]
-  refine ⟨φ, ⟨hc, ?_⟩, ?_⟩
-  · change a c ∈ b.target
-    rw [show a c = b d from hc0.trans hd0.symm]
-    exact b.map_source hd
-  · intro y hy
-    change y ∈ a.source ∧ a y ∈ b.target at hy
+  apply isLocalDiffeomorph_of_chartAt 𝓘(ℂ) ω
+  · intro c
+    let d := c.comp i
+    let a := (hG c).choose
+    let b := (hH d).choose
+    change a c ∈ b.target
+    rw [show a c = b d from (hG c).choose_spec.2.1.trans (hH d).choose_spec.2.1.symm]
+    exact b.map_source (hH d).choose_spec.1
+  · intro c y hy hz
+    let d := c.comp i
+    let a := (hG c).choose
+    let b := (hH d).choose
     ext1 x
     change y (i x) = b.symm (a y) x
-    rw [hdt _ hy.2]
+    rw [(hH d).choose_spec.2.2 (a y) hz x]
     change y (i x) = c (i x) * (((n x : ℝ≥0) : ℝ) : ℂ) ^ (a y)
     rw [← hi x]
-    exact (congrArg (fun q : QuasiCharacter G ↦ q (i x)) (a.left_inv hy.1)).symm.trans
-      (hct _ (a.map_source hy.1) (i x))
-
+    exact (congrArg (fun q : QuasiCharacter G ↦ q (i x)) (a.left_inv hy)).symm.trans
+      ((hG c).choose_spec.2.2 _ (a.map_source hy) (i x))
 
 /-- Paper: Definition 3.1.1.1, p. 119. The abscissa is the real exponent in the modulus of
 a quasi-character. We evaluate the ratio of logarithms at a point where the module differs from one.
@@ -1462,6 +1449,29 @@ theorem sIdeleInsertion_apply (g : (SAdeleRing F S)ˣ) :
     have h : v ≠ u.val := fun h => hv (h ▸ u.property)
     exact RestrictedProduct.mulSingle_eq_of_ne _ _ h
 
+/-- The global norm of the idele extended by one equals the product of the norms in S. -/
+theorem ideleNorm_sIdeleInsertion (g : (SAdeleRing F S)ˣ) :
+    ideleNorm F (sIdeleInsertion F S g) = sIdeleNorm F S g := by
+  classical
+  let a := sIdeleInsertion F S g
+  obtain ⟨harch, hin, hout⟩ := sIdeleInsertion_apply F S g
+  have hS : (fun v : Primes(F) ↦ ‖a.val.2 v‖).mulSupport ⊆ (S : Set (Primes(F))) := by
+    intro v hv
+    by_contra h
+    exact hv ((congrArg norm (hout v h)).trans norm_one)
+  let ev : ((SAdeleRing F S)ˣ →* ℝ≥0ˣ) →* ℝ := NNReal.toRealHom.toMonoidHom.comp
+    ((Units.coeHom ℝ≥0).comp (MonoidHom.eval g))
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F a : ℝ≥0) : ℝ) = ev (sIdeleNorm F S)
+  rw [((ideleNorm_spec F).1 a).2, finprod_eq_prod_of_mulSupport_subset _ hS,
+    ← Finset.prod_coe_sort S (fun v ↦ ‖a.val.2 v‖)]
+  change (∏ w : InfinitePlace F, ‖(sIdeleInsertion F S g).val.1 w‖ ^ w.mult) *
+    (∏ v : S, ‖(sIdeleInsertion F S g).val.2 v.val‖) = _
+  simp_rw [harch, hin]
+  simp only [sIdeleNorm, map_mul, map_prod]
+  rfl
+
 /-- Paper: Equation (3.1.2.7), p. 121. Extension by one is a closed topological embedding. -/
 theorem isClosedEmbedding_sIdeleInsertion : IsClosedEmbedding (sIdeleInsertion F S) := by
   let : T2Space (IdeleGroup (𝓞 F) F) := (ideleGroup_topology F).1
@@ -1590,7 +1600,38 @@ S-idelic character surface is a local complex analytic isomorphism. -/
 theorem sIdeleRestriction_isLocalDiffeomorph :
     letI := quasiCharacterChartedSpace _ (sIdeleQuotient_hasNormTwistCharts F S)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (sIdeleRestriction F S) := by
-  sorry
+  let m := ideleClassNorm F
+  let n := sIdeleQuotientNorm F S
+  let hG := ideleClass_hasNormTwistCharts F
+  let hH := sIdeleQuotient_hasNormTwistCharts F S
+  let := quasiCharacterChartedSpace (G := SIdeleQuotient F S) n hH
+  let : IsManifold 𝓘(ℂ) ω (HeckeCharacter (𝓞 F) F) :=
+    quasiCharacter_isManifold (G := IdeleClassGroup (𝓞 F) F) m hG
+  let := quasiCharacter_isManifold (G := SIdeleQuotient F S) n hH
+  apply isLocalDiffeomorph_of_chartAt 𝓘(ℂ) ω
+  · intro c
+    let d := sIdeleRestriction F S c
+    have h₀ := (hG c.val).choose_spec.2.1
+    have hd₀ := (hH d).choose_spec.2.1
+    change (hG c.val).choose c.val ∈ (hH d).choose.target
+    rw [h₀.trans hd₀.symm]
+    exact (hH d).choose.map_source (hH d).choose_spec.1
+  · intro c y hy hz
+    let d := sIdeleRestriction F S c
+    let a := (hG c.val).choose
+    let b := (hH d).choose
+    have hy' : y.val ∈ a.source := hy.2
+    change a y.val ∈ b.target at hz
+    change sIdeleRestriction F S y = b.symm (a y.val)
+    ext1 x
+    obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective x
+    rw [sIdeleRestriction_mk, (hH d).choose_spec.2.2 _ hz]
+    change y.val (QuotientGroup.mk (sIdeleInsertion F S g)) =
+      c.val (QuotientGroup.mk (sIdeleInsertion F S g)) * (((sIdeleNorm F S g : ℝ≥0) : ℝ) : ℂ) ^ (a y.val)
+    rw [← ideleNorm_sIdeleInsertion]
+    let t : IdeleClassGroup (𝓞 F) F := QuotientGroup.mk (sIdeleInsertion F S g)
+    exact (congrArg (fun q : HeckeCharacter (𝓞 F) F ↦ q t) (a.left_inv hy')).symm.trans
+      ((hG c.val).choose_spec.2.2 _ (a.map_source hy') t)
 
 /-- Paper: §3.1.2.3, p. 122. As S varies, the open loci of characters unramified
 outside S cover the entire space of Hecke characters. -/
