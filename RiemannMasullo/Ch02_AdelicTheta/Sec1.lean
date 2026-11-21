@@ -104,7 +104,8 @@ theorem euclideanSchwartz_reflexive (m : ℕ) :
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is complete. -/
 theorem euclideanSchwartz_strongDual_complete (m : ℕ) :
-    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by sorry
+    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by
+  infer_instance
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is nuclear. -/

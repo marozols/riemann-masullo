@@ -286,11 +286,46 @@ def ratAdeleFundamentalDomain : Set 𝔸[ℚ] :=
   {a | extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace) ∈ Set.Ico 0 1 ∧
     a ∈ integralAdelesOutside ℚ ∅}
 
+/-- Paper: Example A.2.1.3, pp. 545–546. The interval description agrees with the
+general adelic domain for the integral basis consisting of one. -/
+private theorem ratAdeleFundamentalDomain_eq (b : Module.Basis Unit ℤ (𝓞 ℚ)) (hb : (b () : ℚ) = 1) :
+    ratAdeleFundamentalDomain = adeleFundamentalDomain ℚ b := by
+  ext a
+  change (_ ∈ Set.Ico (0 : ℝ) 1 ∧ _) ↔ (_ ∈ infiniteAdeleFundamentalDomain ℚ b ∧ _)
+  apply and_congr_left'
+  let t := extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace)
+  have h : InfiniteAdeleRing.ringEquiv_mixedSpace ℚ a.1 = t • mixedEmbedding ℚ (b () : ℚ) := by
+    rw [hb, map_one]
+    apply Prod.ext
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      change t = t * 1
+      exact (mul_one _).symm
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      exact (InfinitePlace.not_isReal_iff_isComplex.mpr hv Rat.isReal_infinitePlace).elim
+  have hm := infiniteAdeleFundamentalDomain_basis_line ℚ b () t
+  rwa [← h, RingEquiv.symm_apply_apply, Iff.comm] at hm
+
 /-- Paper: Example A.2.1.3, p. 545. Every rational adele belongs to exactly one
 rational translate of the displayed domain. -/
 theorem ratAdeleFundamentalDomain_unique_translate (a : 𝔸[ℚ]) :
     ∃! q : ℚ, a ∈ algebraMap ℚ 𝔸[ℚ] q +ᵥ ratAdeleFundamentalDomain := by
-  sorry
+  let b := (Module.Basis.singleton Unit ℤ).map Rat.ringOfIntegersEquiv.symm.toAddEquiv.toIntLinearEquiv
+  have hb : (b () : ℚ) = 1 := by simp [b, Module.Basis.singleton_apply]
+  rw [ratAdeleFundamentalDomain_eq b hb]
+  obtain ⟨q, hq⟩ := Set.mem_iUnion.mp ((adeleFundamentalDomain_cover ℚ b).symm ▸ Set.mem_univ a)
+  refine ⟨q, hq, ?_⟩
+  intro r hr
+  by_contra hne
+  have hd := adeleFundamentalDomain_disjoint ℚ b (r - q) (sub_ne_zero.mpr hne)
+  have hdis : Disjoint (algebraMap ℚ 𝔸[ℚ] r +ᵥ adeleFundamentalDomain ℚ b)
+      (algebraMap ℚ 𝔸[ℚ] q +ᵥ adeleFundamentalDomain ℚ b) := by
+    rw [Set.disjoint_vadd_set_right, ← add_vadd, add_comm, ← sub_eq_add_neg, ← map_sub]
+    exact hd
+  exact Set.disjoint_left.mp hdis hr hq
 
 /-- Paper: Example A.2.1.3, p. 546. Each member of the rationally indexed cover
 has compact closure. -/

@@ -9,6 +9,7 @@ public import Mathlib.Topology.Algebra.PontryaginDual
 
 import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
+import RiemannMasullo.AppA_AlgebraicNT.Sec2
 
 import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
@@ -661,6 +662,7 @@ theorem quasiCharacterAbscissa_dual [IsTopologicalGroup G] (hm : IsProperMap m)
   rw [map_inv, ← div_eq_mul_inv, norm_div, Complex.norm_of_nonneg hmod.le,
     Real.log_div hmod.ne' hnorm, sub_div, div_self hlog]
 
+open Filter in
 /-- Paper: Equation (3.1.1.4), p. 119. The duality map is an analytic automorphism and
 serves as its own inverse. -/
 theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous m)
@@ -668,7 +670,56 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
     letI := quasiCharacterChartedSpace m h
     ∃ e : Diffeomorph 𝓘(ℂ) 𝓘(ℂ) (QuasiCharacter G) (QuasiCharacter G) ω,
       (∀ c, e c = dualQuasiCharacter m hm c) ∧ ∀ c, e.symm c = dualQuasiCharacter m hm c := by
-  sorry
+  let := quasiCharacterChartedSpace m h
+  let D := dualQuasiCharacter m hm
+  have hD (c : QuasiCharacter G) (g : G) : D c g = (modℝ g : ℂ) / c g := by
+    change (modℝ g : ℂ) * c g⁻¹ = _
+    rw [map_inv, div_eq_mul_inv]
+  have hn (g : G) : (modℝ g : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
+  have hinv : Function.Involutive D := by
+    intro c
+    ext1 g
+    rw [hD, hD]
+    field_simp [hn g, ((Group.isUnit g).map c).ne_zero]
+  have hsmooth : ContMDiff 𝓘(ℂ) 𝓘(ℂ) ω D := by
+    intro c
+    let a := (h c).choose
+    let b := (h (D c)).choose
+    obtain ⟨ha, ha0, htwist⟩ := (h c).choose_spec
+    obtain ⟨hb, hb0, hdual⟩ := (h (D c)).choose_spec
+    have ht : -(a c) ∈ b.target := by
+      change -((h c).choose c) ∈ b.target
+      rw [ha0, neg_zero, ← hb0]
+      exact b.map_source hb
+    have hnear : ∀ᶠ z in 𝓝 (a c), z ∈ a.target ∧ -z ∈ b.target := by
+      filter_upwards [a.open_target.mem_nhds (a.map_source ha),
+        continuous_neg.continuousAt.preimage_mem_nhds (b.open_target.mem_nhds ht)] with z hz hz'
+      exact ⟨hz, hz'⟩
+    -- Duality sends a twist by z to a twist by -z in the chart at the dual character.
+    have hchart : D ∘ a.symm =ᶠ[𝓝 (a c)] b.symm ∘ Neg.neg := by
+      filter_upwards [hnear] with z hz
+      ext1 g
+      change D (a.symm z) g = b.symm (-z) g
+      rw [hD, htwist z hz.1 g, hdual (-z) hz.2 g, hD, Complex.cpow_neg]
+      simp only [div_eq_mul_inv, mul_inv_rev]
+      ring
+    apply contMDiffAt_iff.mpr
+    constructor
+    · apply (a.symm.continuousAt_iff_continuousAt_comp_right ha).mpr
+      exact ((b.continuousAt_symm ht).comp continuous_neg.continuousAt).congr_of_eventuallyEq hchart
+    · change ContDiffWithinAt ℂ ω (b ∘ D ∘ a.symm) (Set.range id) (a c)
+      apply ContDiffAt.contDiffWithinAt
+      apply (contDiff_neg.contDiffAt : ContDiffAt ℂ ω Neg.neg (a c)).congr_of_eventuallyEq
+      filter_upwards [hchart, hnear] with z he hz
+      exact (congrArg b he).trans (b.right_inv hz.2)
+  exact ⟨{
+    toFun := D
+    invFun := D
+    left_inv := hinv
+    right_inv := hinv
+    contMDiff_toFun := hsmooth
+    contMDiff_invFun := hsmooth }, fun _ ↦ rfl, fun _ ↦ rfl⟩
 
 /-- Paper: Following Equation (3.1.1.4), p. 119. Duality exchanges the components
 indexed by a norm-one character and its complex conjugate. -/
@@ -718,19 +769,31 @@ theorem sIdeleQuotientNorm_mk (g : (SAdeleRing F S)ˣ) :
     sIdeleQuotientNorm F S (QuotientGroup.mk g) = sIdeleNorm F S g := by
   rfl
 
--- TODO(paper-gap): Theorem A.1.5.2 gives compactness for the norm-one part of C_{F,S}.
--- Applying it to J_{F,S} requires projecting away the integer units outside S.
-
-/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
-one is compact. -/
-theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
-  sorry
-
 /-- Paper: §3.1.2.3, p. 121. The S-idelic norm admits a continuous homomorphic section,
 as used to parametrize the components in (3.1.2.5). -/
 theorem sIdeleQuotientNorm_exists_section :
     ∃ σ : ℝ≥0ˣ →ₜ* SIdeleQuotient F S, RightInverse σ (sIdeleQuotientNorm F S) := by
-  sorry
+  obtain ⟨w⟩ := (inferInstance : Nonempty (InfinitePlace F))
+  let s := singlePlaceIdeleNormSection F w
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := (continuous_fst.prodMk (continuous_pi fun v : S ↦
+    (RestrictedProduct.continuous_eval v.val).comp continuous_snd)).units_map _
+  let q := QuotientGroup.mk' projectedDiagonal
+  refine ⟨⟨q.comp (p.comp s), QuotientGroup.continuous_mk.comp
+    (hp.comp (singlePlaceIdeleNormSection_continuous F w))⟩, fun t ↦ ?_⟩
+  -- The chosen section has every finite coordinate equal to one.
+  let A := integralAdelesOutside F S
+  have hmem (u : ℝ≥0ˣ) : (s u).val ∈ A := by
+    simp only [A, integralAdelesOutside, Subring.mem_iInf]
+    intro v _
+    exact (v.adicCompletionIntegers F).one_mem
+  have ht : s t ∈ A.toSubmonoid.units :=
+    ⟨hmem t, by
+      change ((s t)⁻¹).val ∈ A
+      rw [← map_inv]
+      exact hmem t⁻¹⟩
+  let g := A.toSubmonoid.unitsEquivUnitsType ⟨s t, ht⟩
+  exact ((sIdeleNorm_spec F S).1 g).symm.trans (singlePlaceIdeleNormSection_rightInverse F w t)
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
@@ -748,10 +811,51 @@ theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
   refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
   exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
 
+/-- Forgetting the unit coordinates outside S induces an open quotient map on S-idele
+classes, and this projection preserves the norm. -/
+theorem sIdeleClassGroup_projection :
+    ∃ π : SIdeleClassGroup F S →* SIdeleQuotient F S, IsOpenQuotientMap π ∧
+      ∀ c, sIdeleQuotientNorm F S (π c) = sIdeleClassNorm F S c := by
+  let A := integralAdelesOutside F S
+  let p := Units.map ((adeleProjection F S).comp A.subtype).toMonoidHom
+  let d := (Units.map (integralAdeleDiagonal F S).toMonoidHom).range
+  let π := QuotientGroup.map d (d.map p) p (Subgroup.le_comap_map _ _)
+  have hp : IsOpenQuotientMap p := by
+    let B := (v : {v : Primes(F) // v ∉ S}) → v.val.adicCompletionIntegers F
+    obtain ⟨e, he, he', hcoords⟩ := integralAdelesOutside_factors F S
+    let E : A ≃ₜ* (SAdeleRing F S × B) :=
+      { e.toMulEquiv with continuous_toFun := he, continuous_invFun := he' }
+    let U := (Units.mapContinuousMulEquiv E).trans (ContinuousMulEquiv.prodUnits _ _)
+    have heq : (p : Aˣ → (SAdeleRing F S)ˣ) = Prod.fst ∘ U := by
+      funext g
+      exact Units.ext (hcoords g.val).1.symm
+    rw [heq]
+    exact isOpenQuotientMap_fst.comp U.toHomeomorph.isOpenQuotientMap
+  let q := QuotientGroup.mk' d
+  have hq : IsOpenQuotientMap q := QuotientGroup.isOpenQuotientMap_mk
+  refine ⟨π, hq.of_comp_iff.mp ?_, ?_⟩
+  · exact (QuotientGroup.isOpenQuotientMap_mk (N := d.map p)).comp hp
+  · intro c
+    induction c using QuotientGroup.induction_on with
+    | H g => rfl
+
+/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
+one is compact. -/
+theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
+  obtain ⟨π, hπ, hnorm⟩ := sIdeleClassGroup_projection F S
+  have hcomp : IsProperMap ((sIdeleQuotientNorm F S) ∘ π) := by
+    simpa only [Function.comp_def, hnorm] using
+      isProperMap_sIdeleClassNorm_of_global F S (isProperMap_ideleClassNorm F)
+  exact isProperMap_of_comp_of_surj hπ.continuous
+    (hπ.continuous_comp_iff.mp hcomp.continuous) hcomp hπ.surjective
+
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
 theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) := by
-  sorry
+  obtain ⟨_, _, _, _, _, hT, hLC, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+  obtain ⟨g, rfl⟩ := hsurj t
+  exact hasNormTwistCharts_of_proper _ (isProperMap_ideleClassNorm F) ⟨g, ht⟩
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting the multiplicative group of a finite completion and
 passing to idele classes is continuous. -/
@@ -778,6 +882,25 @@ theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
   apply QuotientGroup.continuous_mk.comp
   apply Continuous.units_map
   exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
+
+/-- Paper: §3.1.2, p. 120. The idele class norm on one finite completion is its normalized
+local norm. -/
+theorem ideleClassNorm_ofAdicCompletion (v : HeightOneSpectrum (𝓞 F)) (x : (v.adicCompletion F)ˣ) :
+    ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v x) =
+      Units.map nnNormHom.toMonoidHom x := by
+  classical
+  let g := IdeleGroup.ofAdicCompletion (𝓞 F) F v x
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F g : ℝ≥0) : ℝ) = ‖x.val‖
+  rw [((ideleNorm_spec F).1 g).2]
+  change (∏ w : InfinitePlace F, ‖(1 : w.Completion)‖ ^ w.mult) *
+    ∏ᶠ w, ‖RestrictedProduct.mulSingle (fun w : Primes(F) ↦ w.adicCompletionIntegers F) v x.val w‖ = _
+  simp only [norm_one, one_pow, Finset.prod_const_one, one_mul]
+  rw [finprod_eq_single _ v]
+  · rw [RestrictedProduct.mulSingle_eq_same]
+  · intro w hw
+    rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, norm_one]
 
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
@@ -1211,7 +1334,22 @@ theorem sIdeleRestriction_isLocalDiffeomorph :
 outside S cover the entire space of Hecke characters. -/
 theorem iUnion_unramifiedOutside :
     (⋃ T : Finset (Primes(F)), (unramifiedOutside F T : Set (HeckeCharacter (𝓞 F) F))) = Set.univ := by
-  sorry
+  classical
+  apply Set.eq_univ_of_forall
+  intro c
+  have (v : Primes(F)) : CompactSpace (LocalUnits(v)) := by
+    have := compactSpace_adicCompletionIntegers (K := F) v
+    exact compactSpace_units_of_compactSpace _
+  obtain ⟨T, hT⟩ := exists_finset_complexCharacter_eq_one (c.comp (finiteIntegerUnitInsertion F))
+  refine Set.mem_iUnion.mpr ⟨T, (mem_unramifiedOutside_iff F T c).mpr ?_⟩
+  intro v hv u
+  change c (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v
+    (Units.map (LocalIntegers(v)).subtype.toMonoidHom u)) = 1
+  rw [← finiteIntegerUnitInsertion_mulSingle]
+  apply hT (Pi.mulSingle v u)
+  intro w hw
+  have hwv : w ≠ v := fun he ↦ hv (he ▸ hw)
+  exact Pi.mulSingle_eq_of_ne hwv _
 
 end Ideles
 

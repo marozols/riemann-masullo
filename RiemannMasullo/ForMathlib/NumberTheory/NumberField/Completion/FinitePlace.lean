@@ -14,6 +14,18 @@ open scoped WithZero
 variable {R K : Type*} [CommRing R] [IsDedekindDomain R] [Ring.HasFiniteQuotients R]
   [Field K] [Algebra R K] [IsFractionRing R K]
 
+open NumberField in
+/-- A uniformizer of the completed discrete valuation has norm the reciprocal of the
+absolute norm of the prime ideal. -/
+theorem norm_uniformizer_adicCompletion (v : HeightOneSpectrum R) (π : v.adicCompletion K)
+    (hπ : Valued.v.IsUniformizer π) :
+    ‖π‖ = (v.asIdeal.absNorm : ℝ)⁻¹ := by
+  have hval : Valued.v π = WithZero.exp (-1 : ℤ) := hπ.trans
+    (congrArg Units.val (Valuation.IsRankOneDiscrete.generator_eq_exp_neg_one_of_surjective
+      (v.valuedAdicCompletion_surjective K)))
+  rw [FinitePlace.norm_def, hval, WithZeroMulInt.toNNReal_neg_apply _ (by simp)]
+  simp
+
 omit [Ring.HasFiniteQuotients R] in
 /-- The residue field of a completion at a height-one prime is isomorphic to the quotient
 of the base ring by that prime. -/
