@@ -11,6 +11,7 @@ import Mathlib.Algebra.Module.ULift
 import Mathlib.Analysis.InnerProductSpace.Dual
 import Mathlib.Analysis.Normed.Lp.lpSpace
 import Mathlib.Analysis.Normed.Module.DoubleDual
+import Mathlib.Analysis.Normed.Module.FiniteDimension
 import Mathlib.Analysis.Normed.Operator.BanachSteinhaus
 import Mathlib.Topology.Algebra.Module.Star
 import Mathlib.Topology.ContinuousMap.ZeroAtInfty
@@ -1361,7 +1362,31 @@ def IsSchwartzTVS (E : Type*) [AddCommGroup E] [Module ℂ E] [TopologicalSpace 
 exactly when it is finite-dimensional.
 Deviation: Sanity check using the norm seminorm in the definition. -/
 theorem isSchwartzTVS_iff_finiteDimensional (E : Type*) [NormedAddCommGroup E] [NormedSpace ℂ E] :
-    IsSchwartzTVS E ↔ FiniteDimensional ℂ E := by sorry
+    IsSchwartzTVS E ↔ FiniteDimensional ℂ E := by
+  constructor
+  · intro h
+    obtain ⟨V, hV, htb⟩ := h.2 (normSeminorm ℂ E) continuous_norm
+    apply FiniteDimensional.of_totallyBounded_nhds_zero ℂ hV
+    have hu : (inferInstance : UniformSpace E) =
+        (normSeminorm ℂ E).toSeminormedAddCommGroup.toUniformSpace := by
+      simpa using (SeminormFamily.withSeminorms_iff_uniformSpace_eq_iInf _).mp
+        (norm_withSeminorms ℂ E)
+    exact (congrArg (fun u : UniformSpace E ↦ @TotallyBounded E u V) hu).mpr htb
+  · intro hE
+    have : ProperSpace E := FiniteDimensional.proper ℂ E
+    refine ⟨inferInstance, fun p hp ↦
+      ⟨Metric.closedBall 0 1, Metric.closedBall_mem_nhds _ zero_lt_one, ?_⟩⟩
+    -- The norm-compact unit ball stays compact for each continuous seminorm topology.
+    let t (s : {s : Seminorm ℂ E // Continuous s}) :=
+      s.val.toSeminormedAddCommGroup.toUniformSpace.toTopologicalSpace
+    have hle : (inferInstance : TopologicalSpace E) ≤ t ⟨p, hp⟩ :=
+      (PolynormableSpace.withSeminorms ℂ E).topologicalSpace_eq_iInf.le.trans
+        (iInf_le t ⟨p, hp⟩)
+    have hc : @Continuous E E _ (t ⟨p, hp⟩) id := continuous_id_of_le hle
+    apply @IsCompact.totallyBounded E p.toSeminormedAddCommGroup.toUniformSpace
+    have himg := @IsCompact.image E E _ (t ⟨p, hp⟩) _ id (isCompact_closedBall (0 : E) 1) hc
+    rw [Set.image_id] at himg
+    exact himg
 
 -- TODO(paper-gap): Example C.1.5.10 requires nuclear locally convex spaces from §C.2.4.
 
