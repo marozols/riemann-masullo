@@ -8,6 +8,7 @@ public import Mathlib.Topology.Compactness.Paracompact
 public import RiemannMasullo.ForMathlib.Topology.ContinuousMap.CompactlySupported
 public import Mathlib.Topology.Sets.Compacts
 public import RiemannMasullo.ForMathlib.Topology.UniformSpace.CompactConvergence
+import Mathlib.Analysis.Calculus.LineDeriv.Basic
 import Mathlib.Data.Finsupp.ToDFinsupp
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
 import RiemannMasullo.ForMathlib.Topology.Compactness.Paracompact
@@ -683,7 +684,18 @@ gives the weak Gâteaux derivatives, with derivative zero in the zero direction.
 theorem HasWeakCompletionDifferentialOn.hasWeakDirectionalDerivativesOn {Ω : Set W}
     (hΩ : IsOpen Ω) {f : W → E} {D : Ω × W → PettisWeakCompletion E}
     (hD : HasWeakCompletionDifferentialOn (k := k) f D) :
-    HasWeakDirectionalDerivativesOn (k := k) f D := by sorry
+    HasWeakDirectionalDerivativesOn (k := k) f D := by
+  intro x v
+  apply (WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).2
+  intro φ
+  obtain ⟨L, hL, heval⟩ := ((hasWeakCompletionDifferentialOn_iff hΩ f D).1 hD).1 φ x
+  have hline := ((hL.hasFDerivAt (hΩ.mem_nhds x.property)).hasLineDerivAt v).tendsto_slope_zero
+  have hfilter : 𝓝[{h : k | h ≠ 0 ∧ (x : W) + h • v ∈ Ω}] 0 ≤ 𝓝[≠] 0 :=
+    nhdsWithin_mono _ fun _ ht ↦ ht.1
+  change Tendsto (fun h : k ↦ algebraMap k ℂ h⁻¹ * φ (f ((x : W) + h • v) - f x))
+    _ (𝓝 ((show Module.Dual ℂ (StrongDual ℂ E) from D (x, v)) φ))
+  rw [heval]
+  simpa only [Function.comp_apply, Algebra.smul_def, map_sub] using hline.mono_left hfilter
 
 variable [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ E] [T2Space E]
 
