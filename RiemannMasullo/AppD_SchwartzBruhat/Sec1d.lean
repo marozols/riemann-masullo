@@ -207,7 +207,8 @@ def realSchwartzFourierDeriv (m n : ℕ) (f : 𝓢(ℝ, ℂ)) : 𝓢(ℝ, ℂ) :
 the Fourier transform remains.
 Deviation: Sanity check on the differential orders. -/
 theorem realSchwartzFourierDeriv_zero (f : 𝓢(ℝ, ℂ)) :
-    realSchwartzFourierDeriv 0 0 f = 𝓕 f := by sorry
+    realSchwartzFourierDeriv 0 0 f = 𝓕 f := by
+  rfl
 
 /-- Paper: Proposition D.1.10.2, p. 784. L² norms of the differentiated real
 Fourier transforms in (D.1.10.3) generate the Schwartz topology. -/

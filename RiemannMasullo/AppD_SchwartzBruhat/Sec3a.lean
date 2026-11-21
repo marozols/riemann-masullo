@@ -137,7 +137,36 @@ gives a nonzero example whenever the strip is nonempty.
 Deviation: Sanity check in the zero-extension representation. -/
 theorem gaussian_mem_schwartzBergmanSubmodule (I : Set ℝ) (hI : IsOpen I) :
     (Complex.re ⁻¹' I).indicator (fun z : ℂ ↦ Complex.exp (z ^ 2)) ∈
-      schwartzBergmanSubmodule I := by sorry
+      schwartzBergmanSubmodule I := by
+  refine ⟨fun z hz ↦ indicator_of_notMem hz _, ?_, ?_⟩
+  · have h : Differentiable ℂ (fun z : ℂ ↦ Complex.exp (z ^ 2)) := by fun_prop
+    intro z hz
+    apply DifferentiableAt.differentiableWithinAt
+    apply (h z).congr_of_eventuallyEq
+    filter_upwards [(hI.preimage Complex.continuous_re).mem_nhds hz] with w hw
+    exact indicator_of_mem hw _
+  · intro a b _ hab N
+    let M := max |a| |b|
+    refine ⟨N.factorial * Real.exp (1 + 2 * M ^ 2), ?_⟩
+    rintro _ ⟨z, hz, rfl⟩
+    have hstrip : z.re ∈ Icc a b := hz
+    have hM : |z.re| ≤ M := abs_le_max_abs_abs hstrip.1 hstrip.2
+    have hsq : z.re ^ 2 ≤ M ^ 2 := by
+      simpa using pow_le_pow_left₀ (abs_nonneg _) hM 2
+    have hweight : ‖z‖ ^ N ≤ N.factorial * Real.exp ‖z‖ := by
+      have h := (div_le_iff₀ (show 0 < (N.factorial : ℝ) by positivity)).mp
+        (Real.pow_div_factorial_le_exp ‖z‖ (norm_nonneg z) N)
+      simpa [mul_comm] using h
+    change ‖z ^ N * (Complex.re ⁻¹' I).indicator _ z‖ ≤ _
+    rw [indicator_of_mem (show z ∈ Complex.re ⁻¹' I from hab hstrip), norm_mul, norm_pow, Complex.norm_exp]
+    calc
+      _ ≤ (N.factorial * Real.exp ‖z‖) * Real.exp (z ^ 2).re :=
+        mul_le_mul_of_nonneg_right hweight (Real.exp_pos _).le
+      _ = N.factorial * Real.exp (‖z‖ + (z ^ 2).re) := by rw [Real.exp_add, mul_assoc]
+      _ ≤ _ := by
+        apply mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr ?_) (by positivity)
+        rw [pow_two, Complex.mul_re]
+        nlinarith [Complex.sq_norm_sub_sq_re z, sq_nonneg (‖z‖ - 1 / 2)]
 
 /-- Paper: (D.3.1.7), p. 799. Evaluate the polynomially weighted function on the
 vertical line with real part a. -/
@@ -148,7 +177,8 @@ def weightedVerticalTrace (a : ℝ) (N : ℕ) (f : ℂ → ℂ) (x : ℝ) : ℂ 
 /-- Paper: (D.3.1.7), p. 799. At zero height, the trace evaluates the weighted
 function on the real axis. -/
 theorem weightedVerticalTrace_zero_height (a : ℝ) (N : ℕ) (f : ℂ → ℂ) :
-    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by sorry
+    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by
+  simp [weightedVerticalTrace]
 
 /-- Paper: Lemma D.3.1.2, p. 799. Each polynomially weighted trace belongs to
 the indicated Lᵖ space.
@@ -156,7 +186,41 @@ Deviation: The single-line bounds also give this for an endpoint when the
 carrier is used with a closed interval. -/
 theorem schwartzBergman_trace_memLp (I : Set ℝ) (a : I)
     (p : ℝ≥0∞) (hp : 1 < p) (hp' : p < ⊤) (N : ℕ) (f : schwartzBergmanSubmodule I) :
-    MemLp (weightedVerticalTrace a N f.val) p volume := by sorry
+    MemLp (weightedVerticalTrace a N f.val) p volume := by
+  let z (x : ℝ) : ℂ := (a.val : ℂ) + x * Complex.I
+  have hz (x : ℝ) : (z x).re = a := by simp [z]
+  have hc : Continuous z := by
+    dsimp [z]
+    fun_prop
+  have hf : Continuous (f.val ∘ z) :=
+    f.property.2.1.continuousOn.comp_continuous hc fun x ↦ by
+      simp [mem_preimage, hz]
+  have bound (k : ℕ) : ∃ C : ℝ, ∀ x, ‖z x ^ k * f.val (z x)‖ ≤ C := by
+    obtain ⟨C, hC⟩ := f.property.2.2 a a le_rfl (by simp) k
+    exact ⟨C, fun x ↦ hC ⟨z x, by simp [mem_preimage, hz], rfl⟩⟩
+  obtain ⟨A, hA⟩ := bound N
+  obtain ⟨B, hB⟩ := bound (N + 1)
+  have hmodel : MemLp (fun x : ℝ ↦ (1 + ‖x‖)⁻¹) p volume := by
+    apply (integrable_norm_rpow_iff (by fun_prop) (zero_lt_one.trans hp).ne' hp'.ne).mp
+    have hdim : 1 < p.toReal := by
+      simpa using (ENNReal.toReal_lt_toReal ENNReal.one_ne_top hp'.ne).2 hp
+    have hnorm (x : ℝ) : ‖(1 + ‖x‖)⁻¹‖ = (1 + ‖x‖)⁻¹ := Real.norm_of_nonneg (by positivity)
+    simpa only [hnorm, Real.rpow_neg_eq_inv_rpow] using
+      (integrable_one_add_norm (μ := (volume : Measure ℝ)) (r := p.toReal) (by simpa using hdim))
+  apply hmodel.of_le_mul (c := A + B) ((hc.pow N).mul hf).aestronglyMeasurable
+  apply Filter.Eventually.of_forall
+  intro x
+  change ‖z x ^ N * f.val (z x)‖ ≤ (A + B) * ‖(1 + ‖x‖)⁻¹‖
+  rw [Real.norm_of_nonneg (by positivity), ← div_eq_mul_inv, le_div_iff₀ (by positivity)]
+  rw [mul_add, mul_one]
+  apply add_le_add (hA x)
+  have hx : ‖x‖ ≤ ‖z x‖ := by simpa [Real.norm_eq_abs, z] using Complex.abs_im_le_norm (z x)
+  calc
+    ‖z x ^ N * f.val (z x)‖ * ‖x‖ ≤ ‖z x ^ N * f.val (z x)‖ * ‖z x‖ :=
+      mul_le_mul_of_nonneg_left hx (norm_nonneg _)
+    _ = ‖z x ^ (N + 1) * f.val (z x)‖ := by
+      rw [← norm_mul, pow_succ, mul_right_comm]
+    _ ≤ B := hB x
 
 /-- Paper: Definition D.3.1.3, p. 800. The weighted L² norm on one line
 satisfies the seminorm laws. -/
@@ -221,7 +285,7 @@ def realSchwartzCoe : 𝓢(ℝ, ℂ) →ₗ[ℂ] (ℝ → ℂ) where
 
 /-- Paper: Definition D.3.2.1, p. 801. Forgetting the Schwartz properties
 retains the values of the function. -/
-theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := by sorry
+theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := rfl
 
 /-- Paper: Definition D.3.2.1, p. 801. In logarithmic coordinates, weighting
 by tᵃ amounts to multiplying by exp(ax). -/
@@ -230,7 +294,9 @@ def logExponentialWeight (a : ℝ) : (ℝ → ℂ) →ₗ[ℂ] (ℝ → ℂ) :=
 
 /-- Paper: Definition D.3.2.1, p. 801. The weight at exponent zero does not
 change the function. -/
-theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by sorry
+theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by
+  ext x
+  simp [logExponentialWeight, LinearMap.mulLeft]
 
 /-- Paper: Definition D.3.2.1, p. 801. A logarithmic profile belongs to the
 decay submodule if each weighted profile is a real-line Schwartz function.
@@ -256,7 +322,10 @@ def logExponentialDecayTwist (I : Set ℝ) (a : I) : logExponentialDecaySubmodul
 exp(ax) times the original logarithmic profile. -/
 theorem logExponentialDecayTwist_apply (I : Set ℝ) (a : I)
     (f : logExponentialDecaySubmodule I) (x : ℝ) :
-    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by sorry
+    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by
+  exact congrFun (LinearEquiv.ofInjective_symm_apply realSchwartzCoe
+    (h := DFunLike.coe_injective)
+    ⟨logExponentialWeight a f.val, logExponentialDecay_weight_mem_range I a f⟩) x
 
 /-- Paper: Definition D.3.2.1, p. 801. The topology is induced by
 all weighted Schwartz profiles, using the usual seminorms on the real Schwartz space.
@@ -270,7 +339,30 @@ abbrev PositiveRealExponentialDecay (I : Set ℝ) :=
 the decay space in a product of real Schwartz spaces. -/
 theorem positiveRealExponentialDecay_isEmbedding (I : Set ℝ) (hne : I.Nonempty) :
     IsEmbedding (fun (f : PositiveRealExponentialDecay I) (a : I) ↦
-      logExponentialDecayTwist I a f) := by sorry
+      logExponentialDecayTwist I a f) := by
+  let T : PositiveRealExponentialDecay I →ₗ[ℂ] (I → 𝓢(ℝ, ℂ)) :=
+    LinearMap.pi (logExponentialDecayTwist I)
+  have hp := withSeminorms_pi fun _ : I ↦ schwartz_withSeminorms ℂ ℝ ℂ
+  have hsource := withGeneratingSeminorms_spec (logExponentialDecaySubmodule I)
+    (fun i : I × ℕ × ℕ ↦
+      (SchwartzMap.seminorm ℂ i.2.1 i.2.2).comp (logExponentialDecayTwist I i.1))
+  change IsEmbedding T
+  constructor
+  · constructor
+    refine hsource.topologicalSpace_eq_iInf.trans ?_
+    refine Eq.trans ?_ (WithSeminorms.topologicalSpace_eq_iInf
+      (t := TopologicalSpace.induced T inferInstance) (T.withSeminorms_induced hp)).symm
+    rw [iInf_sigma, iInf_prod]
+    rfl
+  · intro f g h
+    obtain ⟨a, ha⟩ := hne
+    apply Subtype.ext
+    funext x
+    have hx := congrArg (fun F : 𝓢(ℝ, ℂ) ↦ F x) (congrFun h ⟨a, ha⟩)
+    change logExponentialDecayTwist I ⟨a, ha⟩ f x = logExponentialDecayTwist I ⟨a, ha⟩ g x at hx
+    rw [logExponentialDecayTwist_apply I ⟨a, ha⟩ f x,
+      logExponentialDecayTwist_apply I ⟨a, ha⟩ g x] at hx
+    exact mul_left_cancel₀ (by exact_mod_cast (Real.exp_pos (a * x)).ne') hx
 
 variable (I : Set ℝ)
 
@@ -385,7 +477,9 @@ def modulationWeight (a : ℝ) : (G → ℂ) →ₗ[ℂ] (G → ℂ) :=
 
 /-- Paper: Definition D.3.3.1, p. 804. Weighting at exponent zero is
 the identity. -/
-theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by sorry
+theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by
+  ext g
+  simp [modulationWeight]
 
 /-- Paper: Definition D.3.3.1, p. 804. All real twists with exponents in I
 must lie in the Schwartz–Bruhat submodule.

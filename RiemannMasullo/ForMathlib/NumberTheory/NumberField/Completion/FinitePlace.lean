@@ -2,6 +2,7 @@ module
 
 public import Mathlib.NumberTheory.NumberField.Completion.FinitePlace
 
+import Mathlib.Topology.Algebra.Group.Units
 import Mathlib.Topology.Algebra.Valued.LocallyCompact
 
 public section
@@ -14,9 +15,23 @@ open scoped WithZero
 variable {R K : Type*} [CommRing R] [IsDedekindDomain R] [Ring.HasFiniteQuotients R]
   [Field K] [Algebra R K] [IsFractionRing R K]
 
-/-- The residue field of the completion is a quotient of `R / v`. -/
-private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
-    Finite (ResidueField (v.adicCompletionIntegers K)) := by
+open NumberField in
+/-- A uniformizer of the completed discrete valuation has norm the reciprocal of the
+absolute norm of the prime ideal. -/
+theorem norm_uniformizer_adicCompletion (v : HeightOneSpectrum R) (π : v.adicCompletion K)
+    (hπ : Valued.v.IsUniformizer π) :
+    ‖π‖ = (v.asIdeal.absNorm : ℝ)⁻¹ := by
+  have hval : Valued.v π = WithZero.exp (-1 : ℤ) := hπ.trans
+    (congrArg Units.val (Valuation.IsRankOneDiscrete.generator_eq_exp_neg_one_of_surjective
+      (v.valuedAdicCompletion_surjective K)))
+  rw [FinitePlace.norm_def, hval, WithZeroMulInt.toNNReal_neg_apply _ (by simp)]
+  simp
+
+omit [Ring.HasFiniteQuotients R] in
+/-- The residue field of a completion at a height-one prime is isomorphic to the quotient
+of the base ring by that prime. -/
+theorem nonempty_residueFieldEquiv_adicCompletion (v : HeightOneSpectrum R) :
+    Nonempty ((R ⧸ v.asIdeal) ≃+* ResidueField (v.adicCompletionIntegers K)) := by
   let O := v.adicCompletionIntegers K
   let f := (residue O).comp (algebraMap R O)
   let q : R ⧸ v.asIdeal →+* ResidueField O := Ideal.Quotient.lift v.asIdeal f (by
@@ -26,8 +41,8 @@ private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
     change Valued.v (algebraMap R (v.adicCompletion K) r) < (1 : ℤᵐ⁰)
     rw [HeightOneSpectrum.valuedAdicCompletion_eq_valuation]
     exact (v.valuation_lt_one_iff_mem r).2 hr)
-  have := Ring.HasFiniteQuotients.finiteQuotient v.ne_bot
-  apply Finite.of_surjective q
+  let := Ideal.Quotient.field v.asIdeal
+  refine ⟨RingEquiv.ofBijective q ⟨q.injective, ?_⟩⟩
   intro y
   obtain ⟨x, rfl⟩ := residue_surjective y
   -- Approximate the representative first by an element of `K`, then by one of `R`.
@@ -56,6 +71,20 @@ private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
   change ν (algebraMap R (v.adicCompletion K) r - x) < 1
   simpa only [sub_add_sub_cancel] using ν.map_add_lt hr' ha
 
+omit [Ring.HasFiniteQuotients R] in
+/-- The cardinality of the completed residue field is the absolute norm of the prime. -/
+theorem card_residueField_adicCompletion (v : HeightOneSpectrum R) :
+    Nat.card (ResidueField (v.adicCompletionIntegers K)) = v.asIdeal.absNorm := by
+  obtain ⟨e⟩ := nonempty_residueFieldEquiv_adicCompletion (K := K) v
+  exact (Nat.card_congr e.toEquiv).symm.trans (Ideal.absNorm_of_ne_bot v.ne_bot).symm
+
+/-- The residue field of the completion at a height-one prime is finite. -/
+private theorem finite_residueField_adicCompletion (v : HeightOneSpectrum R) :
+    Finite (ResidueField (v.adicCompletionIntegers K)) := by
+  obtain ⟨e⟩ := nonempty_residueFieldEquiv_adicCompletion (K := K) v
+  have := Ring.HasFiniteQuotients.finiteQuotient v.ne_bot
+  exact Finite.of_equiv _ e.toEquiv
+
 open Valued.integer in
 /-- Closed balls in the completion at a height-one prime are compact when the base
 Dedekind domain has finite quotients. -/
@@ -82,5 +111,84 @@ theorem compactSpace_adicCompletionIntegers (v : HeightOneSpectrum R) :
   exact Valued.integer.compactSpace_iff_completeSpace_and_isDiscreteValuationRing_and_finite_residueField.mpr
     ⟨hcomplete, inferInstanceAs (IsDiscreteValuationRing (v.adicCompletionIntegers K)),
       finite_residueField_adicCompletion v⟩
+
+open Function NumberField in
+/-- A uniformizer splits the finite completion's unit group into the discrete valuation
+and the units of its valuation ring. -/
+theorem finitePlace_unitDecomposition (v : HeightOneSpectrum R) (π : (v.adicCompletion K)ˣ)
+    (hπ : ‖π.val‖ = (v.asIdeal.absNorm : ℝ)⁻¹) :
+    let ι := Units.map (v.adicCompletionIntegers K).subtype.toMonoidHom
+    ∃ e : (v.adicCompletion K)ˣ ≃ₜ* (Multiplicative ℤ × (v.adicCompletionIntegers K)ˣ),
+      e π = (Multiplicative.ofAdd 1, 1) ∧ ∀ u, e (ι u) = (1, u) := by
+  let O := v.adicCompletionIntegers K
+  let ι : Oˣ →* (v.adicCompletion K)ˣ := Units.map O.subtype.toMonoidHom
+  have hι : Continuous ι := continuous_subtype_val.units_map O.subtype.toMonoidHom
+  let valUnits := Units.map (Valued.v : Valuation (v.adicCompletion K) ℤᵐ⁰).toMonoidHom
+  -- Take the negative valuation logarithm so that the uniformizer has order one.
+  let ord := (WithZero.unitsWithZeroEquiv.toMonoidHom.comp valUnits)⁻¹
+  have hord (x : (v.adicCompletion K)ˣ) : (ord x).toAdd = -WithZero.log (Valued.v x.val) :=
+    congrArg Neg.neg (WithZero.logEquiv_apply (valUnits x))
+  have hker (x : (v.adicCompletion K)ˣ) : ord x = 1 ↔ x ∈ O.units := by
+    rw [HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one]
+    change (ord x).toAdd = 0 ↔ _
+    rw [hord, neg_eq_zero, ← WithZero.exp_eq_one, WithZero.exp_log (by simp [x.ne_zero])]
+  have hcont : Continuous ord := by
+    apply continuous_of_continuousAt_one ord
+    apply Filter.EventuallyEq.continuousAt (y := 1)
+    filter_upwards [(Submonoid.isOpen_units (Valued.isOpen_valuationSubring
+      (v.adicCompletion K))).mem_nhds O.units.one_mem] with x hx
+    exact (hker x).mpr hx
+  have hordπ : (ord π).toAdd = 1 := by
+    have hq : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+    rw [FinitePlace.norm_def, WithZeroMulInt.toNNReal_neg_apply _ (by simp [π.ne_zero]),
+      NNReal.coe_zpow] at hπ
+    have hlog : WithZero.log (Valued.v π.val) = -1 :=
+      zpow_right_injective₀ (zero_lt_one.trans hq) hq.ne' (by simpa using hπ)
+    rw [hord, hlog, neg_neg]
+  let sec : Multiplicative ℤ →* (v.adicCompletion K)ˣ :=
+    { toFun := fun k ↦ π ^ k.toAdd
+      map_one' := zpow_zero _
+      map_mul' := fun x y ↦ zpow_add _ _ _ }
+  have hsec : RightInverse sec ord := by
+    intro k
+    change ord (π ^ k.toAdd) = k
+    rw [map_zpow]
+    change k.toAdd • (ord π).toAdd = k.toAdd
+    simp [hordπ]
+  -- Divide by the corresponding power of the uniformizer to recover the integer unit.
+  let strip := (MonoidHom.id (v.adicCompletion K)ˣ) / (sec.comp ord)
+  have hstrip (x : (v.adicCompletion K)ˣ) : strip x ∈ O.units := by
+    apply (hker _).mp
+    change ord (x / sec (ord x)) = 1
+    rw [map_div, hsec, div_self']
+  let res := O.toSubmonoid.unitsEquivUnitsType.toMonoidHom.comp (strip.codRestrict O.units hstrip)
+  have hsec_cont : Continuous sec := continuous_of_discreteTopology
+  have hstrip_cont : Continuous strip := continuous_id.div' (hsec_cont.comp hcont)
+  have hres : Continuous res := by
+    apply Units.continuous_iff.mpr
+    exact ⟨(Units.continuous_val.comp hstrip_cont).subtype_mk (fun x ↦ (hstrip x).1),
+      (Units.continuous_val.comp hstrip_cont.inv).subtype_mk (fun x ↦ (hstrip x).2)⟩
+  have hresval (x : (v.adicCompletion K)ˣ) : ι (res x) = x / sec (ord x) := Units.ext rfl
+  have hιinj : Injective ι := Units.map_injective Subtype.val_injective
+  have hordι (u : Oˣ) : ord (ι u) = 1 := (hker _).mpr ⟨u.val.prop, u.inv.prop⟩
+  let e : (v.adicCompletion K)ˣ ≃ₜ* (Multiplicative ℤ × Oˣ) :=
+    { toFun := fun x ↦ (ord x, res x)
+      invFun := fun p ↦ sec p.1 * ι p.2
+      map_mul' := fun x y ↦ Prod.ext (map_mul ord x y) (map_mul res x y)
+      left_inv := fun x ↦ by
+        change sec (ord x) * ι (res x) = x
+        rw [hresval, mul_div_cancel]
+      right_inv := fun p ↦ by
+        have ho : ord (sec p.1 * ι p.2) = p.1 := by rw [map_mul, hsec, hordι, mul_one]
+        exact Prod.ext ho (hιinj (by rw [hresval, ho]; exact mul_div_cancel_left _ _))
+      continuous_toFun := hcont.prodMk hres
+      continuous_invFun := (hsec_cont.comp continuous_fst).mul (hι.comp continuous_snd) }
+  refine ⟨e, Prod.ext hordπ (hιinj ?_), fun u ↦ Prod.ext (hordι u) (hιinj ?_)⟩
+  · change ι (res π) = ι 1
+    rw [hresval, map_one]
+    change π / π ^ (ord π).toAdd = 1
+    rw [hordπ, zpow_one, div_self']
+  · change ι (res (ι u)) = ι u
+    rw [hresval, hordι, map_one, div_one]
 
 end RiemannMasullo

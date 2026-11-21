@@ -6,8 +6,11 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import Mathlib.MeasureTheory.Function.AEEqOfIntegral
 import Mathlib.MeasureTheory.Function.ContinuousMapDense
 import Mathlib.MeasureTheory.Measure.SeparableMeasure
+import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
+import RiemannMasullo.ForMathlib.MeasureTheory.Integral.Prod
 
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
@@ -33,7 +36,8 @@ abbrev RegularL2 (ν : Measure G) := Lp ℂ 2 ν
 /-- Paper: Definition 4.3.1.1, p. 175. Swapping the arguments of Mathlib's inner
 product gives the integral of the first function times the conjugate of the second. -/
 theorem regularL2_inner (ν : Measure G) (f h : RegularL2 ν) :
-    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by sorry
+    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by
+  rfl
 
 variable (ν : Measure G) [hν : ν.IsHaarMeasure]
 
@@ -163,11 +167,79 @@ theorem regularIsotypic_ae_integrable (ω : PontryaginDual K) (f : RegularL2 ν)
   exact (h₂.integrable (by norm_num)).bdd_mul (c := 1)
     (by fun_prop) (ae_of_all _ fun k ↦ by simp)
 
+/-- The Hilbert-space integral of weighted translates agrees almost everywhere
+with the scalar fiber integral. -/
+private theorem regularIsotypic_integral_ae (ω : PontryaginDual K) (f : RegularL2 ν)
+    (hint : Integrable (fun k : K ↦ star (ω k : ℂ) • regularTranslate ν (k : G) f) ν₁) :
+    ((∫ k : K, star (ω k : ℂ) • regularTranslate ν (k : G) f ∂ν₁ : RegularL2 ν) : G → ℂ)
+      =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  let U (k : K) (f : RegularL2 ν) := star (ω k : ℂ) • regularTranslate ν (k : G) f
+  let F (k : K) (x : G) := star (ω k : ℂ) * f ((k : G)⁻¹ * x)
+  -- On a set of finite measure the translated L² integrand is also in L¹.
+  have hFin (s : Set G) (hμs : ν s < ∞) :
+      Integrable (uncurry F) (ν₁.prod (ν.restrict s)) := by
+    have : IsFiniteMeasure (ν.restrict s) := isFiniteMeasure_restrict.mpr hμs.ne
+    have h₂ := (regularTranslate_memLp_prod m hm ν ν₁ f).mono_measure
+      (Measure.prod_mono le_rfl (Measure.restrict_le_self (s := s)))
+    exact (h₂.integrable (by norm_num)).bdd_mul (c := 1)
+      (show Continuous (fun p : K × G ↦ star (ω p.1 : ℂ)) by fun_prop).aestronglyMeasurable
+      (ae_of_all _ fun p ↦ by simp)
+  apply ae_eq_of_forall_setIntegral_eq_of_sigmaFinite
+  · exact fun s _ hs ↦ integrableOn_Lp_of_measure_ne_top (∫ k : K, U k f ∂ν₁) (by norm_num) hs.ne
+  · exact fun s _ hs ↦ (hFin s hs).integral_prod_right
+  · intro s hs hμs
+    -- Pairing with the indicator of s computes the set integral of an L² class.
+    let e := indicatorConstLp (μ := ν) 2 hs hμs.ne (1 : ℂ)
+    have he (u : RegularL2 ν) : ⟪e, u⟫_ℂ = ∫ x in s, u x ∂ν := by
+      simpa [e] using L2.inner_indicatorConstLp_eq_inner_setIntegral ℂ hs hμs.ne (1 : ℂ) u
+    rw [← he]
+    change ⟪e, ∫ k : K, U k f ∂ν₁⟫_ℂ = ∫ x in s, ∫ k : K, F k x ∂ν₁ ∂ν
+    rw [← integral_inner hint e, ← integral_integral_swap (hFin s hμs)]
+    refine integral_congr_ae (ae_of_all _ fun k ↦ ?_)
+    change ⟪e, U k f⟫_ℂ = ∫ x in s, F k x ∂ν
+    rw [he]
+    apply integral_congr_ae
+    apply ae_restrict_of_ae
+    filter_upwards [Lp.coeFn_smul (star (ω k : ℂ)) (regularTranslate ν (k : G) f),
+      regularTranslate_ae_eq ν (k : G) f] with x h₁ h₂
+    exact h₁.trans (congrArg (star (ω k : ℂ) * ·) h₂)
+
 /-- Paper: (4.3.2.1), p. 178. Fiber averaging defines a continuous linear
 operator on Haar L² with its stated almost-everywhere formula. -/
 theorem existsUnique_regularIsotypicIntegral (ω : PontryaginDual K) :
     ∃! P : RegularL2 ν →L[ℂ] RegularL2 ν, ∀ f : RegularL2 ν,
-      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by sorry
+      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : Fact ((2 : ℝ≥0∞) ≠ ∞) := ⟨by norm_num⟩
+  let U (k : K) (f : RegularL2 ν) := star (ω k : ℂ) • regularTranslate ν (k : G) f
+  have hi (f : RegularL2 ν) : Integrable (fun k ↦ U k f) ν₁ := by
+    apply Continuous.integrable_of_hasCompactSupport _ (HasCompactSupport.of_compactSpace _)
+    exact (show Continuous (fun k : K ↦ star (ω k : ℂ)) by fun_prop).smul
+      ((DomMulAct.continuous_mk.comp continuous_subtype_val.inv).smul continuous_const)
+  let A : RegularL2 ν →ₗ[ℂ] RegularL2 ν :=
+    { toFun := fun f ↦ ∫ k : K, U k f ∂ν₁
+      map_add' := fun f g ↦ by
+        simpa only [U, regularTranslate, smul_add] using integral_add (hi f) (hi g)
+      map_smul' := fun c f ↦ by
+        change (∫ k : K, U k (c • f) ∂ν₁) = c • ∫ k : K, U k f ∂ν₁
+        rw [← integral_smul]
+        apply integral_congr_ae
+        exact ae_of_all _ fun k ↦ by
+          simp only [U, regularTranslate, smul_comm (DomMulAct.mk _) c, smul_comm (star _) c] }
+  let P := A.mkContinuous (ν₁.real univ) fun f ↦ by
+    change ‖∫ k : K, U k f ∂ν₁‖ ≤ ν₁.real univ * ‖f‖
+    rw [mul_comm]
+    apply norm_integral_le_of_norm_le_const
+    exact ae_of_all _ fun k ↦ by simp [U, regularTranslate, norm_smul]
+  have hP (f : RegularL2 ν) :
+      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ :=
+    regularIsotypic_integral_ae m hm ν ν₁ ω f (hi f)
+  refine ⟨P, hP, fun Q hQ ↦ ?_⟩
+  ext f : 1
+  exact Lp.ext ((hQ f).trans (hP f).symm)
 
 /-- Paper: (4.3.2.1), p. 178. The unnormalized L² isotypic operator is
 the continuous linear map given almost everywhere by integration over the kernel. -/
@@ -184,6 +256,58 @@ variable (τ : ℝ≥0ˣ →ₜ* G) (hτ : RightInverse τ m)
 
 include hτ
 
+omit hm hν hν₁ hτ in
+/-- Paper: Definition A.3.2.1, p. 559. The exponential pushforward of Lebesgue measure
+is a multiplicative Haar measure on the positive reals. -/
+theorem positiveRealHaar_isHaarMeasure : positiveRealHaar.IsHaarMeasure := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  let μ : Measure (Multiplicative ℝ) := (volume : Measure ℝ)
+  have : μ.IsHaarMeasure := by
+    have : IsFiniteMeasureOnCompacts μ :=
+      inferInstanceAs (IsFiniteMeasureOnCompacts (volume : Measure ℝ))
+    have : Measure.IsOpenPosMeasure μ :=
+      inferInstanceAs (Measure.IsOpenPosMeasure (volume : Measure ℝ))
+    have : μ.IsMulLeftInvariant :=
+      ⟨fun t ↦ (measurePreserving_add_left (volume : Measure ℝ) t.toAdd).map_eq⟩
+    constructor
+  let h := Real.expOrderIso.toHomeomorph.trans (Nonneg.unitsHomeomorphPos ℝ).symm
+  let e : Multiplicative ℝ ≃ₜ* ℝ≥0ˣ :=
+    { h with
+      map_mul' := fun x y ↦ by
+        apply Units.ext
+        apply NNReal.eq
+        change Real.exp (x.toAdd + y.toAdd) = Real.exp x.toAdd * Real.exp y.toAdd
+        exact Real.exp_add _ _ }
+  have he (x : ℝ) :
+      e (Multiplicative.ofAdd x) = Units.mk0 (Real.exp x).toNNReal (by positivity) := by
+    apply Units.ext
+    apply NNReal.eq
+    exact (Real.coe_toNNReal _ (Real.exp_pos x).le).symm
+  convert e.isHaarMeasure_map μ using 1
+  unfold positiveRealHaar
+  congr 1
+  funext x
+  exact (he x).symm
+
+omit hν hν₁ [MeasurableSpace G] [BorelSpace G] in
+/-- Use the section as a coordinate and invert the kernel variable to match the fiber integral. -/
+private theorem exists_regularIsotypic_sectionEquiv :
+    ∃ j : (K × ℝ≥0ˣ) ≃ₜ* G, ∀ p, j p = (p.1 : G)⁻¹ * τ p.2 := by
+  let r : ℝ≥0ˣ ≃ₜ m.toMonoidHom.range :=
+    { toFun := fun t ↦ ⟨t, τ t, hτ t⟩
+      invFun := Subtype.val
+      left_inv := fun _ ↦ rfl
+      right_inv := fun _ ↦ rfl
+      continuous_toFun := continuous_id.subtype_mk _
+      continuous_invFun := continuous_subtype_val }
+  let h : (K × ℝ≥0ˣ) ≃ₜ* (K × m.toMonoidHom.range) :=
+    { (Homeomorph.inv K).prodCongr r with
+      map_mul' := fun a b ↦ Prod.ext (by simp [mul_comm]) rfl }
+  let i : m.toMonoidHom.range →ₜ* ℝ≥0ˣ := ⟨m.toMonoidHom.range.subtype, continuous_subtype_val⟩
+  let τr := τ.comp i
+  obtain ⟨e, he⟩ := hm.exists_prod_equiv τr (fun t ↦ hτ t)
+  exact ⟨h.trans e, fun p ↦ he p.1⁻¹ (r p.2)⟩
+
 /-- Paper: (4.3.2.4), p. 178. Integration on the fibers parametrized by a
 section is defined almost everywhere and gives an L² function for `dt/t`.
 Deviation: We use fiber integration of a representative to define the
@@ -193,7 +317,31 @@ theorem regularIsotypicComponent_memLp (ω : PontryaginDual K) (f : RegularL2 ν
     (∀ᵐ t ∂positiveRealHaar,
       Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * τ t)) ν₁) ∧
     MemLp (fun t ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * τ t) ∂ν₁)
-      2 positiveRealHaar := by sorry
+      2 positiveRealHaar := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have : positiveRealHaar.IsHaarMeasure := positiveRealHaar_isHaarMeasure
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let logHomeo := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.toHomeomorph.symm
+  have : LocallyCompactSpace ℝ≥0ˣ := logHomeo.isOpenEmbedding.locallyCompactSpace
+  obtain ⟨j, hj⟩ := exists_regularIsotypic_sectionEquiv m hm τ hτ
+  let η := ν₁.prod positiveRealHaar
+  have : (η.map j).IsHaarMeasure := j.isHaarMeasure_map η
+  -- Both Haar measures on G differ by a finite positive scalar.
+  have hmem : MemLp (f : G → ℂ) 2 (η.map j) := by
+    rw [Measure.isMulLeftInvariant_eq_smul (η.map j) ν]
+    exact (Lp.memLp f).smul_measure_nnreal
+  have hcomp := hmem.comp_of_map j.continuous.measurable.aemeasurable
+  have hweighted : MemLp (fun p : K × ℝ≥0ˣ ↦ star (ω p.1 : ℂ) * f (j p)) 2 η := by
+    apply hcomp.of_le
+    · have hc : Continuous (fun p : K × ℝ≥0ˣ ↦ star (ω p.1 : ℂ)) := by fun_prop
+      exact hc.aestronglyMeasurable.mul hcomp.aestronglyMeasurable
+    · exact ae_of_all _ fun p ↦ by simp
+  constructor
+  · simpa only [hj] using
+      (memLp_two_prod_left_ae hweighted).mono fun t ht ↦ ht.integrable (by norm_num)
+  · simpa only [hj] using memLp_two_integral_prod_left hweighted
 
 /-- Paper: (4.3.2.4), p. 178. The section gives the `dt/t` L² coordinate
 of the unnormalized character average.
@@ -242,6 +390,20 @@ theorem regularIsotypicTransform_continuousLinear :
 coordinates is in the range of the transform. -/
 theorem regularIsotypicTransform_surjective :
     Surjective (regularIsotypicTransform m hm ν ν₁ τ hτ) := by sorry
+
+/-- Paper: Lemma 4.3.2.2, p. 179. The Hilbert sum of the isotypic coordinates
+determines the original L² class.
+Deviation: Injectivity holds for arbitrary Haar normalizations. -/
+theorem regularIsotypicTransform_injective :
+    Injective (regularIsotypicTransform m hm ν ν₁ τ hτ) := by sorry
+
+/-- Paper: Lemma 4.3.2.2, p. 179. The squared norm of the isotypic transform
+scales by the mass of the norm-one subgroup times the product Haar measure ratio.
+Deviation: The scaling factor accounts for the arbitrary Haar normalizations (ERRATA I73). -/
+theorem regularIsotypicTransform_norm_sq (c : ℝ≥0∞)
+    (hc : (ν₁.prod positiveRealHaar).map (fun z : K × ℝ≥0ˣ ↦ (z.1 : G) * τ z.2) = c • ν)
+    (f : RegularL2 ν) :
+    ‖regularIsotypicTransform m hm ν ν₁ τ hτ f‖ ^ 2 = ν₁.real univ * c.toReal * ‖f‖ ^ 2 := by sorry
 
 -- TODO(paper-gap): Lemma 4.3.2.2's isometry and the isometry asserted on
 -- p. 180 fail for the same measure rescaling as (4.3.2.5).
