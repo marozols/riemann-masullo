@@ -5,6 +5,8 @@ public import Mathlib.Analysis.Distribution.SchwartzSpace.Deriv
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
+import Mathlib.Analysis.MellinInversion
 
 /-!
 # Mellin transforms and asymptotic Cauchy integrals
@@ -18,7 +20,7 @@ values outside the positive reals are immaterial.
 @[expose] public noncomputable section
 
 open Filter Function MeasureTheory Set
-open scoped Asymptotics ContDiff ENNReal NNReal SchwartzMap Topology
+open scoped Asymptotics ContDiff ENNReal FourierTransform NNReal SchwartzMap Topology
 
 namespace RiemannMasullo
 
@@ -412,7 +414,23 @@ theorem continuousOn_mellin_of_weighted_schwartz :
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform restricts
 to a Schwartz function on each vertical line of the closed strip. -/
 theorem exists_schwartz_verticalTrace_mellin_of_weighted_schwartz (σ : ℝ) (hσ : σ ∈ Icc a b) :
-    ∃ g : 𝓢(ℝ, ℂ), (g : ℝ → ℂ) = verticalTrace (mellin (fromLog f)) σ := by sorry
+    ∃ g : 𝓢(ℝ, ℂ), (g : ℝ → ℂ) = verticalTrace (mellin (fromLog f)) σ := by
+  obtain ⟨g, hg⟩ := hWeighted σ hσ
+  let r := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ
+    (LinearIsometryEquiv.neg ℝ (E := ℝ)).toContinuousLinearEquiv g
+  let e := (LinearEquiv.smulOfNeZero ℝ ℝ (2 * Real.pi)⁻¹
+    (inv_ne_zero (mul_ne_zero two_ne_zero Real.pi_ne_zero))).toContinuousLinearEquiv
+  refine ⟨SchwartzMap.compCLMOfContinuousLinearEquiv ℂ e (𝓕 r), ?_⟩
+  funext y
+  change (𝓕 r) ((2 * Real.pi)⁻¹ * y) = mellin (fun t ↦ f (Real.log t)) (σ + y * Complex.I)
+  rw [SchwartzMap.fourier_coe, mellin_eq_fourier]
+  simp only [Complex.add_re, Complex.ofReal_re, Complex.mul_I_re, Complex.ofReal_im,
+    neg_zero, add_zero, Complex.add_im, Complex.mul_I_im, zero_add, Real.log_exp,
+    div_eq_inv_mul]
+  apply congrArg (fun v : ℝ → ℂ ↦ 𝓕 v ((2 * Real.pi)⁻¹ * y))
+  funext x
+  change g (-x) = _
+  simp only [hg, Complex.real_smul, mul_neg, neg_mul]
 
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform is holomorphic
 in the interior of the strip of Schwartz weights. -/
