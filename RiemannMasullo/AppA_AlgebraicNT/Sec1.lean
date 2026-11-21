@@ -2402,6 +2402,15 @@ private theorem sIdeleClassGroup_openEmbedding :
   obtain ⟨u, rfl⟩ := hqS.surjective c
   exact (sIdeleNorm_spec F S).1 u
 
+/-- Restricting the proper global class norm to the open subgroup of S-idele classes
+gives a proper map. Every open subgroup of a topological group is also closed. -/
+theorem isProperMap_sIdeleClassNorm_of_global (h : IsProperMap (ideleClassNorm F)) :
+    IsProperMap (sIdeleClassNorm F S) := by
+  obtain ⟨j, hj, hnorm, _⟩ := sIdeleClassGroup_openEmbedding F S
+  have hj' : IsClosedEmbedding j :=
+    ⟨hj.isEmbedding, j.range.isClosed_of_isOpen hj.isOpen_range⟩
+  simpa only [Function.comp_def, hnorm] using h.comp hj'.isProperMap
+
 open NumberField.Units.dirichletUnitTheorem in
 /-- The norm-one classes of ideles that are local units at every finite place lie in a
 compact set. Ordinary units reduce the archimedean logarithms to a bounded domain. -/

@@ -3,7 +3,7 @@ module
 public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Compactness.Compact
 
-/-! # Units of compact monoids -/
+/-! # Topology on monoid units -/
 
 @[expose] public section
 
@@ -28,5 +28,23 @@ theorem compactSpace_units_of_compactSpace (M : Type*) [Monoid M]
   exact (isClosed_eq (continuous_fst.mul (MulOpposite.continuous_unop.comp continuous_snd))
     continuous_const).inter (isClosed_eq
       ((MulOpposite.continuous_unop.comp continuous_snd).mul continuous_fst) continuous_const)
+
+/-- If a monoid embeds with closed image, the induced map on units also has closed image.
+Both a unit and its inverse must lift to the original monoid. -/
+theorem isClosed_range_unitsMap {M N : Type*} [Monoid M] [Monoid N] [TopologicalSpace N]
+    (f : M →* N) (hf : Function.Injective f) (hc : IsClosed (Set.range f)) :
+    IsClosed (Set.range (Units.map f)) := by
+  have h : Set.range (Units.map f) = (Units.val ⁻¹' Set.range f) ∩
+      (fun u : Nˣ ↦ (u⁻¹ : Nˣ).val) ⁻¹' Set.range f := by
+    ext u
+    constructor
+    · rintro ⟨a, rfl⟩
+      exact ⟨⟨a.val, rfl⟩, ⟨a.inv, rfl⟩⟩
+    · rintro ⟨⟨a, ha⟩, ⟨b, hb⟩⟩
+      have hab : a * b = 1 := hf (by rw [map_mul, ha, hb, map_one]; exact u.val_inv)
+      have hba : b * a = 1 := hf (by rw [map_mul, hb, ha, map_one]; exact u.inv_val)
+      exact ⟨⟨a, b, hab, hba⟩, Units.ext ha⟩
+  rw [h]
+  exact (hc.preimage Units.continuous_val).inter (hc.preimage Units.continuous_coe_inv)
 
 end RiemannMasullo

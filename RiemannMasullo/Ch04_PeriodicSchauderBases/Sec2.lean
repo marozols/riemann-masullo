@@ -4,6 +4,7 @@ public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec1
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
+import Mathlib.Analysis.PSeries
 
 /-!
 # Periodization and Schauder bases on the positive real axis
@@ -42,7 +43,32 @@ any real lift of the circle coordinate.
 Deviation: This also checks the formula on the ordinary Schwartz space. -/
 theorem cyclicPeriodizationValue_hasSum (f : 𝓢(ℝ, ℂ)) (x : ℝ) :
     HasSum (fun k : ℤ ↦ f (x + (k : ℝ) * Real.log γ))
-      (cyclicPeriodizationValue γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by sorry
+      (cyclicPeriodizationValue γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by
+  let L := Real.log γ
+  have hL : L ≠ 0 := (Real.log_pos hγ).ne'
+  let e := ContinuousLinearEquiv.unitsEquivAut ℝ (Units.mk0 L hL)
+  let F := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ e (f.compSubConstCLM ℂ (-x))
+  have hs : Summable (fun k : ℤ ↦ F (k : ℝ)) :=
+    summable_of_isBigO (Real.summable_abs_int_rpow one_lt_two)
+      ((F.isBigO_cocompact_rpow (-2)).comp_tendsto Int.tendsto_coe_cofinite)
+  let a (k : ℤ) := f (x + (k : ℝ) * L)
+  have ha : Summable a := by
+    simpa [a, F, e, SchwartzMap.compCLMOfContinuousLinearEquiv_apply, add_comm] using hs
+  let r := ((AddCircle.equivIco (1 : ℝ) 0) ((x / L : ℝ) : T)).val
+  change HasSum a (∑' k : ℤ, f (L * (r + k)))
+  have hr : r = x / L - ⌊x / L⌋ := by
+    dsimp only [r]
+    rw [AddCircle.coe_equivIco_mk_apply, div_one, mul_one, ← Int.self_sub_floor]
+  convert ha.hasSum using 1
+  calc
+    (∑' k : ℤ, f (L * (r + k))) = ∑' k : ℤ, a ((Equiv.subRight ⌊x / L⌋) k) := by
+      apply tsum_congr
+      intro k
+      simp only [a, Equiv.subRight_apply, Int.cast_sub, hr]
+      congr 1
+      field_simp
+      ring
+    _ = ∑' k : ℤ, a k := (Equiv.subRight ⌊x / L⌋).tsum_eq a
 
 /-- Paper: Lemma 4.2.1.5(1), p. 165. The orbit sum gives a smooth function
 on the circle.
@@ -169,7 +195,24 @@ variable {X : Type*} [AddCommGroup X] [Module ℂ X] [TopologicalSpace X]
 and has image the continuous functionals vanishing on the closed subspace. -/
 theorem quotientDual_weakEmbedding (M : Submodule ℂ X) (hM : IsClosed (M : Set X)) :
     let pull := fun l : WeakDual ℂ (X ⧸ M) ↦ StrongDual.toWeakDual (l.toStrongDual.comp M.mkQL)
-    IsEmbedding pull ∧ range pull = {l | ∀ x ∈ M, l x = 0} := by sorry
+    IsEmbedding pull ∧ range pull = {l | ∀ x ∈ M, l x = 0} := by
+  dsimp only
+  constructor
+  · have he : IsEmbedding (fun l : WeakDual ℂ (X ⧸ M) ↦ (l : (X ⧸ M) → ℂ)) :=
+      WeakBilin.isEmbedding (B := topDualPairing ℂ (X ⧸ M)) ContinuousLinearMap.coe_injective
+    have hπ := M.mkQ_surjective.isEmbedding_comp (X := ℂ) M.mkQ
+    apply Topology.IsEmbedding.of_comp (g := fun l : WeakDual ℂ X ↦ (l : X → ℂ))
+      (WeakDual.continuous_of_continuous_eval fun x ↦ WeakDual.eval_continuous (M.mkQ x))
+      WeakDual.coeFn_continuous
+    exact hπ.comp he
+  · ext l
+    constructor
+    · rintro ⟨v, rfl⟩ x hx
+      change v (Submodule.Quotient.mk x) = 0
+      rw [(Submodule.Quotient.mk_eq_zero M).mpr hx, map_zero]
+    · intro h
+      refine ⟨StrongDual.toWeakDual (M.liftQL l.toStrongDual (fun x hx ↦ h x hx)), ?_⟩
+      exact DFunLike.ext _ _ fun _ ↦ rfl
 
 /-- Paper: Lemma 4.2.1.3, p. 163. The image of the quotient adjoint in the
 strong dual consists precisely of the functionals vanishing on the subspace. -/
