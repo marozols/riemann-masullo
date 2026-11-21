@@ -247,11 +247,51 @@ def regularIsotypicComponent (ω : PontryaginDual K) (f : RegularL2 ν) :
   (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω f).2.toLp
     (fun t ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * τ t) ∂ν₁)
 
+/-- Almost-everywhere equality on the group pulls back to almost-everywhere equality
+on almost every section fiber. -/
+private theorem regularIsotypic_section_ae {u v : G → ℂ} (huv : u =ᵐ[ν] v) :
+    ∀ᵐ t ∂positiveRealHaar, ∀ᵐ a : K ∂ν₁, u ((a : G)⁻¹ * τ t) = v ((a : G)⁻¹ * τ t) := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have : positiveRealHaar.IsHaarMeasure := positiveRealHaar_isHaarMeasure
+  let logHomeo := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.toHomeomorph.symm
+  have : LocallyCompactSpace ℝ≥0ˣ := logHomeo.isOpenEmbedding.locallyCompactSpace
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  obtain ⟨j, hj⟩ := exists_regularIsotypic_sectionEquiv m hm τ hτ
+  let η := ν₁.prod positiveRealHaar
+  have : (η.map j).IsHaarMeasure := j.isHaarMeasure_map η
+  have hmap : QuasiMeasurePreserving j η ν :=
+    ⟨j.continuous.measurable.aemeasurable, Measure.absolutelyContinuous_isHaarMeasure _ _⟩
+  have hp : ∀ᵐ t ∂positiveRealHaar, ∀ᵐ a : K ∂ν₁, u (j (a, t)) = v (j (a, t)) :=
+    Measure.ae_ae_of_ae_prod (Measure.measurePreserving_swap.quasiMeasurePreserving.ae_eq_comp
+      (hmap.ae_eq_comp huv))
+  simpa only [hj] using hp
+
 /-- Paper: (4.3.2.4), p. 178. Translation by a norm-one element acts on the
 corresponding transformed coordinate by the character. -/
 theorem regularIsotypicComponent_equivariant (ω : PontryaginDual K) (k : K) (f : RegularL2 ν) :
     regularIsotypicComponent m hm ν ν₁ τ hτ ω (regularTranslate ν (k : G) f) =
-      (ω k : ℂ) • regularIsotypicComponent m hm ν ν₁ τ hτ ω f := by sorry
+      (ω k : ℂ) • regularIsotypicComponent m hm ν ν₁ τ hτ ω f := by
+  let f' := regularTranslate ν (k : G) f
+  have hab := regularIsotypic_section_ae m hm ν ν₁ τ hτ (regularTranslate_ae_eq ν (k : G) f)
+  let C := regularIsotypicComponent m hm ν ν₁ τ hτ ω
+  have hC (v : RegularL2 ν) : (C v : ℝ≥0ˣ → ℂ) =ᵐ[positiveRealHaar] fun t ↦
+      ∫ a : K, star (ω a : ℂ) * v ((a : G)⁻¹ * τ t) ∂ν₁ :=
+    (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω v).2.coeFn_toLp
+  apply Lp.ext
+  filter_upwards [hC f', hC f, Lp.coeFn_smul (ω k : ℂ) (C f), hab] with t ht' ht hs htrans
+  change (C f') t = ((ω k : ℂ) • C f) t
+  rw [ht', hs]
+  change _ = (ω k : ℂ) * (C f) t
+  rw [ht, ← integral_const_mul, ← integral_mul_right_eq_self
+    (μ := ν₁) (fun a : K ↦ (ω k : ℂ) * (star (ω a : ℂ) * f ((a : G)⁻¹ * τ t))) k]
+  apply integral_congr_ae
+  filter_upwards [htrans] with a ha
+  rw [ha]
+  simp only [map_mul, Subgroup.coe_mul, mul_inv_rev, Circle.coe_mul, star_mul', mul_assoc]
+  rw [mul_left_comm (ω k : ℂ) (star (ω a : ℂ)), ← mul_assoc (ω k : ℂ)]
+  simp [← Circle.coe_inv_eq_conj]
 
 -- TODO(paper-gap): (4.3.2.3) evaluates ω on G before choosing its extension
 -- from G¹. The section gives an extension trivial on its image.
