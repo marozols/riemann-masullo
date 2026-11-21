@@ -776,7 +776,10 @@ under negation on the Schwartz submodule. -/
 theorem elementarySchwartzSeminorm_neg (i : ElementarySchwartzIndex m n r)
     (f : elementarySchwartzSubmodule m n r F) :
     (elementarySchwartzBound (-f).val i).toReal =
-      (elementarySchwartzBound f.val i).toReal := by sorry
+      (elementarySchwartzBound f.val i).toReal := by
+  change (elementarySchwartzBound (-f.val) i).toReal = _
+  rw [← neg_one_smul ℂ f.val, elementarySchwartzBound_smul (-1 : ℂ) f.property.1]
+  simp
 
 /-- Paper: Definition D.1.3.1, p. 750. On the Schwartz submodule each finite
 weighted bound gives a real-valued seminorm. -/
