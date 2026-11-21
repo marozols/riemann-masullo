@@ -310,6 +310,18 @@ theorem exists_mellin_of_holomorphicOn_isPolynomialDecay
         MemLp (fun x : ℝ ↦ logWeight σ x * φ (Real.exp x)) 2 volume) ∧
       ∀ s ∈ stripWithTop a b, HasMellin φ s (F s) := by sorry
 
+/-- Two-sided decay gives Schwartz profiles for weights of either sign. -/
+private theorem exponentialDecay_weighted_schwartz (f : 𝓢(ℝ, ℂ)) (hf : ExponentialDecay f) (c : ℝ) :
+    ∃ g : 𝓢(ℝ, ℂ), ∀ x : ℝ, g x = logWeight c x * f x := by
+  by_cases hc : 0 ≤ c
+  · exact (forwardSemiExponentialDecay_iff_weighted_schwartz f).mp hf.1 c hc
+  obtain ⟨R, hR, _⟩ := exists_schwartzLogReflection
+  have hr : ForwardSemiExponentialDecay (R f) :=
+    (backwardSemiExponentialDecay_iff_forward_reflected (R f) f
+      (fun x ↦ by rw [hR, neg_neg])).mp hf.2
+  obtain ⟨g, hg⟩ := (forwardSemiExponentialDecay_iff_weighted_schwartz (R f)).mp hr (-c) (by linarith)
+  exact ⟨R g, fun x ↦ by simp only [hR, hg, neg_neg, neg_mul_neg]⟩
+
 section ExponentialMellin
 
 variable (f : 𝓢(ℝ, ℂ)) (hf : ExponentialDecay f)
@@ -319,7 +331,10 @@ include hf
 /-- Paper: Equation (B.2.1.26), p. 598. The Mellin integral of an
 exponentially decaying function converges absolutely at every complex exponent. -/
 theorem mellinConvergent_of_exponentialDecay (s : ℂ) :
-    MellinConvergent (fromLog f) s := by sorry
+    MellinConvergent (fromLog f) s := by
+  obtain ⟨g, hg⟩ := exponentialDecay_weighted_schwartz f hf s.re
+  exact mellinConvergent_of_integrable_logWeight f s
+    ((g.integrable (μ := volume)).congr (Eventually.of_forall hg))
 
 /-- Paper: Proposition B.2.1.9(1), p. 598. The Mellin transform of an
 exponentially decaying function is entire. -/
