@@ -324,7 +324,11 @@ variable (γ : ℝ) (hγ : 1 < γ)
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. The periodization of exponential profiles
 is continuous. Smoothness in part (1) is built into its elementary Schwartz target. -/
-theorem cyclicPeriodization_continuous : Continuous (cyclicPeriodization γ hγ) := by sorry
+theorem cyclicPeriodization_continuous : Continuous (cyclicPeriodization γ hγ) := by
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  have h : Continuous (fun f : E ↦ logExponentialDecayTwist univ a f) :=
+    continuous_pi_iff.mp (positiveRealExponentialDecay_isEmbedding (univ : Set ℝ) univ_nonempty).continuous a
+  exact (cyclicSchwartzPeriodization γ hγ).continuous.comp h
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Every smooth quotient function has an
 exponentially decaying lift under periodization. -/
