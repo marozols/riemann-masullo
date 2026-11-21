@@ -93,8 +93,32 @@ theorem schwartzBergman_closure (I : Set ℝ) :
       EqOn f 0 (Complex.re ⁻¹' I)ᶜ ∧ DifferentiableOn ℂ f (Complex.re ⁻¹' I) ∧
       ∀ (a b : ℝ), a ≤ b → Icc a b ⊆ I → ∀ N : ℕ,
         BddAbove ((fun z : ℂ ↦ ‖z ^ N * f z‖) '' (Complex.re ⁻¹' Icc a b))
-    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) :=
-  by sorry
+    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) := by
+  dsimp only
+  refine ⟨⟨eqOn_refl _ _, differentiableOn_const 0, ?_⟩, ?_, ?_⟩
+  · intro a b _ _ N
+    exact ⟨0, by rintro _ ⟨z, _, rfl⟩; simp⟩
+  · rintro f g ⟨hf, df, bf⟩ ⟨hg, dg, bg⟩
+    refine ⟨fun z hz ↦ ?_, df.add dg, ?_⟩
+    · simp [Pi.add_apply, hf hz, hg hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      obtain ⟨B, hB⟩ := bg a b hab hI N
+      refine ⟨A + B, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (f z + g z)‖ ≤ _
+      rw [mul_add]
+      exact (norm_add_le _ _).trans (add_le_add (hA ⟨z, hz, rfl⟩) (hB ⟨z, hz, rfl⟩))
+  · rintro c f ⟨hf, df, bf⟩
+    refine ⟨fun z hz ↦ ?_, df.const_mul c, ?_⟩
+    · simp [Pi.smul_apply, hf hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      refine ⟨‖c‖ * A, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (c * f z)‖ ≤ _
+      rw [mul_left_comm, norm_mul]
+      exact mul_le_mul_of_nonneg_left (hA ⟨z, hz, rfl⟩) (norm_nonneg _)
 
 /-- Paper: Definition D.3.1.3, p. 800. These are the holomorphic functions
 with rapid decay on every bounded-width strip whose real closure is contained in the interval.
@@ -124,7 +148,8 @@ def weightedVerticalTrace (a : ℝ) (N : ℕ) (f : ℂ → ℂ) (x : ℝ) : ℂ 
 /-- Paper: (D.3.1.7), p. 799. At zero height, the trace evaluates the weighted
 function on the real axis. -/
 theorem weightedVerticalTrace_zero_height (a : ℝ) (N : ℕ) (f : ℂ → ℂ) :
-    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by sorry
+    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by
+  simp [weightedVerticalTrace]
 
 /-- Paper: Lemma D.3.1.2, p. 799. Each polynomially weighted trace belongs to
 the indicated Lᵖ space.
@@ -197,7 +222,7 @@ def realSchwartzCoe : 𝓢(ℝ, ℂ) →ₗ[ℂ] (ℝ → ℂ) where
 
 /-- Paper: Definition D.3.2.1, p. 801. Forgetting the Schwartz properties
 retains the values of the function. -/
-theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := by sorry
+theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := rfl
 
 /-- Paper: Definition D.3.2.1, p. 801. In logarithmic coordinates, weighting
 by tᵃ amounts to multiplying by exp(ax). -/
@@ -206,7 +231,9 @@ def logExponentialWeight (a : ℝ) : (ℝ → ℂ) →ₗ[ℂ] (ℝ → ℂ) :=
 
 /-- Paper: Definition D.3.2.1, p. 801. The weight at exponent zero does not
 change the function. -/
-theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by sorry
+theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by
+  ext x
+  simp [logExponentialWeight, LinearMap.mulLeft]
 
 /-- Paper: Definition D.3.2.1, p. 801. A logarithmic profile belongs to the
 decay submodule if each weighted profile is a real-line Schwartz function.
@@ -218,7 +245,8 @@ def logExponentialDecaySubmodule (I : Set ℝ) : Submodule ℂ (ℝ → ℂ) :=
 profile, bundled as a Schwartz map. -/
 theorem logExponentialDecay_weight_mem_range (I : Set ℝ)
     (a : I) (f : logExponentialDecaySubmodule I) :
-    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by sorry
+    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by
+  exact (Submodule.mem_iInf _).mp f.property a
 
 /-- Paper: (D.3.2.1), p. 801. This is the linear multiplier to the space
 of Schwartz functions in logarithmic coordinates. -/
@@ -360,7 +388,9 @@ def modulationWeight (a : ℝ) : (G → ℂ) →ₗ[ℂ] (G → ℂ) :=
 
 /-- Paper: Definition D.3.3.1, p. 804. Weighting at exponent zero is
 the identity. -/
-theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by sorry
+theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by
+  ext g
+  simp [modulationWeight]
 
 /-- Paper: Definition D.3.3.1, p. 804. All real twists with exponents in I
 must lie in the Schwartz–Bruhat submodule.

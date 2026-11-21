@@ -788,12 +788,160 @@ theorem isNuclearTVS_iff_localBanach_series :
       ⟨Equiv.refl (E ⊗[ℂ] F), hfwd, continuous_injectiveTensor_to_projectiveTensor_of_localSeries E h F⟩
     exact e.isHomeomorph
 
+omit [T2Space E] in
+/-- Paper: (C.2.4.1), p. 685. Each injective generator is continuous for the
+projective topology, so the tensor comparison is uniformly continuous. -/
+private theorem uniformContinuous_tensorComparison
+    (F : Type*) [AddCommGroup F] [Module ℂ F] [TopologicalSpace F] [PolynormableSpace ℂ F] :
+    @UniformContinuous (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id := by
+  let f : ProjectiveTensor E F →ₗ[ℂ] InjectiveTensor E F := LinearMap.id
+  apply uniformContinuous_addMonoidHom_of_continuous (f := f)
+  let hP := withGeneratingSeminorms_spec (E ⊗[ℂ] F)
+    (fun p : {p : Seminorm ℂ (E ⊗[ℂ] F) //
+      ContinuousAt (fun z : E × F ↦ p (z.1 ⊗ₜ[ℂ] z.2)) 0} ↦ p.val)
+  exact (withGeneratingSeminorms_spec (E ⊗[ℂ] F) _).continuous_of_continuous_comp f
+    fun ⟨U, V⟩ ↦ hP.continuous_seminorm
+      ⟨_, injectiveSeminorm_continuousAt_tmul U V⟩
+
+omit [T2Space E] in
+/-- Paper: Definition C.2.4.1, p. 685. The tensor comparison is a homeomorphism
+exactly when its map on completions is a homeomorphism. -/
+private theorem isHomeomorph_completedTensorComparison_iff
+    (F : Type*) [AddCommGroup F] [Module ℂ F] [TopologicalSpace F] [PolynormableSpace ℂ F] :
+    IsHomeomorph (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) ↔
+      @IsHomeomorph (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id := by
+  have hforward := uniformContinuous_tensorComparison E F
+  let g : InjectiveTensor E F →ₗ[ℂ] ProjectiveTensor E F := LinearMap.id
+  constructor
+  · intro h
+    have hcomm : (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) ∘
+        (Completion.coe' : ProjectiveTensor E F → Completion (ProjectiveTensor E F)) =
+        (fun z : ProjectiveTensor E F ↦
+          (Completion.coe' : InjectiveTensor E F → Completion (InjectiveTensor E F)) z) := by
+      funext z
+      exact Completion.map_coe hforward z
+    have hind := h.isInducing.comp Completion.isDenseInducing_coe.isInducing
+    have hback : Continuous g := hind.continuous_iff.mpr (by
+      rw [hcomm]
+      exact @Completion.continuous_coe (InjectiveTensor E F) _)
+    exact (⟨Equiv.refl (E ⊗[ℂ] F), hforward.continuous, hback⟩ :
+      ProjectiveTensor E F ≃ₜ InjectiveTensor E F).isHomeomorph
+  · intro h
+    have hback : Continuous g := h.isInducing.continuous_iff.mpr
+      (@continuous_id (InjectiveTensor E F) _)
+    let e : ProjectiveTensor E F ≃ᵤ InjectiveTensor E F :=
+      ⟨Equiv.refl (E ⊗[ℂ] F), hforward,
+        uniformContinuous_addMonoidHom_of_continuous hback⟩
+    exact (Completion.mapEquiv e).toHomeomorph.isHomeomorph
+
+/-- Paper: Theorem C.2.4.2(3), p. 686. Each projective generator can be pulled back
+from the projective tensor with the local Banach space of a continuous seminorm on
+the second factor. If the comparison there is a homeomorphism, the generator is
+continuous for the injective topology on the original tensor product. -/
+private theorem continuous_projectiveSeminorm_of_localBanach
+    {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F]
+    [PolynormableSpace ℂ F] [T2Space F]
+    (h : ∀ s : Seminorm ℂ F,
+      @IsHomeomorph (ProjectiveTensor E (LocalBanach s)) (InjectiveTensor E (LocalBanach s)) _ _ id)
+    (r : Seminorm ℂ (E ⊗[ℂ] F))
+    (hr : ContinuousAt (fun z : E × F ↦ r (z.1 ⊗ₜ[ℂ] z.2)) 0) :
+    @Continuous (InjectiveTensor E F) ℝ _ _ r := by
+  obtain ⟨q, s, hq, hs, hbound⟩ := exists_projectiveSeminorm_pure_bound E r hr
+  obtain ⟨j, hj⟩ := exists_localBanach_inclusion s hs
+  let κ : E ⊗[ℂ] F →ₗ[ℂ] LocalBanach r := Completion.toComplL.toLinearMap.comp LinearMap.id
+  have hκ (z : E ⊗[ℂ] F) : ‖κ z‖ = r z := localBanach_norm_coe r z
+  -- Extend the pure-tensor map in the second factor, with values in the completion for r.
+  let B₀ : WithLocalSeminorm q →L[ℂ] WithLocalSeminorm s →L[ℂ] LocalBanach r :=
+    ((TensorProduct.mk ℂ E F).compr₂ κ :
+      WithLocalSeminorm q →ₗ[ℂ] WithLocalSeminorm s →ₗ[ℂ] LocalBanach r).mkContinuous₂ 1
+      (fun x y ↦ by
+        change ‖κ (x ⊗ₜ[ℂ] y)‖ ≤ 1 * q x * s y
+        rw [hκ, one_mul]
+        exact hbound x y)
+  let B := B₀.flip.fromCompletion
+  have hcoe (x : E) (y : WithLocalSeminorm s) :
+      B (y : LocalBanach s) x = κ (x ⊗ₜ[ℂ] y) := by
+    change B₀.flip.fromCompletion (y : LocalBanach s) x = _
+    rw [ContinuousLinearMap.fromCompletion_apply_coe]
+    rfl
+  have hB (x : E) (y : LocalBanach s) : ‖B y x‖ ≤ q x * ‖y‖ := by
+    induction y using Completion.induction_on with
+    | hp =>
+      apply isClosed_le
+      · exact ((ContinuousLinearMap.apply ℂ (LocalBanach r)
+          (show WithLocalSeminorm q from x)).continuous.comp B.continuous).norm
+      · exact continuous_const.mul continuous_norm
+    | ih y =>
+      rw [hcoe, hκ, localBanach_norm_coe s]
+      exact hbound x y
+  let L : E ⊗[ℂ] LocalBanach s →ₗ[ℂ] LocalBanach r :=
+    TensorProduct.lift (LinearMap.mk₂ ℂ (fun x y ↦ B y x)
+      (fun _ _ _ ↦ map_add _ _ _) (fun _ _ _ ↦ map_smul _ _ _)
+      (fun _ _ _ ↦ by rw [map_add]; rfl) (fun _ _ _ ↦ by rw [map_smul]; rfl))
+  let p := (normSeminorm ℂ (LocalBanach r)).comp L
+  have hp : ContinuousAt (fun z : E × LocalBanach s ↦ p (z.1 ⊗ₜ[ℂ] z.2)) 0 := by
+    have ht : Tendsto (fun z : E × LocalBanach s ↦ q z.1 * ‖z.2‖) (𝓝 0) (𝓝 0) := by
+      have hcont : Continuous (fun z : E × LocalBanach s ↦ q z.1 * ‖z.2‖) :=
+        (hq.comp continuous_fst).mul continuous_snd.norm
+      simpa [ContinuousAt] using hcont.continuousAt (x := 0)
+    have hzero : p ((0 : E) ⊗ₜ[ℂ] (0 : LocalBanach s)) = 0 := by simp
+    change Tendsto _ _ (𝓝 (p ((0 : E) ⊗ₜ[ℂ] (0 : LocalBanach s))))
+    rw [hzero]
+    exact squeeze_zero (fun _ ↦ apply_nonneg _ _) (fun z ↦ by
+      change ‖L (z.1 ⊗ₜ[ℂ] z.2)‖ ≤ _
+      rw [show L (z.1 ⊗ₜ[ℂ] z.2) = B z.2 z.1 from TensorProduct.lift.tmul _ _]
+      exact hB z.1 z.2) ht
+  let hP := withGeneratingSeminorms_spec (E ⊗[ℂ] LocalBanach s)
+    (fun p : {p : Seminorm ℂ (E ⊗[ℂ] LocalBanach s) //
+      ContinuousAt (fun z : E × LocalBanach s ↦ p (z.1 ⊗ₜ[ℂ] z.2)) 0} ↦ p.val)
+  have hpP := hP.continuous_seminorm ⟨p, hp⟩
+  have hpI : @Continuous (InjectiveTensor E (LocalBanach s)) ℝ _ _ p :=
+    (h s).isQuotientMap.continuous_iff.mpr hpP
+  have : PolynormableSpace ℂ (LocalBanach s) := (norm_withSeminorms ℂ _).toPolynormableSpace
+  let T := injectiveTensorMap (ContinuousLinearMap.id ℂ E).toLinearMap j.toLinearMap
+  have hL : L.comp T = κ := by
+    apply TensorProduct.ext'
+    intro x y
+    change L (TensorProduct.map LinearMap.id j.toLinearMap (x ⊗ₜ[ℂ] y)) = κ (x ⊗ₜ[ℂ] y)
+    rw [TensorProduct.map_tmul, TensorProduct.lift.tmul]
+    change B (j y) x = κ (x ⊗ₜ[ℂ] y)
+    rw [hj, hcoe]
+  have heq : (fun z : InjectiveTensor E F ↦ p (T z)) = r := by
+    funext z
+    change ‖(L.comp T) z‖ = r z
+    rw [hL]
+    exact hκ z
+  rw [← heq]
+  exact hpI.comp (injectiveTensorMap_continuous (ContinuousLinearMap.id ℂ E) j)
+
 /-- Paper: Theorem C.2.4.2(3), p. 686. Nuclearity can be tested on the completed
 projective to injective comparison against Banach spaces. -/
 theorem isNuclearTVS_iff_completedTensor_banach :
     IsNuclearTVS.{v, u} E ↔
       ∀ (F : Type (max v u)) (_ : NormedAddCommGroup F) (_ : NormedSpace ℂ F) (_ : CompleteSpace F),
-        IsHomeomorph (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) := by sorry
+        IsHomeomorph (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) := by
+  constructor
+  · intro h F _ _ _
+    have : PolynormableSpace ℂ F := (norm_withSeminorms ℂ F).toPolynormableSpace
+    exact (isHomeomorph_completedTensorComparison_iff E F).mpr
+      (h.2.2 F inferInstance inferInstance inferInstance inferInstance inferInstance)
+  · intro h
+    refine ⟨inferInstance, inferInstance, ?_⟩
+    intro F _ _ _ _ _
+    have hlocal (s : Seminorm ℂ F) :
+        @IsHomeomorph (ProjectiveTensor E (LocalBanach s)) (InjectiveTensor E (LocalBanach s)) _ _ id := by
+      have : PolynormableSpace ℂ (LocalBanach s) := (norm_withSeminorms ℂ _).toPolynormableSpace
+      exact (isHomeomorph_completedTensorComparison_iff E (LocalBanach s)).mp
+        (h (LocalBanach s) inferInstance inferInstance inferInstance)
+    let hP := withGeneratingSeminorms_spec (E ⊗[ℂ] F)
+      (fun p : {p : Seminorm ℂ (E ⊗[ℂ] F) //
+        ContinuousAt (fun z : E × F ↦ p (z.1 ⊗ₜ[ℂ] z.2)) 0} ↦ p.val)
+    have hback : @Continuous (InjectiveTensor E F) (ProjectiveTensor E F) _ _ id :=
+      hP.continuous_of_continuous_comp
+        (LinearMap.id : InjectiveTensor E F →ₗ[ℂ] ProjectiveTensor E F)
+        fun ⟨r, hr⟩ ↦ continuous_projectiveSeminorm_of_localBanach E hlocal r hr
+    exact (⟨Equiv.refl (E ⊗[ℂ] F), (uniformContinuous_tensorComparison E F).continuous, hback⟩ :
+      ProjectiveTensor E F ≃ₜ InjectiveTensor E F).isHomeomorph
 
 /-- Paper: Theorem C.2.4.2(4), p. 686. Nuclearity is equivalent to the canonical
 comparison on completed tensors being a homeomorphism against all Hausdorff locally
@@ -802,7 +950,52 @@ theorem isNuclearTVS_iff_completedTensor :
     IsNuclearTVS.{v, u} E ↔
       ∀ (F : Type (max v u)) (_ : AddCommGroup F) (_ : Module ℂ F) (_ : TopologicalSpace F)
         (_ : PolynormableSpace ℂ F) (_ : T2Space F),
-        IsHomeomorph (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) := by sorry
+        IsHomeomorph (@Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id) := by
+  constructor
+  · rintro ⟨_, _, h⟩ F aF mF tF lcF hF
+    let e : ProjectiveTensor E F ≃ InjectiveTensor E F :=
+      ⟨id, id, fun _ ↦ rfl, fun _ ↦ rfl⟩
+    have he := e.isHomeomorph_iff.mp (h F aF mF tF lcF hF)
+    have hu : @UniformContinuous (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id :=
+      uniformContinuous_addMonoidHom_of_continuous
+        (α := ProjectiveTensor E F) (β := InjectiveTensor E F)
+        (f := (LinearMap.id : ProjectiveTensor E F →ₗ[ℂ] InjectiveTensor E F)) he.1
+    have hu' : @UniformContinuous (InjectiveTensor E F) (ProjectiveTensor E F) _ _ id :=
+      uniformContinuous_addMonoidHom_of_continuous
+        (α := InjectiveTensor E F) (β := ProjectiveTensor E F)
+        (f := (LinearMap.id : InjectiveTensor E F →ₗ[ℂ] ProjectiveTensor E F)) he.2
+    let eu : ProjectiveTensor E F ≃ᵤ InjectiveTensor E F := ⟨e, hu, hu'⟩
+    exact (Completion.mapEquiv eu).toHomeomorph.isHomeomorph
+  · intro h
+    refine ⟨inferInstance, inferInstance, ?_⟩
+    intro F aF mF tF lcF hF
+    have hc : @Continuous (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id := by
+      let hI := withGeneratingSeminorms_spec (E ⊗[ℂ] F)
+        (fun UV : {U : Set E // U ∈ 𝓝 0} × {V : Set F // V ∈ 𝓝 0} ↦
+          injectiveTensorSeminorm UV.1 UV.2)
+      let hP := withGeneratingSeminorms_spec (E ⊗[ℂ] F)
+        (fun p : {p : Seminorm ℂ (E ⊗[ℂ] F) //
+          ContinuousAt (fun v : E × F ↦ p (v.1 ⊗ₜ[ℂ] v.2)) 0} ↦ p.val)
+      exact hI.continuous_of_continuous_comp
+        (LinearMap.id : ProjectiveTensor E F →ₗ[ℂ] InjectiveTensor E F)
+        fun ⟨U, V⟩ ↦ hP.continuous_seminorm ⟨_, injectiveSeminorm_continuousAt_tmul U V⟩
+    have hu : @UniformContinuous (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id :=
+      uniformContinuous_addMonoidHom_of_continuous
+        (α := ProjectiveTensor E F) (β := InjectiveTensor E F)
+        (f := (LinearMap.id : ProjectiveTensor E F →ₗ[ℂ] InjectiveTensor E F)) hc
+    let coeP := Completion.coe' (α := ProjectiveTensor E F)
+    let coeI := Completion.coe' (α := InjectiveTensor E F)
+    let completedComparison := @Completion.map (ProjectiveTensor E F) _ (InjectiveTensor E F) _ id
+    have hcoe : completedComparison ∘ coeP = coeI ∘ (id : ProjectiveTensor E F → InjectiveTensor E F) :=
+      funext (Completion.map_coe (α := ProjectiveTensor E F) (β := InjectiveTensor E F) hu)
+    have hi : IsInducing (completedComparison ∘ coeP) :=
+      (h F aF mF tF lcF hF).isInducing.comp
+        (Completion.isUniformInducing_coe (ProjectiveTensor E F)).isInducing
+    rw [hcoe] at hi
+    have hid : @IsInducing (ProjectiveTensor E F) (InjectiveTensor E F) _ _ id :=
+      (Completion.isUniformInducing_coe (InjectiveTensor E F)).isInducing.of_comp_iff.mp hi
+    exact isHomeomorph_iff_isEmbedding_surjective.mpr
+      ⟨⟨hid, Function.injective_id⟩, Function.surjective_id⟩
 
 end Characterizations
 

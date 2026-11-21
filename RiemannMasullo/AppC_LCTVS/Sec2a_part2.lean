@@ -1024,7 +1024,8 @@ include lcE lcF lcG lcH sE sF sG sH
 /-- Paper: (C.2.3.9), p. 678. The injective tensor map applies its two factors
 to the corresponding entries of a pure tensor. -/
 theorem injectiveTensorMap_tmul (x : E) (y : F) :
-    injectiveTensorMap f.toLinearMap g.toLinearMap (x ⊗ₜ[ℂ] y) = f x ⊗ₜ[ℂ] g y := by sorry
+    injectiveTensorMap f.toLinearMap g.toLinearMap (x ⊗ₜ[ℂ] y) = f x ⊗ₜ[ℂ] g y :=
+  TensorProduct.map_tmul _ _ _ _
 
 omit lcE lcF lcG lcH sE sF sG sH in
 open scoped Pointwise in

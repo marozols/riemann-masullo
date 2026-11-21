@@ -1,6 +1,9 @@
 module
 
 public import RiemannMasullo.Ch02_AdelicTheta.Sec3
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Analysis.SpecificLimits.Normed
+import RiemannMasullo.ForMathlib.Analysis.Normed.Ring.InfiniteSum
 
 /-!
 # Small-norm estimates for S-local adelic theta
@@ -60,6 +63,61 @@ end Rat
 -- M = 1, N = 2, a₁ = 2, T = 1 and φ(t) = K on (0, 1), zero for t ≥ 1.
 -- At t = 2⁻ⁿ the sum is K n, so the coefficient must be at least K / log 2.
 
+/-- A bounded function with power decay has a single majorant for all decay exponents
+between zero and one. -/
+private theorem geometric_grid_decay_majorant {N : ℕ} (hN : 1 ≤ N) {φ : ℝ → ℂ}
+    {C A T : ℝ} (hC : 0 < C) (hb : ∀ y, 0 < y → ‖φ y‖ ≤ C)
+    (hd : ∀ y, T ≤ y → ‖φ y‖ ≤ A * (y ^ N)⁻¹) :
+    ∃ D : ℝ, 0 < D ∧ ∀ y, 0 < y → ∀ L : ℝ, 1 ≤ L →
+      ‖φ y‖ ≤ D * Real.exp (-Real.log y / L) := by
+  let D := max (C * max 1 T) A
+  have hCD : C ≤ D :=
+    (le_mul_of_one_le_right hC.le (le_max_left 1 T)).trans (le_max_left _ _)
+  refine ⟨D, hC.trans_le hCD, ?_⟩
+  intro y hy L hL
+  have hL0 : 0 < L := zero_lt_one.trans_le hL
+  rcases le_total y 1 with hy₁ | hy₁
+  · have hlog := Real.log_nonpos hy.le hy₁
+    exact ((hb y hy).trans hCD).trans (le_mul_of_one_le_right (hC.le.trans hCD)
+      (Real.one_le_exp (div_nonneg (neg_nonneg.mpr hlog) hL0.le)))
+  · have hlinear : ‖φ y‖ * y ≤ D := by
+      by_cases hT : T ≤ y
+      · have hpow : y ≤ y ^ N := by simpa using pow_le_pow_right₀ hy₁ hN
+        have hdec : ‖φ y‖ ≤ A / y ^ N := by simpa only [div_eq_mul_inv] using hd y hT
+        exact (mul_le_mul_of_nonneg_left hpow (norm_nonneg _)).trans
+          (((le_div_iff₀ (pow_pos hy N)).mp hdec).trans (le_max_right _ _))
+      · exact (mul_le_mul (hb y hy) ((le_of_not_ge hT).trans (le_max_right _ _)) hy.le hC.le).trans
+          (le_max_left _ _)
+    calc
+      ‖φ y‖ ≤ D * Real.exp (-Real.log y) := by
+        rw [Real.exp_neg, Real.exp_log hy, ← div_eq_mul_inv]
+        exact (le_div_iff₀ hy).mpr hlinear
+      _ ≤ D * Real.exp (-Real.log y / L) := by
+        gcongr
+        apply (le_div_iff₀ hL0).mpr
+        nlinarith [mul_nonneg (Real.log_nonneg hy₁) (sub_nonneg.mpr hL)]
+
+/-- The mass of a geometric series with ratio exp(-b/L) is at most linear in L. -/
+private theorem geometric_grid_factor_bound {b L : ℝ} (hb : 0 < b) (hL : 1 ≤ L) :
+    (1 - Real.exp (-b / L))⁻¹ ≤ (1 + b⁻¹) * L := by
+  have hL0 := zero_lt_one.trans_le hL
+  let x := b / L
+  have hx : 0 < x := div_pos hb hL0
+  have hex : 0 < Real.exp x - 1 := sub_pos.mpr (Real.one_lt_exp_iff.mpr hx)
+  calc
+    (1 - Real.exp (-b / L))⁻¹ = 1 + (Real.exp x - 1)⁻¹ := by
+      rw [neg_div, Real.exp_neg]
+      change (1 - (Real.exp x)⁻¹)⁻¹ = _
+      field_simp [hex.ne', (Real.exp_pos x).ne']
+      ring
+    _ ≤ 1 + x⁻¹ := by
+      gcongr
+      linarith [Real.add_one_le_exp x]
+    _ ≤ (1 + b⁻¹) * L := by
+      dsimp [x]
+      rw [inv_div, one_add_mul, div_eq_inv_mul]
+      linarith
+
 /-- Paper: Lemma 2.4.1.2, p. 107. For a bounded function with power decay
 at infinity, the sum of the norms over the multiplicative grid with M bases
 greater than one converges and is bounded by a constant times the Mth power
@@ -73,7 +131,62 @@ theorem summable_geometric_grid_log_bound (M N : ℕ) (hM : 1 ≤ M) (hN : 1 < N
     (hdecay : ∃ A T : ℝ, 0 < A ∧ 0 < T ∧ ∀ t : ℝ, T ≤ t → ‖φ t‖ ≤ A * (t ^ N)⁻¹) :
     ∃ T₀ Cφ : ℝ, 0 < T₀ ∧ 0 < Cφ ∧ ∀ t : ℝ, 0 < t → t < T₀ →
       let term : (Fin M → ℕ) → ℝ := fun k ↦ ‖φ ((∏ i, a i ^ k i) * t)‖
-      Summable term ∧ (∑' k, term k) ≤ Cφ * |Real.log t| ^ M := by sorry
+      Summable term ∧ (∑' k, term k) ≤ Cφ * |Real.log t| ^ M := by
+  clear hM -- The product estimate also holds in dimension zero.
+  obtain ⟨C, hC, hb⟩ := hbounded
+  obtain ⟨A, T, -, -, hd⟩ := hdecay
+  obtain ⟨D, hD, hmajor⟩ := geometric_grid_decay_majorant hN.le hC hb hd
+  let b (i : Fin M) := Real.log (a i)
+  have hbpos (i : Fin M) : 0 < b i := Real.log_pos (ha i)
+  have hapos (i : Fin M) : 0 < a i := zero_lt_one.trans (ha i)
+  let P := ∏ i, (1 + (b i)⁻¹)
+  have hP : 0 < P := Finset.prod_pos fun i _ ↦ by have := hbpos i; positivity
+  refine ⟨Real.exp (-1), D * Real.exp 1 * P, Real.exp_pos _, by positivity, ?_⟩
+  intro t ht ht₀
+  -- Choose the decay exponent 1/L so that the factor from t is exactly exp(1).
+  let L := -Real.log t
+  have hL : 1 ≤ L := by
+    have h := (Real.log_lt_iff_lt_exp ht).mpr ht₀
+    dsimp [L]
+    linarith
+  have hL0 : 0 < L := zero_lt_one.trans_le hL
+  let q (i : Fin M) := Real.exp (-b i / L)
+  let w (k : Fin M → ℕ) := ∏ i, (q i) ^ k i
+  have hq (i : Fin M) : q i < 1 :=
+    Real.exp_lt_one_iff.mpr (div_neg_of_neg_of_pos (neg_lt_zero.mpr (hbpos i)) hL0)
+  have hw : HasSum w (∏ i, (1 - q i)⁻¹) :=
+    hasSum_prod_fin_of_nonneg (fun i n ↦ q i ^ n) _
+      (fun i n ↦ pow_nonneg (Real.exp_nonneg _) _)
+      (fun i ↦ hasSum_geometric_of_lt_one (Real.exp_nonneg _) (hq i))
+  have hpoint (k : Fin M → ℕ) :
+      ‖φ ((∏ i, a i ^ k i) * t)‖ ≤ D * Real.exp 1 * w k := by
+    have hp : 0 < ∏ i, a i ^ k i := Finset.prod_pos fun i _ ↦ pow_pos (hapos i) _
+    refine (hmajor _ (mul_pos hp ht) L hL).trans_eq ?_
+    have hlog : -Real.log ((∏ i, a i ^ k i) * t) / L = 1 + ∑ i, (k i : ℝ) * (-b i / L) := by
+      rw [Real.log_mul hp.ne' ht.ne', Real.log_prod (fun i _ ↦ (pow_pos (hapos i) _).ne')]
+      simp only [Real.log_pow]
+      have hterm (i : Fin M) : (k i : ℝ) * (-b i / L) = -((k i : ℝ) * b i) / L := by ring
+      simp_rw [hterm]
+      simp only [div_eq_mul_inv, ← Finset.sum_mul, Finset.sum_neg_distrib]
+      change -((∑ i, (k i : ℝ) * b i) + Real.log t) / L = _
+      have htL : Real.log t = -L := (neg_neg _).symm
+      rw [htL]
+      field_simp [hL0.ne']
+      ring
+    rw [hlog, Real.exp_add, Real.exp_sum, mul_assoc]
+    simp only [Real.exp_nat_mul, w, q]
+  have hsum := hw.mul_left (D * Real.exp 1)
+  have hs := hsum.summable.of_nonneg_of_le (fun k ↦ norm_nonneg _) hpoint
+  refine ⟨hs, (hs.tsum_le_tsum hpoint hsum.summable).trans ?_⟩
+  rw [hsum.tsum_eq, abs_of_nonpos (by change Real.log t ≤ 0; dsimp [L] at hL; linarith)]
+  change D * Real.exp 1 * (∏ i, (1 - q i)⁻¹) ≤ D * Real.exp 1 * P * L ^ M
+  rw [mul_assoc (D * Real.exp 1)]
+  apply mul_le_mul_of_nonneg_left _ (mul_nonneg hD.le (Real.exp_nonneg _))
+  calc
+    (∏ i, (1 - q i)⁻¹) ≤ ∏ i, ((1 + (b i)⁻¹) * L) :=
+      Finset.prod_le_prod₀ (fun i _ ↦ inv_nonneg.mpr (sub_nonneg.mpr (hq i).le))
+        (fun i _ ↦ geometric_grid_factor_bound (hbpos i) hL)
+    _ = P * L ^ M := by simp [P, Finset.prod_mul_distrib]
 
 -- TODO(paper-gap): The geometric series in (2.4.1.5) has an unrounded
 -- lower endpoint, and (2.4.1.8) loses a factor in the power of T. The

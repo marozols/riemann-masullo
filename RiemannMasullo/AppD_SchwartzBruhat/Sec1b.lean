@@ -458,7 +458,7 @@ obtained by pullback and extension by zero. -/
 theorem schwartzBruhatStageInclusion_apply (a : BruhatStructuralPair G)
     (e : ElementaryLCAPresentation a.quotient) (f : SchwartzBruhatStage e) (x : G) :
     (show SchwartzBruhat G from schwartzBruhatStageInclusion a e f) x =
-      schwartzBruhatStageRealization a e f x := by sorry
+      schwartzBruhatStageRealization a e f x := rfl
 
 include hTop hT2 hLC
 

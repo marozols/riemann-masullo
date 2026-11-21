@@ -230,7 +230,8 @@ variable {E F : Type*} [NormedAddCommGroup E] [NormedSpace ℂ E]
 /-- Paper: Remark C.2.1.6, p. 671. The operator norm is the supremum of the image norms
 over the closed unit ball of the source. -/
 theorem opNorm_eq_sup_closedUnitBall (f : E →L[ℂ] F) :
-    ‖f‖ = ⨆ x : Metric.closedBall (0 : E) 1, ‖f x‖ := by sorry
+    ‖f‖ = ⨆ x : Metric.closedBall (0 : E) 1, ‖f x‖ := by
+  rw [← f.sSup_unitClosedBall_eq_norm, sSup_image']
 
 /-- Paper: Remark C.2.1.6, p. 671. The operator-norm balls form a zero-neighborhood basis
 for uniform convergence on all bounded subsets of a normed space. -/

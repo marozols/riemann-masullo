@@ -7,8 +7,10 @@ public import Mathlib.NumberTheory.NumberField.HeckeLFunction
 public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 
+import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
@@ -587,7 +589,18 @@ theorem continuous_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g
 /-- Paper: Equation (3.1.1.2), p. 119. Every real number occurs as an abscissa. -/
 theorem surjective_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g ≠ 1) :
     Surjective (quasiCharacterAbscissa m hm hne) := by
-  sorry
+  intro r
+  let n := (Units.coeHom ℝ≥0).comp m
+  let f := Complex.ofRealHom.toMonoidHom.comp
+    (NNReal.toRealHom.toMonoidHom.comp ((NNReal.rpowMonoidHom r).comp n))
+  have hc : Continuous f := Complex.continuous_ofReal.comp
+    ((NNReal.continuous_coe.comp (Units.continuous_val.comp hm.continuous)).rpow continuous_const
+      (fun g ↦ Or.inl (NNReal.coe_ne_zero.mpr (m g).ne_zero)))
+  let c : QuasiCharacter G := ⟨f, hc⟩
+  refine ⟨c, quasiCharacterAbscissa_of_unitary_twist m hm hne c 1 (r : ℂ) ?_⟩
+  intro g
+  rw [PontryaginDual.one_apply, Circle.coe_one, one_mul]
+  exact Complex.ofReal_cpow (NNReal.coe_nonneg _) r
 
 /-- Paper: Definition 3.1.1.2(1), p. 119. The relative vertical strip over an interval is
 the inverse image under the abscissa, with the topology inherited on its subtype.
@@ -848,7 +861,19 @@ theorem infinitePlace_quasiCharacterParametrization (w : InfinitePlace F)
 gives complex exponent charts. Its multiplicity is one at real places and two at complex places. -/
 theorem infinitePlace_hasNormTwistCharts (w : InfinitePlace F) :
     HasNormTwistCharts (infiniteNorm(w) : w.Completionˣ →* ℝ≥0ˣ) := by
-  sorry
+  have htwo : 1 < ‖(2 : w.Completion)‖ := by
+    rw [← (InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) (2 : w.Completion), map_ofNat]
+    norm_num
+  let : NontriviallyNormedField w.Completion := ⟨⟨2, htwo⟩⟩
+  let : ProperSpace w.Completion :=
+    .of_nontriviallyNormedField_of_weaklyLocallyCompactSpace w.Completion
+  apply hasNormTwistCharts_of_proper _ (isProperMap_units_nnNorm_pow w.mult w.mult_ne_zero)
+  let u := Units.mk0 (2 : w.Completion) (by rintro h; rw [h, norm_zero] at htwo; linarith)
+  refine ⟨u, fun he ↦ ?_⟩
+  have hv := congrArg (fun y : ℝ≥0ˣ ↦ ((y : ℝ≥0) : ℝ)) he
+  change ‖(2 : w.Completion)‖ ^ w.mult = 1 at hv
+  exact (one_lt_pow₀ htwo w.mult_ne_zero).ne' hv
 
 /-- Paper: §3.1.2, p. 120. Equip the Hecke characters with the norm-twist atlas. -/
 scoped instance heckeCharacterChartedSpace : ChartedSpace ℂ (HeckeCharacter (𝓞 F) F) :=
