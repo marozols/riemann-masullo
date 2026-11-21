@@ -138,7 +138,11 @@ theorem contDiff_zeroExtension_of_backwardSemiExponentialDecay (f : 𝓢(ℝ, �
 the continuous linear involution given by reflection of the logarithmic profile. -/
 theorem exists_schwartzLogReflection :
     ∃ R : 𝓢(ℝ, ℂ) ≃L[ℂ] 𝓢(ℝ, ℂ), (∀ (f : 𝓢(ℝ, ℂ)) (x : ℝ), R f x = f (-x)) ∧
-      Involutive R := by sorry
+      Involutive R := by
+  let T := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (F := ℂ) (ContinuousLinearEquiv.neg ℝ (M := ℝ))
+  have hT (f : 𝓢(ℝ, ℂ)) (x : ℝ) : T f x = f (-x) := rfl
+  have hinv (f : 𝓢(ℝ, ℂ)) : T (T f) = f := by ext x; simp only [hT, neg_neg]
+  exact ⟨ContinuousLinearEquiv.equivOfInverse T T hinv hinv, hT, hinv⟩
 
 /-- Paper: Lemma B.2.1.4(2), p. 593. Exponential decay is invariant under
 reflection of the logarithmic profile. -/
