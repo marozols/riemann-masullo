@@ -339,7 +339,30 @@ abbrev PositiveRealExponentialDecay (I : Set ℝ) :=
 the decay space in a product of real Schwartz spaces. -/
 theorem positiveRealExponentialDecay_isEmbedding (I : Set ℝ) (hne : I.Nonempty) :
     IsEmbedding (fun (f : PositiveRealExponentialDecay I) (a : I) ↦
-      logExponentialDecayTwist I a f) := by sorry
+      logExponentialDecayTwist I a f) := by
+  let T : PositiveRealExponentialDecay I →ₗ[ℂ] (I → 𝓢(ℝ, ℂ)) :=
+    LinearMap.pi (logExponentialDecayTwist I)
+  have hp := withSeminorms_pi fun _ : I ↦ schwartz_withSeminorms ℂ ℝ ℂ
+  have hsource := withGeneratingSeminorms_spec (logExponentialDecaySubmodule I)
+    (fun i : I × ℕ × ℕ ↦
+      (SchwartzMap.seminorm ℂ i.2.1 i.2.2).comp (logExponentialDecayTwist I i.1))
+  change IsEmbedding T
+  constructor
+  · constructor
+    refine hsource.topologicalSpace_eq_iInf.trans ?_
+    refine Eq.trans ?_ (WithSeminorms.topologicalSpace_eq_iInf
+      (t := TopologicalSpace.induced T inferInstance) (T.withSeminorms_induced hp)).symm
+    rw [iInf_sigma, iInf_prod]
+    rfl
+  · intro f g h
+    obtain ⟨a, ha⟩ := hne
+    apply Subtype.ext
+    funext x
+    have hx := congrArg (fun F : 𝓢(ℝ, ℂ) ↦ F x) (congrFun h ⟨a, ha⟩)
+    change logExponentialDecayTwist I ⟨a, ha⟩ f x = logExponentialDecayTwist I ⟨a, ha⟩ g x at hx
+    rw [logExponentialDecayTwist_apply I ⟨a, ha⟩ f x,
+      logExponentialDecayTwist_apply I ⟨a, ha⟩ g x] at hx
+    exact mul_left_cancel₀ (by exact_mod_cast (Real.exp_pos (a * x)).ne') hx
 
 variable (I : Set ℝ)
 

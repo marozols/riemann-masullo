@@ -7,6 +7,7 @@ public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
 import Mathlib.Analysis.MellinInversion
+import RiemannMasullo.ForMathlib.Analysis.MellinTransform
 
 /-!
 # Mellin transforms and asymptotic Cauchy integrals
@@ -435,7 +436,10 @@ include hab hWeighted
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin integral converges
 absolutely throughout the closed strip of Schwartz weights. -/
 theorem mellinConvergent_on_strip_of_weighted_schwartz (s : ℂ) (hs : s ∈ closedStrip a b) :
-    MellinConvergent (fromLog f) s := by sorry
+    MellinConvergent (fromLog f) s := by
+  obtain ⟨g, hg⟩ := hWeighted s.re hs
+  apply mellinConvergent_of_integrable_logWeight
+  exact (g.integrable (μ := volume)).congr (Eventually.of_forall hg)
 
 /-- Paper: Proposition B.2.2.3(1), p. 601. The two endpoint weights give one
 integrable majorant for every Mellin integrand in the closed strip. -/

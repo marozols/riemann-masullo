@@ -172,7 +172,7 @@ def bruhatDirectionalDerivLinear (a : LCATopologicalLie G) :
 with the derivative of the orbit curve. -/
 theorem bruhatDirectionalDerivLinear_apply (a : LCATopologicalLie G)
     (f : bruhatContDiffSubmodule (G := G) 1) (x : G) :
-    bruhatDirectionalDerivLinear a f x = bruhatDirectionalDeriv a f x := by sorry
+    bruhatDirectionalDerivLinear a f x = bruhatDirectionalDeriv a f x := rfl
 
 /-- Paper: Lemma D.1.6.7(1), p. 767. The first-order operator is the complex
 linear directional derivative acting on the smooth submodule. -/
