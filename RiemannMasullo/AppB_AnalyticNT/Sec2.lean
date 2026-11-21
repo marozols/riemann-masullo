@@ -679,7 +679,15 @@ theorem cauchyKernel_verticalIntegrable_on_leftHalfPlane
 on the imaginary axis is absolutely integrable for every positive input. -/
 theorem verticalIntegrable_mellinInv_of_schwartzOnVerticalStrips {Φ : ℂ → ℂ}
     (hΦ : SchwartzOnVerticalStrips Φ) (t : ℝ) (ht : 0 < t) :
-    Complex.VerticalIntegrable (fun s ↦ Φ s * (t : ℂ) ^ (-s)) 0 := by sorry
+    Complex.VerticalIntegrable (fun s ↦ Φ s * (t : ℂ) ^ (-s)) 0 := by
+  have h := (hΦ.2 (-1) 1 (by norm_num)).verticalIntegrable 0 (by constructor <;> norm_num)
+  have hphase : Continuous (fun y : ℝ ↦ (t : ℂ) ^ (-(verticalPoint 0 y))) := by
+    apply Continuous.const_cpow (by fun_prop)
+    exact Or.inl (by exact_mod_cast ht.ne')
+  have bound (y : ℝ) : ‖(t : ℂ) ^ (-(verticalPoint 0 y))‖ ≤ 1 := by
+    simp [Complex.norm_cpow_eq_rpow_re_of_pos ht]
+  exact (h.bdd_mul hphase.aestronglyMeasurable (Eventually.of_forall bound)).congr
+    (Eventually.of_forall fun y ↦ mul_comm _ _)
 
 /-- Paper: Remark B.2.2.5, p. 603. The zero extension of the imaginary-axis
 contour integral is smooth on the real line. -/
