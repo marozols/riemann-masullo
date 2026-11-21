@@ -6,6 +6,8 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import Mathlib.MeasureTheory.Function.AEEqOfIntegral
+
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
 @[expose] public noncomputable section
@@ -127,11 +129,79 @@ representative is integrable on almost every norm-one fiber. -/
 theorem regularIsotypic_ae_integrable (ω : PontryaginDual K) (f : RegularL2 ν) :
     ∀ᵐ x ∂ν, Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁ := by sorry
 
+/-- The Hilbert-space integral of weighted translates agrees almost everywhere
+with the scalar fiber integral. -/
+private theorem regularIsotypic_integral_ae (ω : PontryaginDual K) (f : RegularL2 ν)
+    (hint : Integrable (fun k : K ↦ star (ω k : ℂ) • regularTranslate ν (k : G) f) ν₁) :
+    ((∫ k : K, star (ω k : ℂ) • regularTranslate ν (k : G) f ∂ν₁ : RegularL2 ν) : G → ℂ)
+      =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  let U (k : K) (f : RegularL2 ν) := star (ω k : ℂ) • regularTranslate ν (k : G) f
+  let F (k : K) (x : G) := star (ω k : ℂ) * f ((k : G)⁻¹ * x)
+  -- On a set of finite measure the translated L² integrand is also in L¹.
+  have hFin (s : Set G) (hμs : ν s < ∞) :
+      Integrable (uncurry F) (ν₁.prod (ν.restrict s)) := by
+    have : IsFiniteMeasure (ν.restrict s) := isFiniteMeasure_restrict.mpr hμs.ne
+    have h₂ := (regularTranslate_memLp_prod m hm ν ν₁ f).mono_measure
+      (Measure.prod_mono le_rfl (Measure.restrict_le_self (s := s)))
+    exact (h₂.integrable (by norm_num)).bdd_mul (c := 1)
+      (show Continuous (fun p : K × G ↦ star (ω p.1 : ℂ)) by fun_prop).aestronglyMeasurable
+      (ae_of_all _ fun p ↦ by simp)
+  apply ae_eq_of_forall_setIntegral_eq_of_sigmaFinite
+  · exact fun s _ hs ↦ integrableOn_Lp_of_measure_ne_top (∫ k : K, U k f ∂ν₁) (by norm_num) hs.ne
+  · exact fun s _ hs ↦ (hFin s hs).integral_prod_right
+  · intro s hs hμs
+    -- Pairing with the indicator of s computes the set integral of an L² class.
+    let e := indicatorConstLp (μ := ν) 2 hs hμs.ne (1 : ℂ)
+    have he (u : RegularL2 ν) : ⟪e, u⟫_ℂ = ∫ x in s, u x ∂ν := by
+      simpa [e] using L2.inner_indicatorConstLp_eq_inner_setIntegral ℂ hs hμs.ne (1 : ℂ) u
+    rw [← he]
+    change ⟪e, ∫ k : K, U k f ∂ν₁⟫_ℂ = ∫ x in s, ∫ k : K, F k x ∂ν₁ ∂ν
+    rw [← integral_inner hint e, ← integral_integral_swap (hFin s hμs)]
+    refine integral_congr_ae (ae_of_all _ fun k ↦ ?_)
+    change ⟪e, U k f⟫_ℂ = ∫ x in s, F k x ∂ν
+    rw [he]
+    apply integral_congr_ae
+    apply ae_restrict_of_ae
+    filter_upwards [Lp.coeFn_smul (star (ω k : ℂ)) (regularTranslate ν (k : G) f),
+      regularTranslate_ae_eq ν (k : G) f] with x h₁ h₂
+    exact h₁.trans (congrArg (star (ω k : ℂ) * ·) h₂)
+
 /-- Paper: (4.3.2.1), p. 178. Fiber averaging defines a continuous linear
 operator on Haar L² with its stated almost-everywhere formula. -/
 theorem existsUnique_regularIsotypicIntegral (ω : PontryaginDual K) :
     ∃! P : RegularL2 ν →L[ℂ] RegularL2 ν, ∀ f : RegularL2 ν,
-      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by sorry
+      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : Fact ((2 : ℝ≥0∞) ≠ ∞) := ⟨by norm_num⟩
+  let U (k : K) (f : RegularL2 ν) := star (ω k : ℂ) • regularTranslate ν (k : G) f
+  have hi (f : RegularL2 ν) : Integrable (fun k ↦ U k f) ν₁ := by
+    apply Continuous.integrable_of_hasCompactSupport _ (HasCompactSupport.of_compactSpace _)
+    exact (show Continuous (fun k : K ↦ star (ω k : ℂ)) by fun_prop).smul
+      ((DomMulAct.continuous_mk.comp continuous_subtype_val.inv).smul continuous_const)
+  let A : RegularL2 ν →ₗ[ℂ] RegularL2 ν :=
+    { toFun := fun f ↦ ∫ k : K, U k f ∂ν₁
+      map_add' := fun f g ↦ by
+        simpa only [U, regularTranslate, smul_add] using integral_add (hi f) (hi g)
+      map_smul' := fun c f ↦ by
+        change (∫ k : K, U k (c • f) ∂ν₁) = c • ∫ k : K, U k f ∂ν₁
+        rw [← integral_smul]
+        apply integral_congr_ae
+        exact ae_of_all _ fun k ↦ by
+          simp only [U, regularTranslate, smul_comm (DomMulAct.mk _) c, smul_comm (star _) c] }
+  let P := A.mkContinuous (ν₁.real univ) fun f ↦ by
+    change ‖∫ k : K, U k f ∂ν₁‖ ≤ ν₁.real univ * ‖f‖
+    rw [mul_comm]
+    apply norm_integral_le_of_norm_le_const
+    exact ae_of_all _ fun k ↦ by simp [U, regularTranslate, norm_smul]
+  have hP (f : RegularL2 ν) :
+      (P f : G → ℂ) =ᵐ[ν] fun x ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * x) ∂ν₁ :=
+    regularIsotypic_integral_ae m hm ν ν₁ ω f (hi f)
+  refine ⟨P, hP, fun Q hQ ↦ ?_⟩
+  ext f : 1
+  exact Lp.ext ((hQ f).trans (hP f).symm)
 
 /-- Paper: (4.3.2.1), p. 178. The unnormalized L² isotypic operator is
 the continuous linear map given almost everywhere by integration over the kernel. -/
