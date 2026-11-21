@@ -213,7 +213,10 @@ def cyclicFourierCoeff (m : ℤ) : StrongDual ℂ S where
 /-- Paper: Lemma 4.2.1.2, p. 162. A monomial has its own coefficient equal to
 one and every other coefficient zero. -/
 theorem cyclicFourierCoeff_exponential (m n : ℤ) :
-    cyclicFourierCoeff m (cyclicExponential n) = if m = n then 1 else 0 := by sorry
+    cyclicFourierCoeff m (cyclicExponential n) = if m = n then 1 else 0 := by
+  change fourierCoeff (fourier n : C(T, ℂ)) m = _
+  rw [fourierCoeff_fourier]
+  by_cases h : m = n <;> simp [h]
 
 /-- Paper: Lemma 4.2.1.2(1), p. 162. The circle exponentials form an absolute
 Schauder basis with the Fourier coefficient functionals.
