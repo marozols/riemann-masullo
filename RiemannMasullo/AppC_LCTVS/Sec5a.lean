@@ -738,7 +738,26 @@ theorem vectorDifferentials_complex_id :
       HasWeakDirectionalDerivativesOn (k := ℂ) id D ∧
       WeakGateauxDifferentiableOn (k := ℂ) univ (id : ℂ → ℂ) ∧
       HasStrongDifferentialOn (k := ℂ) (Ω := (univ : Set ℂ)) id Prod.snd ∧
-      VectorContDiffOn (k := ℂ) univ (id : ℂ → ℂ) := by sorry
+      VectorContDiffOn (k := ℂ) univ (id : ℂ → ℂ) := by
+  let L := toPettisWeakCompletion ℂ
+  let D (p : ↥(univ : Set ℂ) × ℂ) := L p.2
+  have hc : HasWeakCompletionDifferentialOn (k := ℂ) id D := by
+    refine ⟨(continuous_toPettisWeakCompletion (E := ℂ)).comp continuous_snd, fun x ↦ ?_⟩
+    refine ⟨⟨L, fun _ ↦ rfl⟩, ?_⟩
+    simpa [D, L, map_sub] using
+      (tendsto_const_nhds (x := (0 : PettisWeakCompletion ℂ))
+        (f := 𝓝[(univ : Set ℂ) \ {(x : ℂ)}] (x : ℂ)))
+  have hd : HasWeakDirectionalDerivativesOn (k := ℂ) id D := by
+    intro x v
+    apply tendsto_const_nhds.congr'
+    filter_upwards [self_mem_nhdsWithin] with h hh
+    have hn : h ≠ 0 := hh.1
+    change L v = algebraMap ℂ ℂ h⁻¹ • L ((x : ℂ) + h • v - x)
+    rw [add_sub_cancel_left, map_smul]
+    exact (inv_smul_smul₀ hn (L v)).symm
+  have hs : HasStrongDifferentialOn (k := ℂ) (Ω := (univ : Set ℂ)) id Prod.snd :=
+    ⟨continuous_snd, hc⟩
+  exact ⟨hc, hd, ⟨D, hd⟩, hs, ⟨Prod.snd, hs⟩⟩
 
 variable {d : ℕ}
 
