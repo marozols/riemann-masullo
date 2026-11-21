@@ -1075,6 +1075,25 @@ theorem ideleClassNorm_ofAdicCompletion (v : HeightOneSpectrum (𝓞 F)) (x : (v
   · intro w hw
     rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, norm_one]
 
+/-- Inserting a unit at an infinite place gives its normalized local norm in the idele class group. -/
+theorem ideleClassNorm_ofCompletion (w : InfinitePlace F) (x : w.Completionˣ) :
+    ideleClassNorm F (IdeleClassGroup.ofCompletion (𝓞 F) F w x) =
+      (Units.map nnNormHom.toMonoidHom x) ^ w.mult := by
+  classical
+  let g := IdeleGroup.ofCompletion (𝓞 F) F w x
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F g : ℝ≥0) : ℝ) = ‖x.val‖ ^ w.mult
+  rw [((ideleNorm_spec F).1 g).2]
+  change (∏ v : InfinitePlace F, ‖Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completion)
+    w x.val v‖ ^ v.mult) * ∏ᶠ v : HeightOneSpectrum (𝓞 F), ‖(1 : v.adicCompletion F)‖ = _
+  simp only [norm_one, finprod_one, mul_one]
+  rw [Finset.prod_eq_single w]
+  · rw [Pi.mulSingle_eq_same]
+  · intro v _ hv
+    rw [Pi.mulSingle_eq_of_ne hv, norm_one, one_pow]
+  · simp
+
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
 def finitePlaceRestriction (v : Primes(F)) (c : HeckeCharacter (𝓞 F) F) :
@@ -1273,7 +1292,12 @@ complex analytic isomorphism in the norm-twist atlases. -/
 theorem infinitePlaceRestriction_isLocalDiffeomorph (w : InfinitePlace F) :
     letI := quasiCharacterChartedSpace _ (infinitePlace_hasNormTwistCharts F w)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (infinitePlaceRestriction F w) := by
-  sorry
+  let i : w.Completionˣ →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩
+  exact quasiCharacter_comp_isLocalDiffeomorph (G := IdeleClassGroup (𝓞 F) F)
+    (H := w.Completionˣ) (ideleClassNorm F) (infiniteNorm(w)) i
+    (fun x ↦ ideleClassNorm_ofCompletion F w x) (ideleClass_hasNormTwistCharts F)
+    (infinitePlace_hasNormTwistCharts F w)
 
 /-- Paper: Equation (3.1.2.5), p. 121. A continuous splitting of the S-idelic norm
 identifies the surface with a complex plane for each character of its norm-one subgroup.
