@@ -1425,7 +1425,24 @@ theorem compactIntervalPeriodization_dual_absoluteBasis (a b : ℝ) (ha : 0 < a)
     let δ := fun n ↦ (Real.log γ : ℂ) •
       (cyclicFourierCoeff (freq n)).comp (P.ker.liftQL P le_rfl)
     ∃ c : ℕ → StrongDual ℂ (StrongDual ℂ (D[K] ⧸ P.ker)),
-      IsSchauderBasis δ c ∧ SchauderBasis.IsAbsolute δ c := by sorry
+      IsSchauderBasis δ c ∧ SchauderBasis.IsAbsolute δ c := by
+  let K := symmInterval[a,b]
+  let P := Φ[K]
+  obtain ⟨e, he⟩ := compactIntervalPeriodization_quotient_equiv γ hγ a b
+    (intervalRadius_gt_one γ a hγ ha hwide) hb hwide
+  have heq : e.toContinuousLinearMap = P.ker.liftQL P le_rfl := by
+    ext v
+    obtain ⟨f, rfl⟩ := P.ker.mkQ_surjective v
+    exact he f
+  have hz : (Real.log γ : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.log_pos hγ).ne'
+  let transfer := normalizedFourierPullback e (Real.log γ : ℂ) hz
+  have hm : transfer ∘ (cyclicFourierCoeff ∘ freq) = fun n ↦ (Real.log γ : ℂ) •
+      (cyclicFourierCoeff (freq n)).comp (P.ker.liftQL P le_rfl) := by
+    funext n
+    change normalizedFourierPullback e _ hz (cyclicFourierCoeff (freq n)) = _
+    rw [normalizedFourierPullback_apply, heq]
+  exact ⟨_, hm ▸ circleBasis_map transfer cyclicFourierCoeff_unconditionalBasis.1,
+    hm ▸ circleAbsolute_map transfer cyclicFourierCoeff_absolute⟩
 
 /-- Paper: Remark 4.2.2.6, p. 173. Periodization on ordinary Schwartz
 profiles has a continuous linear right inverse. -/
