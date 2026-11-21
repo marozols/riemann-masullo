@@ -869,7 +869,30 @@ coordinate direction is equivalent to existence of a unique weak partial derivat
 theorem weaklyPartialDifferentiableOn_iff_existsUnique {Ω : Set V} (hΩ : IsOpen Ω)
     (i : Fin d) (f : V → E) :
     WeaklyPartialDifferentiableOn i f Ω ↔
-      ∃! D : Ω → PettisWeakCompletion E, HasWeakPartialOn i f D := by sorry
+      ∃! D : Ω → PettisWeakCompletion E, HasWeakPartialOn i f D := by
+  let line (x : Ω) (t : k) := (x : V) + t • EuclideanSpace.single i 1
+  let S (x : Ω) := line x ⁻¹' Ω
+  have huniq (x : Ω) : UniqueDiffWithinAt k (S x) 0 := by
+    have hc : Continuous (line x) := continuous_const.add (continuous_id.smul continuous_const)
+    exact (hΩ.preimage hc).uniqueDiffWithinAt (by simp [line])
+  constructor
+  · intro hf
+    let D (x : Ω) : Module.Dual ℂ (StrongDual ℂ E) :=
+      { toFun := fun φ ↦ derivWithin (fun t ↦ φ (f (line x t))) (S x) 0
+        map_add' := fun φ ψ ↦ by
+          change derivWithin ((fun t ↦ φ (f (line x t))) + (fun t ↦ ψ (f (line x t)))) (S x) 0 = _
+          exact derivWithin_add (hf φ x) (hf ψ x)
+        map_smul' := fun c φ ↦ by
+          change derivWithin (c • (fun t ↦ φ (f (line x t)))) (S x) 0 = _
+          exact derivWithin_const_smul c (hf φ x) }
+    refine ⟨D, fun φ x ↦ (hf φ x).hasDerivWithinAt, ?_⟩
+    intro D' hD'
+    funext x
+    apply LinearMap.ext
+    intro φ
+    exact ((hD' φ x).derivWithin (huniq x)).symm
+  · rintro ⟨D, hD, _⟩ φ x
+    exact (hD φ x).differentiableWithinAt
 
 /-- Paper: Lemma C.5.1.15, p. 728. A weak differential is jointly continuous
 exactly when each weak coordinate partial exists and is continuous. -/
