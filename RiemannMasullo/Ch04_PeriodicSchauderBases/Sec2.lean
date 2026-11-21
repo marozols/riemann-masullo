@@ -360,7 +360,8 @@ local notation "symmInterval[" a ", " b "]" =>
 /-- Paper: §4.2.2, p. 170. A smooth logarithmic profile supported in a fixed
 compact set satisfies all exponential Schwartz weights. -/
 theorem compactLogProfile_mem (K : Compacts ℝ) (f : D[K]) :
-    (f : ℝ → ℂ) ∈ logExponentialDecaySubmodule univ := by sorry
+    (f : ℝ → ℂ) ∈ logExponentialDecaySubmodule univ := by
+  exact mem_logExponentialDecaySubmodule_of_hasCompactSupport univ f.hasCompactSupport f.contDiff
 
 /-- Paper: §4.2.2, p. 170. Including profiles supported in a fixed compact set
 into the exponential decay space is continuous for the uniform derivative topology. -/

@@ -304,6 +304,16 @@ Deviation: The carrier is in the logarithmic coordinate x = log t. -/
 def logExponentialDecaySubmodule (I : Set ℝ) : Submodule ℂ (ℝ → ℂ) :=
   ⨅ a : I, realSchwartzCoe.range.comap (logExponentialWeight a)
 
+/-- A compactly supported smooth profile has Schwartz decay after every real exponential twist. -/
+theorem mem_logExponentialDecaySubmodule_of_hasCompactSupport (I : Set ℝ) {f : ℝ → ℂ}
+    (hs : HasCompactSupport f) (hf : ContDiff ℝ ∞ f) : f ∈ logExponentialDecaySubmodule I := by
+  apply (Submodule.mem_iInf _).2
+  intro a
+  let w (x : ℝ) : ℂ := Real.exp ((a : ℝ) * x)
+  have hw : ContDiff ℝ ∞ w :=
+    Complex.ofRealCLM.contDiff.comp ((contDiff_const.mul contDiff_id).exp)
+  exact ⟨(hs.mul_left (f := w)).toSchwartzMap (hw.mul hf), rfl⟩
+
 /-- Paper: Definition D.3.2.1, p. 801. The multiplier Tₐ is the weighted
 profile, bundled as a Schwartz map. -/
 theorem logExponentialDecay_weight_mem_range (I : Set ℝ)
