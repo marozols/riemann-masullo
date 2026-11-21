@@ -236,7 +236,14 @@ theorem existsUnique_relativelyCompactActionAverage
         ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
           ∀ K : Set G, IsCompact K →
             TendstoUniformlyOn (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop K)) :
-    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ X ρ 1 P := by sorry
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ X ρ 1 P := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  have : IsFiniteMeasure (μ.restrict X) := isFiniteMeasure_restrict.2
+    ((measure_mono subset_closure).trans_lt (hX.measure_lt_top (μ := μ))).ne
+  have hμX : ∀ᵐ x ∂μ.restrict X, x ∈ closure X :=
+    (ae_restrict_iff isClosed_closure.measurableSet).2 (ae_of_all _ fun _ hx ↦ subset_closure hx)
+  simpa [IsPettisIsotypicAverageOn] using
+    existsUnique_pettisIntegral_continuousFamily (μ.restrict X) hX hμX (fun g ↦ ρ g) hρ
 
 -- TODO(paper-gap): Lemma 4.3.3.7(2) and (3) fail for a relatively compact
 -- locally closed subset. On the circle take X to be a proper open arc
