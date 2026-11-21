@@ -142,7 +142,9 @@ def regularL2Action : G →* (RegularL2 ν →L[ℂ] RegularL2 ν) :=
 /-- Paper: Lemma 4.3.1.5(2), p. 176. The extended action agrees with
 measure-preserving precomposition on every L² class. -/
 theorem regularL2Action_apply (g : G) (f : RegularL2 ν) :
-    regularL2Action ν g f = regularTranslate ν g f := by sorry
+    regularL2Action ν g f = regularTranslate ν g f := by
+  exact eq_regularTranslate_of_compactlySupported ν g _
+    ((existsUnique_regularL2_action ν).exists.choose_spec.2 g) f
 
 /-- Paper: Lemma 4.3.1.5(2), p. 176. Left translations preserve the
 Hermitian inner product and their inverses are the opposite translations. -/
