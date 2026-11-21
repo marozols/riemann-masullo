@@ -237,15 +237,6 @@ theorem finiteHeckeEulerFactor_summableUniformlyOn (χ : U[F])
   rw [Real.norm_of_nonneg (norm_nonneg _)]
   exact norm_finiteHeckeEulerFactor_sub_one_le χ v hr (hmin s hs)
 
-/-- Paper: Lemma 3.2.1.1, p. 123. The Euler product multiplied by the archimedean
-gamma factor converges uniformly on compact subsets of the open half-plane. -/
-theorem completedHeckeEulerProduct_hasProdUniformlyOn (χ : U[F])
-    (K : Set ℂ) (hK : IsCompact K) (h : K ⊆ halfPlane) :
-    TendstoUniformlyOn
-      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦
-        fun s ↦ heckeGammaFactor χ s * ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
-      (fun s ↦ heckeGammaFactor χ s * χ₀(χ).LSeries s) atTop K := by sorry
-
 /-- Paper: Definition 3.2.1.2, p. 123. The Hecke L-function on the half-plane
 is the archimedean gamma factor times Mathlib's finite Hecke L-series. -/
 def completedHeckeL (χ : U[F]) (s : halfPlane) : ℂ :=
@@ -372,6 +363,87 @@ theorem finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane (χ : U[F]) {a : �
   exact Filter.Eventually.of_forall fun S s hs ↦
     (LSeriesHasSum_finset_prod f _ s (fun v ↦ LSeriesHasSum_finiteHeckeEulerFactor χ v
       (ha.trans_le hs)) S).LSeries_eq
+
+/-- The reciprocal archimedean factor is entire, including at the poles of the gamma factors. -/
+theorem differentiable_inv_heckeGammaFactor (χ : U[F]) :
+    Differentiable ℂ (fun s ↦ (heckeGammaFactor χ s)⁻¹) := by
+  classical
+  unfold heckeGammaFactor
+  simp_rw [← Finset.prod_inv_distrib]
+  apply Differentiable.fun_finsetProd
+  intro v _
+  by_cases hv : v.IsReal
+  · simp only [dite_eq_left hv]
+    apply Complex.differentiable_Gammaℝ_inv.comp
+    fun_prop
+  · simp only [dite_eq_right hv, div_eq_mul_inv, mul_inv_rev, inv_inv]
+    apply Differentiable.const_mul
+    apply Complex.differentiable_Gammaℂ_inv.comp
+    fun_prop
+
+/-- No archimedean gamma factor vanishes on the positive half-plane. -/
+theorem heckeGammaFactor_ne_zero_of_re_pos (χ : U[F]) {s : ℂ} (hs : 0 < s.re) :
+    heckeGammaFactor χ s ≠ 0 := by
+  classical
+  unfold heckeGammaFactor
+  apply Finset.prod_ne_zero_iff.mpr
+  intro v _
+  by_cases hv : v.IsReal
+  · simp only [dite_eq_left hv]
+    apply Complex.Gammaℝ_ne_zero_of_re_pos
+    have ha := (realHeckeCharacter_parameters χ v hv).exists.choose_spec.1
+    simp only [Complex.add_re, Complex.natCast_re, ha, add_zero]
+    positivity
+  · simp only [dite_eq_right hv]
+    apply (div_ne_zero · two_ne_zero)
+    rw [← Complex.Gammaℝ_mul_Gammaℝ_add_one]
+    have hv' := InfinitePlace.not_isReal_iff_isComplex.mp hv
+    let a := (complexHeckeCharacter_parameters χ v hv').exists.choose
+    have ha : a.1.re = 0 := (complexHeckeCharacter_parameters χ v hv').exists.choose_spec.1
+    have ht : 0 < (s + a.1 + (a.2.natAbs : ℂ) / 2).re := by
+      simp only [Complex.add_re, Complex.div_ofNat_re, Complex.natCast_re, ha, add_zero]
+      positivity
+    exact mul_ne_zero (Complex.Gammaℝ_ne_zero_of_re_pos ht)
+      (Complex.Gammaℝ_ne_zero_of_re_pos (by
+        simpa only [Complex.add_re, Complex.one_re] using
+          (add_pos ht zero_lt_one)))
+
+/-- The archimedean factor is holomorphic on the positive half-plane. -/
+theorem differentiableAt_heckeGammaFactor_of_re_pos (χ : U[F]) {s : ℂ} (hs : 0 < s.re) :
+    DifferentiableAt ℂ (heckeGammaFactor χ) s := by
+  have h := (differentiable_inv_heckeGammaFactor χ).differentiableAt (x := s)
+  have hd : DifferentiableAt ℂ (fun t ↦ ((heckeGammaFactor χ t)⁻¹)⁻¹) s :=
+    h.inv (inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ hs))
+  simpa only [inv_inv] using hd
+
+/-- Paper: Lemma 3.2.1.1, p. 123. The Euler product multiplied by the archimedean
+gamma factor converges uniformly on compact subsets of the open half-plane. -/
+theorem completedHeckeEulerProduct_hasProdUniformlyOn (χ : U[F])
+    (K : Set ℂ) (hK : IsCompact K) (h : K ⊆ halfPlane) :
+    TendstoUniformlyOn
+      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦
+        fun s ↦ heckeGammaFactor χ s * ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
+      (fun s ↦ heckeGammaFactor χ s * χ₀(χ).LSeries s) atTop K := by
+  rcases K.eq_empty_or_nonempty with rfl | hne
+  · exact tendstoUniformlyOn_empty
+  obtain ⟨s₀, hs₀, hmin⟩ := hK.exists_isMinOn hne Complex.continuous_re.continuousOn
+  have hu := (finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s₀.re) (h hs₀)).mono
+    (fun s hs ↦ hmin hs : K ⊆ {s : ℂ | s₀.re ≤ s.re})
+  have hc : ContinuousOn (fun s ↦ ‖heckeGammaFactor χ s‖) K := fun s hs ↦
+    (differentiableAt_heckeGammaFactor_of_re_pos χ (zero_lt_one.trans (h hs))).continuousAt.norm.continuousWithinAt
+  obtain ⟨b, _, hb⟩ := hK.exists_isMaxOn hne hc
+  let B := ‖heckeGammaFactor χ b‖ + 1
+  have hB : 0 < B := by dsimp [B]; positivity
+  apply Metric.tendstoUniformlyOn_iff.mpr
+  intro ε hε
+  filter_upwards [Metric.tendstoUniformlyOn_iff.mp hu (ε / B) (div_pos hε hB)] with T hT
+  intro s hs
+  have hbound : ‖heckeGammaFactor χ s‖ ≤ B := (hb hs).trans (by dsimp [B]; linarith)
+  rw [dist_eq_norm, ← mul_sub, norm_mul]
+  have hsmall := hT s hs
+  rw [dist_eq_norm] at hsmall
+  exact (mul_le_mul_of_nonneg_right hbound (norm_nonneg _)).trans_lt
+    ((mul_lt_mul_of_pos_left hsmall hB).trans_eq (mul_div_cancel₀ _ hB.ne'))
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Hecke L-function
 is the value of the convergent Euler product with the ramified factors omitted. -/
