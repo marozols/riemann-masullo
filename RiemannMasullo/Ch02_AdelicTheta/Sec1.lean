@@ -1,8 +1,9 @@
 module
 
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec1c
-public import Mathlib.Analysis.Distribution.TestFunction
+public import RiemannMasullo.ForMathlib.Analysis.Distribution.TestFunction
 public import Mathlib.LinearAlgebra.PiTensorProduct.Basic
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 
 /-!
 # Schwartz–Bruhat functions
@@ -36,7 +37,8 @@ The ordinary distribution space in the example is the strong dual of this Mathli
 theorem realTestFunction_stage_isEmbedding (K : Compacts ℝ) :
     IsEmbedding (TestFunction.ofSupportedInCLM ℂ
       (show (K : Set ℝ) ⊆ (⊤ : Opens ℝ) from Set.subset_univ _) :
-        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by sorry
+        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by
+  exact isEmbedding_testFunction_ofSupportedIn (Set.subset_univ _)
 
 /-- Paper: (2.1.1.1)–(2.1.1.4), p. 60. The weighted magnitude is the norm
 of the mixed partial derivative times one plus the absolute coordinate monomial.
@@ -83,7 +85,15 @@ theorem euclideanSchwartz_nuclear (m : ℕ) :
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The Euclidean Schwartz space is Fréchet. -/
 theorem euclideanSchwartz_frechet (m : ℕ) :
-    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by sorry
+    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by
+  let E := SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ
+  have : (uniformity E).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero E]
+    infer_instance
+  refine ⟨inferInstance, (schwartz_withSeminorms ℂ _ _).toPolynormableSpace,
+    UniformSpace.metrizableSpace, ?_⟩
+  rw [IsUniformAddGroup.rightUniformSpace_eq]
+  exact completeSpace_schwartzMap
 
 /-- Paper: Proposition 2.1.1.6, p. 61. Evaluation identifies the Euclidean Schwartz space
 with its strong bidual. -/
@@ -94,7 +104,8 @@ theorem euclideanSchwartz_reflexive (m : ℕ) :
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is complete. -/
 theorem euclideanSchwartz_strongDual_complete (m : ℕ) :
-    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by sorry
+    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by
+  infer_instance
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is nuclear. -/
@@ -407,9 +418,24 @@ Archimedean and finite adelic Schwartz–Bruhat spaces is complete. -/
 theorem adeleSchwartz_inductiveTensor_complete :
     CompleteSpace (InductiveTensor ℬ(InfiniteAdeleRing F) ℬ(𝔸ᶠ[F])) := by sorry
 
--- TODO(paper-gap): Lemma 2.1.3.2(3) uses indicators of subgroups as generators.
--- These are even in each finite coordinate, whereas coset indicators can distinguish
--- a point from its negative. The statement needs a revised class of generators.
+-- ERRATA F11: Subgroup indicators are even in each finite coordinate.
+-- The compact open subsets used below allow the coset indicators needed in the proof.
+
+/-- Paper: Lemma 2.1.3.2(3), p. 68. Every adelic Schwartz–Bruhat function is a
+finite linear combination of Archimedean Schwartz functions times finite adelic
+rectangle indicators. The rectangle is integral at all but finitely many places.
+Deviation: The local sets are compact open subsets, as in the proof on p. 70. -/
+theorem adeleSchwartz_eq_sum_compactOpen_rectangles (f : ℬ(𝔸[F])) :
+    ∃ (r : ℕ) (c : Fin r → ℂ) (arch : Fin r → ℬ(InfiniteAdeleRing F))
+        (K : Fin r → (v : Places(F)) → Set (v.adicCompletion F)) (φ : Fin r → ℬ(𝔸[F])),
+      1 ≤ r ∧
+      (∀ i, (∀ v, IsCompact (K i v) ∧ IsOpen (K i v)) ∧
+        (∀ᶠ v in cofinite, K i v = (v.adicCompletionIntegers F : Set (v.adicCompletion F))) ∧
+        ∀ x : 𝔸[F], φ i (Multiplicative.ofAdd x) =
+          arch i (Multiplicative.ofAdd x.1) *
+            Set.indicator {y : 𝔸ᶠ[F] | ∀ v, y v ∈ K i v} (fun _ ↦ (1 : ℂ)) x.2) ∧
+      f = ∑ i, c i • φ i := by sorry
+
 -- TODO(paper-gap): The proof on p. 69 cites “Lemma ??” for second countability
 -- and Proposition 2.1.2.8(6), which has only three parts.
 

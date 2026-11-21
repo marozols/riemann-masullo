@@ -38,11 +38,13 @@ theorem exists_ideleClassModulation (F : Type*) [Field F] [NumberField F] :
 
 /-- Paper: Definition D.2.1.1(1), p. 793. The norm-one subgroup is compact. -/
 theorem IsModulation.isCompact_ker {m : G →ₜ* ℝ≥0ˣ} (hm : IsModulation m) :
-    IsCompact (m.toMonoidHom.ker : Set G) := by sorry
+    IsCompact (m.toMonoidHom.ker : Set G) := by
+  exact hm.1.isCompact_preimage (isCompact_singleton (x := 1))
 
 /-- Paper: Definition D.2.1.1, p. 793. The image of the module is closed. -/
 theorem IsModulation.isClosed_range {m : G →ₜ* ℝ≥0ˣ} (hm : IsModulation m) :
-    IsClosed (m.toMonoidHom.range : Set ℝ≥0ˣ) := by sorry
+    IsClosed (m.toMonoidHom.range : Set ℝ≥0ˣ) := by
+  exact hm.1.isClosed_range
 
 open LinearOrderedCommGroup in
 /-- Paper: Remark D.2.1.2, p. 793. A nonsurjective module has infinite cyclic
