@@ -711,6 +711,18 @@ theorem quasiCharacterAbscissa_dual [IsTopologicalGroup G] (hm : IsProperMap m)
   rw [map_inv, ← div_eq_mul_inv, norm_div, Complex.norm_of_nonneg hmod.le,
     Real.log_div hmod.ne' hnorm, sub_div, div_self hlog]
 
+/-- Applying the module-times-inverse duality twice recovers the original quasi-character. -/
+theorem dualQuasiCharacter_involutive [IsTopologicalGroup G] (hm : Continuous m) :
+    Function.Involutive (dualQuasiCharacter m hm) := by
+  intro c
+  ext1 g
+  change (modℝ g : ℂ) * dualQuasiCharacter m hm c g⁻¹ = c g
+  rw [map_inv]
+  change (modℝ g : ℂ) * ((modℝ g : ℂ) * c g⁻¹)⁻¹ = c g
+  rw [map_inv]
+  have hn := Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
+  field_simp [hn, ((Group.isUnit g).map c).ne_zero]
+
 open Filter in
 /-- Paper: Equation (3.1.1.4), p. 119. The duality map is an analytic automorphism and
 serves as its own inverse. -/
@@ -724,13 +736,7 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
   have hD (c : QuasiCharacter G) (g : G) : D c g = (modℝ g : ℂ) / c g := by
     change (modℝ g : ℂ) * c g⁻¹ = _
     rw [map_inv, div_eq_mul_inv]
-  have hn (g : G) : (modℝ g : ℂ) ≠ 0 :=
-    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
-  have hinv : Function.Involutive D := by
-    intro c
-    ext1 g
-    rw [hD, hD]
-    field_simp [hn g, ((Group.isUnit g).map c).ne_zero]
+  have hinv : Function.Involutive D := dualQuasiCharacter_involutive m hm
   have hsmooth : ContMDiff 𝓘(ℂ) 𝓘(ℂ) ω D := by
     intro c
     let a := (h c).choose
@@ -775,7 +781,24 @@ indexed by a norm-one character and its complex conjugate. -/
 theorem dualQuasiCharacter_image_component [IsTopologicalGroup G] (hm : IsProperMap m)
     (hne : ∃ g, m g ≠ 1) (χ : PontryaginDual m.ker) :
     dualQuasiCharacter m hm.continuous '' componentVerticalStrip m hm hne χ Set.univ =
-      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by sorry
+      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by
+  let D := dualQuasiCharacter m hm.continuous
+  have hmap (ψ : PontryaginDual m.ker) {c : QuasiCharacter G}
+      (hc : c ∈ componentVerticalStrip m hm hne ψ Set.univ) :
+      D c ∈ componentVerticalStrip m hm hne ψ⁻¹ Set.univ := by
+    refine ⟨Set.mem_univ _, fun g ↦ ?_⟩
+    have hg : m (g : G) = 1 := g.property
+    change (↑((m (g : G) : ℝ≥0) : ℝ) : ℂ) * c ((g : G)⁻¹) = ((ψ⁻¹ g : Circle) : ℂ)
+    have hcg : c (g : G) = (ψ g : ℂ) := hc.2 g
+    rw [hg, map_inv, hcg]
+    change (1 : ℂ) * (ψ g : ℂ)⁻¹ = (((ψ g)⁻¹ : Circle) : ℂ)
+    simp
+  ext c
+  constructor
+  · rintro ⟨d, hd, rfl⟩
+    exact hmap χ hd
+  · intro hc
+    exact ⟨D c, by simpa using hmap χ⁻¹ hc, dualQuasiCharacter_involutive m hm.continuous c⟩
 
 end Generalities
 
