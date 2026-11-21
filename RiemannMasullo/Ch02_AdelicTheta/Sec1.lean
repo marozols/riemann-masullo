@@ -456,7 +456,7 @@ def schwartzBruhatUnitTranslate (g : Rˣ) (f : ℬ(R)) : ℬ(R) :=
 the original value at the product of the inverse unit and x. -/
 theorem schwartzBruhatUnitTranslate_apply (g : Rˣ) (f : ℬ(R)) (x : R) :
     schwartzBruhatUnitTranslate g f (Multiplicative.ofAdd x) =
-      f (Multiplicative.ofAdd ((↑g⁻¹ : R) * x)) := by sorry
+      f (Multiplicative.ofAdd ((↑g⁻¹ : R) * x)) := rfl
 
 end UnitAction
 

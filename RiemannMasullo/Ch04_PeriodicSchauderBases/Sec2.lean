@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec1
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
+import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
 
 /-!
@@ -217,7 +218,8 @@ theorem quotientDual_weakEmbedding (M : Submodule ℂ X) (hM : IsClosed (M : Set
 strong dual consists precisely of the functionals vanishing on the subspace. -/
 theorem quotientDual_strongRange (M : Submodule ℂ X) (hM : IsClosed (M : Set X)) :
     range (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) =
-      {l : StrongDual ℂ X | ∀ x ∈ M, l x = 0} := by sorry
+      {l : StrongDual ℂ X | ∀ x ∈ M, l x = 0} := by
+  exact (quotientDual_weakEmbedding M hM).2
 
 /-- Paper: Lemma 4.2.1.3(1), p. 163. For a nuclear Fréchet space the quotient
 adjoint also embeds the strong dual, with image the same annihilator. -/
@@ -229,7 +231,19 @@ theorem quotientDual_strongEmbedding_of_nuclear (M : Submodule ℂ X) (hM : IsCl
 embeds the strong dual, with image the annihilator of the closed subspace. -/
 theorem quotientDual_strongEmbedding_of_hilbert {H : Type*} [NormedAddCommGroup H]
     [InnerProductSpace ℂ H] [CompleteSpace H] (M : Submodule ℂ H) (hM : IsClosed (M : Set H)) :
-    IsEmbedding (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) := by sorry
+    IsEmbedding (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) := by
+  have : CompleteSpace M := hM.completeSpace_coe
+  let s : (H ⧸ M) →L[ℂ] H :=
+    Mᗮ.subtypeL.comp M.quotientEquivOrthogonal.toLinearIsometry.toContinuousLinearMap
+  let r := ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ s
+  apply Topology.IsEmbedding.of_leftInverse (f := r) _ r.continuous
+    (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL).continuous
+  intro φ
+  ext x
+  change φ (M.mkQ ((M.quotientEquivOrthogonal x : Mᗮ) : H)) = φ x
+  congr 1
+  exact (M.quotientEquivOrthogonal_symm_eq_mk _ (M.quotientEquivOrthogonal x).property).symm.trans
+    (M.quotientEquivOrthogonal.symm_apply_apply x)
 
 /-- Paper: Remark 4.2.1.4, p. 164. In a totally reflexive Fréchet space, a
 strong embedding of the quotient adjoint implies bounded lifting for the quotient. -/
@@ -360,7 +374,8 @@ local notation "symmInterval[" a ", " b "]" =>
 /-- Paper: §4.2.2, p. 170. A smooth logarithmic profile supported in a fixed
 compact set satisfies all exponential Schwartz weights. -/
 theorem compactLogProfile_mem (K : Compacts ℝ) (f : D[K]) :
-    (f : ℝ → ℂ) ∈ logExponentialDecaySubmodule univ := by sorry
+    (f : ℝ → ℂ) ∈ logExponentialDecaySubmodule univ := by
+  exact mem_logExponentialDecaySubmodule_of_hasCompactSupport univ f.hasCompactSupport f.contDiff
 
 /-- Paper: §4.2.2, p. 170. Including profiles supported in a fixed compact set
 into the exponential decay space is continuous for the uniform derivative topology. -/

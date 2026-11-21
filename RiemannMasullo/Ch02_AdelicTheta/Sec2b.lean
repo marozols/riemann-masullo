@@ -130,7 +130,7 @@ def adelePolarValues : ℬ[F] →ₗ[ℂ] ℂ × ℂ :=
 /-- Paper: Definition 2.2.4.4, p. 91. The polar functionals give the test
 function and Fourier transform values at zero. -/
 theorem adelePolarValues_apply (f : ℬ[F]) :
-    adelePolarValues (F := F) f = (f zeroAdele, adeleSchwartzFourier f zeroAdele) := by sorry
+    adelePolarValues (F := F) f = (f zeroAdele, adeleSchwartzFourier f zeroAdele) := rfl
 
 /-- Paper: Definition 2.2.4.4, p. 91. The intersection of the global polar
 hyperplanes is the common kernel of the two polar functionals. -/

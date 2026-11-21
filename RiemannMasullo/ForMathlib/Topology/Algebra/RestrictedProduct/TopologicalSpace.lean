@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Topology.Algebra.RestrictedProduct.TopologicalSpace
+public import Mathlib.Topology.Algebra.InfiniteSum.Constructions
 public import Mathlib.Topology.Algebra.ContinuousMonoidHom
 public import Mathlib.Topology.Algebra.RestrictedProduct.Units
 
@@ -209,5 +210,42 @@ noncomputable def restrictedProductSplitFinset (hK : ∀ᶠ i in cofinite, IsOpe
     · apply extend
       filter_upwards [Subtype.val_injective.tendsto_cofinite.eventually hK, z.2.2] with j ho hz w
       simpa [domRestrict, join, glue, j.2] using w.2 j ⟨ho, hz⟩
+
+/-- In a restricted product the product of the individual coordinate insertions converges
+to the given element. All partial products belong to one principal restricted product. -/
+theorem hasProd_restrictedProduct_mulSingle {ι : Type*} {G : ι → Type*}
+    [∀ i, CommGroup (G i)] [∀ i, TopologicalSpace (G i)] [DecidableEq ι]
+    (A : (i : ι) → Subgroup (G i)) (x : Πʳ i, [G i, A i]) :
+    HasProd (fun i ↦ RestrictedProduct.mulSingle A i (x i)) x := by
+  let s := {i | x i ∈ A i}
+  have hs : cofinite ≤ 𝓟 s := le_principal_iff.mpr x.property
+  let Y := Πʳ i, [G i, A i]_[𝓟 s]
+  let y : Y := ⟨x, fun _ hi ↦ hi⟩
+  let f (i : ι) : Y := ⟨Pi.mulSingle i (x i), by
+    intro j hj
+    change Pi.mulSingle i (x i) j ∈ A j
+    by_cases h : j = i
+    · subst j
+      rw [Pi.mulSingle_eq_same]
+      exact hj
+    · rw [Pi.mulSingle_eq_of_ne h]
+      exact (A j).one_mem⟩
+  let inc : Y →* Πʳ i, [G i, A i] :=
+    { toFun := RestrictedProduct.inclusion G (fun i ↦ (A i : Set (G i))) hs, map_one' := rfl, map_mul' _ _ := rfl }
+  have hp : HasProd f y := by
+    apply RestrictedProduct.isEmbedding_coe_of_principal.tendsto_nhds_iff.mpr
+    apply tendsto_pi_nhds.mpr
+    intro j
+    have hpart (T : Finset ι) : (∏ i ∈ T, f i) j = ∏ i ∈ T, Pi.mulSingle i (x i) j :=
+      map_prod (RestrictedProduct.evalMonoidHom G j) _ _
+    change Tendsto (fun T : Finset ι ↦ (∏ i ∈ T, f i) j) atTop (𝓝 (x j))
+    simp_rw [hpart]
+    apply (hasProd_pi_single j (x j)).congr_fun
+    intro i
+    by_cases h : i = j
+    · subst i
+      simp
+    · simp [Pi.mulSingle_eq_of_ne h, Pi.mulSingle_eq_of_ne (Ne.symm h)]
+  exact hp.map inc (RestrictedProduct.continuous_inclusion hs)
 
 end RiemannMasullo

@@ -7,6 +7,7 @@ public import Mathlib.NumberTheory.NumberField.HeckeLFunction
 public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import RiemannMasullo.ForMathlib.Geometry.Manifold.LocalDiffeomorph
 import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 import RiemannMasullo.AppA_AlgebraicNT.Sec2
@@ -505,6 +506,38 @@ theorem quasiCharacter_isManifold (h : HasNormTwistCharts m) :
   change e' (e.symm y) = translate y
   rw [heq, e'.right_inv htranslate]
 
+/-- Pullback along a modulus-preserving homomorphism is a local analytic isomorphism
+in the norm-twist atlases. In coordinates at a character and its pullback it is the identity. -/
+theorem quasiCharacter_comp_isLocalDiffeomorph {H : Type*} [CommGroup H] [TopologicalSpace H]
+    (n : H →* ℝ≥0ˣ) (i : H →ₜ* G) (hi : ∀ x, m (i x) = n x)
+    (hG : HasNormTwistCharts m) (hH : HasNormTwistCharts n) :
+    letI := quasiCharacterChartedSpace m hG
+    letI := quasiCharacterChartedSpace n hH
+    IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (fun c : QuasiCharacter G ↦ c.comp i) := by
+  let := quasiCharacterChartedSpace m hG
+  let := quasiCharacterChartedSpace n hH
+  let := quasiCharacter_isManifold m hG
+  let := quasiCharacter_isManifold n hH
+  apply isLocalDiffeomorph_of_chartAt 𝓘(ℂ) ω
+  · intro c
+    let d := c.comp i
+    let a := (hG c).choose
+    let b := (hH d).choose
+    change a c ∈ b.target
+    rw [show a c = b d from (hG c).choose_spec.2.1.trans (hH d).choose_spec.2.1.symm]
+    exact b.map_source (hH d).choose_spec.1
+  · intro c y hy hz
+    let d := c.comp i
+    let a := (hG c).choose
+    let b := (hH d).choose
+    ext1 x
+    change y (i x) = b.symm (a y) x
+    rw [(hH d).choose_spec.2.2 (a y) hz x]
+    change y (i x) = c (i x) * (((n x : ℝ≥0) : ℝ) : ℂ) ^ (a y)
+    rw [← hi x]
+    exact (congrArg (fun q : QuasiCharacter G ↦ q (i x)) (a.left_inv hy)).symm.trans
+      ((hG c).choose_spec.2.2 _ (a.map_source hy) (i x))
+
 /-- Paper: Definition 3.1.1.1, p. 119. The abscissa is the real exponent in the modulus of
 a quasi-character. We evaluate the ratio of logarithms at a point where the module differs from one.
 Deviation: This formula computes (3.1.1.2) without choosing a unitary base-point. -/
@@ -665,6 +698,18 @@ theorem quasiCharacterAbscissa_dual [IsTopologicalGroup G] (hm : IsProperMap m)
   rw [map_inv, ← div_eq_mul_inv, norm_div, Complex.norm_of_nonneg hmod.le,
     Real.log_div hmod.ne' hnorm, sub_div, div_self hlog]
 
+/-- Applying the module-times-inverse duality twice recovers the original quasi-character. -/
+theorem dualQuasiCharacter_involutive [IsTopologicalGroup G] (hm : Continuous m) :
+    Function.Involutive (dualQuasiCharacter m hm) := by
+  intro c
+  ext1 g
+  change (modℝ g : ℂ) * dualQuasiCharacter m hm c g⁻¹ = c g
+  rw [map_inv]
+  change (modℝ g : ℂ) * ((modℝ g : ℂ) * c g⁻¹)⁻¹ = c g
+  rw [map_inv]
+  have hn := Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
+  field_simp [hn, ((Group.isUnit g).map c).ne_zero]
+
 open Filter in
 /-- Paper: Equation (3.1.1.4), p. 119. The duality map is an analytic automorphism and
 serves as its own inverse. -/
@@ -678,13 +723,7 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
   have hD (c : QuasiCharacter G) (g : G) : D c g = (modℝ g : ℂ) / c g := by
     change (modℝ g : ℂ) * c g⁻¹ = _
     rw [map_inv, div_eq_mul_inv]
-  have hn (g : G) : (modℝ g : ℂ) ≠ 0 :=
-    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
-  have hinv : Function.Involutive D := by
-    intro c
-    ext1 g
-    rw [hD, hD]
-    field_simp [hn g, ((Group.isUnit g).map c).ne_zero]
+  have hinv : Function.Involutive D := dualQuasiCharacter_involutive m hm
   have hsmooth : ContMDiff 𝓘(ℂ) 𝓘(ℂ) ω D := by
     intro c
     let a := (h c).choose
@@ -729,7 +768,24 @@ indexed by a norm-one character and its complex conjugate. -/
 theorem dualQuasiCharacter_image_component [IsTopologicalGroup G] (hm : IsProperMap m)
     (hne : ∃ g, m g ≠ 1) (χ : PontryaginDual m.ker) :
     dualQuasiCharacter m hm.continuous '' componentVerticalStrip m hm hne χ Set.univ =
-      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by sorry
+      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by
+  let D := dualQuasiCharacter m hm.continuous
+  have hmap (ψ : PontryaginDual m.ker) {c : QuasiCharacter G}
+      (hc : c ∈ componentVerticalStrip m hm hne ψ Set.univ) :
+      D c ∈ componentVerticalStrip m hm hne ψ⁻¹ Set.univ := by
+    refine ⟨Set.mem_univ _, fun g ↦ ?_⟩
+    have hg : m (g : G) = 1 := g.property
+    change (↑((m (g : G) : ℝ≥0) : ℝ) : ℂ) * c ((g : G)⁻¹) = ((ψ⁻¹ g : Circle) : ℂ)
+    have hcg : c (g : G) = (ψ g : ℂ) := hc.2 g
+    rw [hg, map_inv, hcg]
+    change (1 : ℂ) * (ψ g : ℂ)⁻¹ = (((ψ g)⁻¹ : Circle) : ℂ)
+    simp
+  ext c
+  constructor
+  · rintro ⟨d, hd, rfl⟩
+    exact hmap χ hd
+  · intro hc
+    exact ⟨D c, by simpa using hmap χ⁻¹ hc, dualQuasiCharacter_involutive m hm.continuous c⟩
 
 end Generalities
 
@@ -1029,6 +1085,25 @@ theorem ideleClassNorm_ofAdicCompletion (v : HeightOneSpectrum (𝓞 F)) (x : (v
   · intro w hw
     rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, norm_one]
 
+/-- Inserting a unit at an infinite place gives its normalized local norm in the idele class group. -/
+theorem ideleClassNorm_ofCompletion (w : InfinitePlace F) (x : w.Completionˣ) :
+    ideleClassNorm F (IdeleClassGroup.ofCompletion (𝓞 F) F w x) =
+      (Units.map nnNormHom.toMonoidHom x) ^ w.mult := by
+  classical
+  let g := IdeleGroup.ofCompletion (𝓞 F) F w x
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F g : ℝ≥0) : ℝ) = ‖x.val‖ ^ w.mult
+  rw [((ideleNorm_spec F).1 g).2]
+  change (∏ v : InfinitePlace F, ‖Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completion)
+    w x.val v‖ ^ v.mult) * ∏ᶠ v : HeightOneSpectrum (𝓞 F), ‖(1 : v.adicCompletion F)‖ = _
+  simp only [norm_one, finprod_one, mul_one]
+  rw [Finset.prod_eq_single w]
+  · rw [Pi.mulSingle_eq_same]
+  · intro v _ hv
+    rw [Pi.mulSingle_eq_of_ne hv, norm_one, one_pow]
+  · simp
+
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
 def finitePlaceRestriction (v : Primes(F)) (c : HeckeCharacter (𝓞 F) F) :
@@ -1040,18 +1115,6 @@ with insertion in that coordinate followed by passage to idele classes. -/
 def infinitePlaceRestriction (w : InfinitePlace F) (c : HeckeCharacter (𝓞 F) F) :
     QuasiCharacter w.Completionˣ :=
   c.comp ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩
-
-/-- Paper: §3.1.2, p. 120. The value of a global character is the product of its local
-values on an idele. Only finitely many finite-place factors differ from one. -/
-theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
-    (g : IdeleGroup (𝓞 F) F) :
-    let a := fun w : InfinitePlace F => infinitePlaceRestriction F w c
-      (Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g)
-    let b := fun v : Primes(F) => finitePlaceRestriction F v c
-      (Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) => w.adicCompletion F) v).comp
-        (RingHom.snd _ _)).toMonoidHom g)
-    b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
-  sorry
 
 open Classical in
 /-- Paper: §3.1.2, p. 120. A quasi-character of J_{F,S} is the product of its local
@@ -1215,14 +1278,24 @@ complex analytic isomorphism in the norm-twist atlases. -/
 theorem finitePlaceRestriction_isLocalDiffeomorph (v : Primes(F)) :
     letI := quasiCharacterChartedSpace _ (finitePlace_hasNormTwistCharts F v)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (finitePlaceRestriction F v) := by
-  sorry
+  let i : (v.adicCompletion F)ˣ →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨IdeleClassGroup.ofAdicCompletion (𝓞 F) F v, continuous_ideleClass_ofAdicCompletion F v⟩
+  exact quasiCharacter_comp_isLocalDiffeomorph (G := IdeleClassGroup (𝓞 F) F)
+    (H := (v.adicCompletion F)ˣ) (ideleClassNorm F) finiteNorm i
+    (fun x ↦ ideleClassNorm_ofAdicCompletion F v x) (ideleClass_hasNormTwistCharts F)
+    (finitePlace_hasNormTwistCharts F v)
 
 /-- Paper: Lemma 3.1.2.1, p. 121. Restriction to an infinite completion is a local
 complex analytic isomorphism in the norm-twist atlases. -/
 theorem infinitePlaceRestriction_isLocalDiffeomorph (w : InfinitePlace F) :
     letI := quasiCharacterChartedSpace _ (infinitePlace_hasNormTwistCharts F w)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (infinitePlaceRestriction F w) := by
-  sorry
+  let i : w.Completionˣ →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩
+  exact quasiCharacter_comp_isLocalDiffeomorph (G := IdeleClassGroup (𝓞 F) F)
+    (H := w.Completionˣ) (ideleClassNorm F) (infiniteNorm(w)) i
+    (fun x ↦ ideleClassNorm_ofCompletion F w x) (ideleClass_hasNormTwistCharts F)
+    (infinitePlace_hasNormTwistCharts F w)
 
 /-- Paper: Equation (3.1.2.5), p. 121. A continuous splitting of the S-idelic norm
 identifies the surface with a complex plane for each character of its norm-one subgroup.
@@ -1423,6 +1496,29 @@ theorem sIdeleInsertion_apply (g : (SAdeleRing F S)ˣ) :
     have h : v ≠ u.val := fun h => hv (h ▸ u.property)
     exact RestrictedProduct.mulSingle_eq_of_ne _ _ h
 
+/-- The global norm of the idele extended by one equals the product of the norms in S. -/
+theorem ideleNorm_sIdeleInsertion (g : (SAdeleRing F S)ˣ) :
+    ideleNorm F (sIdeleInsertion F S g) = sIdeleNorm F S g := by
+  classical
+  let a := sIdeleInsertion F S g
+  obtain ⟨harch, hin, hout⟩ := sIdeleInsertion_apply F S g
+  have hS : (fun v : Primes(F) ↦ ‖a.val.2 v‖).mulSupport ⊆ (S : Set (Primes(F))) := by
+    intro v hv
+    by_contra h
+    exact hv ((congrArg norm (hout v h)).trans norm_one)
+  let ev : ((SAdeleRing F S)ˣ →* ℝ≥0ˣ) →* ℝ := NNReal.toRealHom.toMonoidHom.comp
+    ((Units.coeHom ℝ≥0).comp (MonoidHom.eval g))
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F a : ℝ≥0) : ℝ) = ev (sIdeleNorm F S)
+  rw [((ideleNorm_spec F).1 a).2, finprod_eq_prod_of_mulSupport_subset _ hS,
+    ← Finset.prod_coe_sort S (fun v ↦ ‖a.val.2 v‖)]
+  change (∏ w : InfinitePlace F, ‖(sIdeleInsertion F S g).val.1 w‖ ^ w.mult) *
+    (∏ v : S, ‖(sIdeleInsertion F S g).val.2 v.val‖) = _
+  simp_rw [harch, hin]
+  simp only [sIdeleNorm, map_mul, map_prod]
+  rfl
+
 /-- Paper: Equation (3.1.2.7), p. 121. Extension by one is a closed topological embedding. -/
 theorem isClosedEmbedding_sIdeleInsertion : IsClosedEmbedding (sIdeleInsertion F S) := by
   let : T2Space (IdeleGroup (𝓞 F) F) := (ideleGroup_topology F).1
@@ -1551,7 +1647,38 @@ S-idelic character surface is a local complex analytic isomorphism. -/
 theorem sIdeleRestriction_isLocalDiffeomorph :
     letI := quasiCharacterChartedSpace _ (sIdeleQuotient_hasNormTwistCharts F S)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (sIdeleRestriction F S) := by
-  sorry
+  let m := ideleClassNorm F
+  let n := sIdeleQuotientNorm F S
+  let hG := ideleClass_hasNormTwistCharts F
+  let hH := sIdeleQuotient_hasNormTwistCharts F S
+  let := quasiCharacterChartedSpace (G := SIdeleQuotient F S) n hH
+  let : IsManifold 𝓘(ℂ) ω (HeckeCharacter (𝓞 F) F) :=
+    quasiCharacter_isManifold (G := IdeleClassGroup (𝓞 F) F) m hG
+  let := quasiCharacter_isManifold (G := SIdeleQuotient F S) n hH
+  apply isLocalDiffeomorph_of_chartAt 𝓘(ℂ) ω
+  · intro c
+    let d := sIdeleRestriction F S c
+    have h₀ := (hG c.val).choose_spec.2.1
+    have hd₀ := (hH d).choose_spec.2.1
+    change (hG c.val).choose c.val ∈ (hH d).choose.target
+    rw [h₀.trans hd₀.symm]
+    exact (hH d).choose.map_source (hH d).choose_spec.1
+  · intro c y hy hz
+    let d := sIdeleRestriction F S c
+    let a := (hG c.val).choose
+    let b := (hH d).choose
+    have hy' : y.val ∈ a.source := hy.2
+    change a y.val ∈ b.target at hz
+    change sIdeleRestriction F S y = b.symm (a y.val)
+    ext1 x
+    obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective x
+    rw [sIdeleRestriction_mk, (hH d).choose_spec.2.2 _ hz]
+    change y.val (QuotientGroup.mk (sIdeleInsertion F S g)) =
+      c.val (QuotientGroup.mk (sIdeleInsertion F S g)) * (((sIdeleNorm F S g : ℝ≥0) : ℝ) : ℂ) ^ (a y.val)
+    rw [← ideleNorm_sIdeleInsertion]
+    let t : IdeleClassGroup (𝓞 F) F := QuotientGroup.mk (sIdeleInsertion F S g)
+    exact (congrArg (fun q : HeckeCharacter (𝓞 F) F ↦ q t) (a.left_inv hy')).symm.trans
+      ((hG c.val).choose_spec.2.2 _ (a.map_source hy') t)
 
 /-- Paper: §3.1.2.3, p. 122. As S varies, the open loci of characters unramified
 outside S cover the entire space of Hecke characters. -/
@@ -1573,6 +1700,94 @@ theorem iUnion_unramifiedOutside :
   intro w hw
   have hwv : w ≠ v := fun he ↦ hv (he ▸ hw)
   exact Pi.mulSingle_eq_of_ne hwv _
+
+open scoped RestrictedProduct in
+/-- Paper: §3.1.2, p. 120. The value of a global character is the product of its local
+values on an idele. Only finitely many finite-place factors differ from one. -/
+theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
+    (g : IdeleGroup (𝓞 F) F) :
+    let a := fun w : InfinitePlace F => infinitePlaceRestriction F w c
+      (Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g)
+    let b := fun v : Primes(F) => finitePlaceRestriction F v c
+      (Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) => w.adicCompletion F) v).comp
+        (RingHom.snd _ _)).toMonoidHom g)
+    b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
+  classical
+  let A (v : Primes(F)) := (v.adicCompletionIntegers F).units
+  let X := (w : InfinitePlace F) → w.Completionˣ
+  let Y := Πʳ v : Primes(F), [(v.adicCompletion F)ˣ, A v]
+  obtain ⟨e, he⟩ := (ideleGroup_topology F).2.2.2.1
+  let q : IdeleGroup (𝓞 F) F →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨QuotientGroup.mk' _, QuotientGroup.continuous_mk⟩
+  let d := (c.comp q).comp (e.symm : (X × Y) →ₜ* IdeleGroup (𝓞 F) F)
+  let d₁ := d.comp (ContinuousMonoidHom.inl X Y)
+  let d₂ := d.comp (ContinuousMonoidHom.inr X Y)
+  let a (w : InfinitePlace F) := infinitePlaceRestriction F w c ((e g).1 w)
+  let b (v : Primes(F)) := finitePlaceRestriction F v c ((e g).2 v)
+  have harch (w : InfinitePlace F) (u : w.Completionˣ) :
+      e (IdeleGroup.ofCompletion (𝓞 F) F w u) = (Pi.mulSingle w u, 1) := by
+    refine Prod.ext (funext fun j ↦ Units.ext ?_) ?_
+    · rw [(he _).1 j]
+      change Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completion) w u.val j =
+        (Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completionˣ) w u j).val
+      by_cases hj : j = w
+      · subst j
+        simp
+      · simp [Pi.mulSingle_eq_of_ne hj]
+    · apply RestrictedProduct.ext
+      exact fun j ↦ Units.ext ((he _).2 j)
+  have hfin (v : Primes(F)) (u : (v.adicCompletion F)ˣ) :
+      e (IdeleGroup.ofAdicCompletion (𝓞 F) F v u) = (1, RestrictedProduct.mulSingle A v u) := by
+    refine Prod.ext (funext fun j ↦ Units.ext ((he _).1 j)) ?_
+    apply RestrictedProduct.ext
+    intro j
+    apply Units.ext
+    rw [(he _).2 j]
+    change Pi.mulSingle (M := fun t : Primes(F) ↦ t.adicCompletion F) v u.val j =
+      (Pi.mulSingle (M := fun t : Primes(F) ↦ (t.adicCompletion F)ˣ) v u j).val
+    by_cases hj : j = v
+    · subst j
+      simp
+    · simp [Pi.mulSingle_eq_of_ne hj]
+  have h₁ (w : InfinitePlace F) : d₁ (Pi.mulSingle w ((e g).1 w)) = a w := by
+    change c (q (e.symm (Pi.mulSingle w ((e g).1 w), 1))) = _
+    rw [← harch, e.symm_apply_apply]
+    rfl
+  have h₂ (v : Primes(F)) : d₂ (RestrictedProduct.mulSingle A v ((e g).2 v)) = b v := by
+    change c (q (e.symm (1, RestrictedProduct.mulSingle A v ((e g).2 v)))) = _
+    rw [← hfin, e.symm_apply_apply]
+    rfl
+  -- An idele is integral almost everywhere, and the character is unramified outside a finite set.
+  have hc : c ∈ ⋃ T : Finset (Primes(F)), (unramifiedOutside F T : Set _) := by
+    rw [iUnion_unramifiedOutside F]
+    trivial
+  obtain ⟨T, hT⟩ := Set.mem_iUnion.mp hc
+  have hsupport : b.HasFiniteMulSupport := by
+    apply Filter.eventually_cofinite.mp
+    filter_upwards [T.eventually_cofinite_notMem, (e g).2.property] with v hv hu
+    let u := (v.adicCompletionIntegers F).toSubmonoid.unitsEquivUnitsType ⟨(e g).2 v, hu⟩
+    exact (mem_unramifiedOutside_iff F T c).mp hT v hv u
+  have hp := (hasProd_restrictedProduct_mulSingle A (e g).2).map d₂ d₂.continuous
+  have hprod : HasProd b (d₂ (e g).2) := hp.congr_fun fun v ↦ (h₂ v).symm
+  have hA (w : InfinitePlace F) : (e g).1 w =
+      Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g := Units.ext ((he g).1 w)
+  have hB (v : Primes(F)) : (e g).2 v =
+      Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) ↦ w.adicCompletion F) v).comp
+        (RingHom.snd _ _)).toMonoidHom g := Units.ext ((he g).2 v)
+  dsimp only
+  simp_rw [← hA, ← hB]
+  refine ⟨hsupport, ?_⟩
+  change c (q g) = (∏ w, a w) * ∏ᶠ v, b v
+  have ht : (∏' v, b v) = ∏ᶠ v, b v := tprod_eq_finprod hsupport
+  rw [← ht, hprod.tprod_eq]
+  have hinf : d₁ (e g).1 = ∏ w, a w := by
+    conv_lhs => rw [← Finset.univ_prod_mulSingle (e g).1, map_prod]
+    exact Finset.prod_congr rfl fun w _ ↦ h₁ w
+  rw [← hinf]
+  change c (q g) = d ((e g).1, 1) * d (1, (e g).2)
+  rw [← map_mul]
+  change c (q g) = c (q (e.symm ((e g).1 * 1, 1 * (e g).2)))
+  rw [mul_one, one_mul, Prod.mk.eta, e.symm_apply_apply]
 
 end Ideles
 
