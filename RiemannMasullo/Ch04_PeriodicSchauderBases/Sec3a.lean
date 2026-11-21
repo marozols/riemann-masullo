@@ -127,7 +127,22 @@ local notation "K" => m.toMonoidHom.ker
 /-- Paper: (4.3.2.1), p. 178. The character-weighted translate of an L²
 representative is integrable on almost every norm-one fiber. -/
 theorem regularIsotypic_ae_integrable (ω : PontryaginDual K) (f : RegularL2 ν) :
-    ∀ᵐ x ∂ν, Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁ := by sorry
+    ∀ᵐ x ∂ν, Integrable (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have hshift : MeasurePreserving (fun p : K × G ↦ (p.1, (p.1 : G)⁻¹ * p.2))
+      (ν₁.prod ν) (ν₁.prod ν) :=
+    (MeasurePreserving.id ν₁).skew_product (g := fun k x ↦ (k : G)⁻¹ * x)
+      (by unfold uncurry; fun_prop)
+      (ae_of_all _ fun k ↦ (measurePreserving_mul_left ν (k : G)⁻¹).map_eq)
+  have hprod : Integrable (fun p : K × G ↦ ‖f ((p.1 : G)⁻¹ * p.2)‖ ^ 2) (ν₁.prod ν) :=
+    hshift.integrable_comp_of_integrable ((Lp.memLp f).norm.integrable_sq.comp_snd ν₁)
+  filter_upwards [hprod.prod_left_ae] with x hx
+  have hmeas : StronglyMeasurable (fun k : K ↦ f ((k : G)⁻¹ * x)) :=
+    (Lp.stronglyMeasurable f).comp_measurable (by fun_prop)
+  have h₂ := (memLp_two_iff_integrable_sq_norm hmeas.aestronglyMeasurable).2 hx
+  exact (h₂.integrable (by norm_num)).bdd_mul (c := 1)
+    (by fun_prop) (ae_of_all _ fun k ↦ by simp)
 
 /-- The Hilbert-space integral of weighted translates agrees almost everywhere
 with the scalar fiber integral. -/
