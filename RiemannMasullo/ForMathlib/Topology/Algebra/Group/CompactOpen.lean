@@ -56,4 +56,46 @@ theorem isOpen_singleton_one_complex {G : Type*} [Monoid G] [TopologicalSpace G]
       simp [Metric.mem_ball]
   simpa [hVeq] using hV
 
+open Set Topology in
+/-- A continuous complex-valued homomorphism on a product of compact monoids is trivial on
+the elements that equal one in some fixed finite set of coordinates. -/
+theorem exists_finset_complexCharacter_eq_one {ι : Type*} {M : ι → Type*} [∀ i, Monoid (M i)]
+    [∀ i, TopologicalSpace (M i)] [∀ i, CompactSpace (M i)] (c : (∀ i, M i) →ₜ* ℂ) :
+    ∃ S : Finset ι, ∀ x : ∀ i, M i, (∀ i ∈ S, x i = 1) → c x = 1 := by
+  classical
+  have hV : c ⁻¹' Metric.ball 1 1 ∈ 𝓝 1 := c.continuous.continuousAt.preimage_mem_nhds
+    (by
+      change Metric.ball (1 : ℂ) 1 ∈ 𝓝 (c 1)
+      rw [map_one]
+      exact Metric.ball_mem_nhds _ zero_lt_one)
+  rw [nhds_pi] at hV
+  obtain ⟨S, V, hV, hsub⟩ := Filter.mem_pi'.mp hV
+  let cut : (∀ i, M i) →* ∀ i, M i :=
+    MonoidHom.pi fun i ↦ if i ∈ S then 1 else Pi.evalMonoidHom M i
+  have hcut (x : ∀ i, M i) (i : ι) : cut x i = if i ∈ S then 1 else x i := by
+    by_cases hi : i ∈ S <;> simp [cut, hi]
+  have hc : Continuous cut := continuous_pi fun i ↦ by
+    by_cases hi : i ∈ S
+    · simpa only [hcut, hi, ite_true] using (continuous_const (y := (1 : M i)) :
+        Continuous fun _ : ∀ j, M j ↦ (1 : M i))
+    · simpa only [hcut, hi, ite_false] using
+        (continuous_apply i : Continuous fun x : ∀ j, M j ↦ x i)
+  let f := c.toMonoidHom.comp cut
+  have hf : f = 1 := monoidHom_eq_one_of_compact_range_subset_ball f
+    (isCompact_range (c.continuous.comp hc)) (by
+      rintro _ ⟨x, rfl⟩
+      apply hsub
+      intro i hi
+      change i ∈ S at hi
+      rw [hcut, ite_eq_left hi]
+      exact mem_of_mem_nhds (hV i))
+  refine ⟨S, fun x hx ↦ ?_⟩
+  have hfix : cut x = x := by
+    funext i
+    rw [hcut]
+    split_ifs with hi
+    · exact (hx i hi).symm
+    · rfl
+  exact hfix ▸ DFunLike.congr_fun hf x
+
 end RiemannMasullo

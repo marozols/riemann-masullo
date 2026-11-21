@@ -86,8 +86,10 @@ used only by the proof, a general lemma in a new file under `RiemannMasullo/ForM
 path Mathlib would use. Do not merge, and say why on the pull request, if it contains anything
 `AGENTS.md` forbids (`axiom`, `native_decide`, `unsafe`, `implemented_by`, `extern`, `opaque`,
 `debug.*` options, or code that runs at build time: `#eval`, `run_cmd`, `initialize`, `macro`,
-`syntax`, `elab`, new tactics), or a new public definition or theorem that states something from
-the paper. The second is a statement change, however small: label it `integrator`.
+`syntax`, `elab`, new tactics). A new public **definition** taken from the paper, or a new public
+theorem from the paper whose proof is `sorry`, is a statement: label it `integrator`. A new public
+theorem that is **proved** in the pull request is not, even when its docstring cites the paper:
+Lean has checked it and nothing can be built on a wrong reading of it, so merge it.
 
 **A split** (it adds `sorry`). The statement check has confirmed that nothing already on `main`
 changed, so read the new `sorry` lemmas, each as a statement in its own right:
