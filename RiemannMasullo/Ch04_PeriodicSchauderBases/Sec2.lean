@@ -815,28 +815,19 @@ private theorem circularLift_deriv_bound (f : S) (k : ℕ) (y : ℝ) :
 private def cyclicLiftSupport (γ : ℝ) : Compacts ℝ :=
   ⟨Icc (-Real.log γ) (Real.log γ), isCompact_Icc⟩
 
-/-- The windowed lift takes values continuously in a single fixed-support test space. -/
-private def cyclicCompactLift (γ : ℝ) (hγ : 1 < γ) :
-    S →L[ℂ] 𝓓_{cyclicLiftSupport γ}(ℝ, ℂ) := by
+/-- Multiply the periodic lift by a fixed smooth window supported in K. -/
+private def compactWindowLift (γ : ℝ) (K : Compacts ℝ) (w : ℝ → ℂ)
+    (hw : ContDiff ℝ ∞ w) (hK : ∀ x ∉ K, w x = 0) : S →L[ℂ] 𝓓_{K}(ℝ, ℂ) := by
   classical
-  let K := cyclicLiftSupport γ
+  let L := Real.log γ
   let J : S →ₗ[ℂ] 𝓓_{K}(ℝ, ℂ) :=
-    { toFun f := ⟨cyclicLiftValue γ f, (cyclicLiftValue_spec γ hγ f).1, (cyclicLiftValue_spec γ hγ f).2⟩
-      map_add' f g := by
-        ext x
-        change _ * (f _ + g _) = _ * f _ + _ * g _
-        exact mul_add _ _ _
-      map_smul' c f := by
-        ext x
-        change _ * (c * f _) = c * (_ * f _)
-        ring }
+    { toFun f := ⟨fun x ↦ w x * circularLift f (x/L),
+        hw.mul ((circularLift_smooth f).comp (contDiff_id.div_const L)),
+        fun x hx ↦ by simp [hK x hx]⟩
+      map_add' f g := by ext x; exact mul_add _ _ _
+      map_smul' c f := by ext x; change w x * (c * circularLift f (x/L)) = c * (w x * circularLift f (x/L)); ring }
   refine ⟨J, (withGeneratingSeminorms_spec _ _).continuous_of_isBounded
     (ContDiffMapSupportedIn.withSeminorms ℂ ℝ ℂ ⊤ K) J (Seminorm.IsBounded.of_real ?_)⟩
-  let L := Real.log γ
-  let w (x : ℝ) : ℂ := ↑(Real.smoothTransition (x / L + 1) - Real.smoothTransition (x / L))
-  have hw : ContDiff ℝ ∞ w := Complex.ofRealCLM.contDiff.comp
-    ((Real.smoothTransition.contDiff.comp ((contDiff_id.div_const L).add contDiff_const)).sub
-      (Real.smoothTransition.contDiff.comp (contDiff_id.div_const L)))
   choose C hC using fun j : ℕ ↦ K.isCompact.exists_bound_of_continuousOn
     (hw.continuous_iteratedFDeriv (m := j) (by simp)).continuousOn
   let B (k j : ℕ) : ℝ := (k.choose j : ℝ) * max (C j) 0 * ‖L⁻¹‖ ^ (k - j)
@@ -860,7 +851,7 @@ private def cyclicCompactLift (γ : ℝ) (hγ : 1 < γ) :
       (Finset.mem_image_of_mem circularLiftIndex (Finset.mem_range_succ_iff.mpr hj)))
   have he : (J f : ℝ → ℂ) = fun y ↦ w y • u y := by
     funext y
-    change w y * f (point (↑(y / L) : T)) = w y * f (point (↑(L⁻¹ * y) : T))
+    change w y * circularLift f (y / L) = w y * circularLift f (L⁻¹ * y)
     rw [div_eq_inv_mul]
   rw [he]
   refine (norm_iteratedFDeriv_smul_le hw hu x (n := k) (by simp)).trans ?_
@@ -873,6 +864,26 @@ private def cyclicCompactLift (γ : ℝ) (hγ : 1 < γ) :
       gcongr
       exact huf (k - j) (Nat.sub_le _ _)
     _ = B k j * M f := by dsimp [B]; ring
+
+/-- The standard window gives a continuous lift into its fixed support interval. -/
+private def cyclicCompactLift (γ : ℝ) (hγ : 1 < γ) :
+    S →L[ℂ] 𝓓_{cyclicLiftSupport γ}(ℝ, ℂ) := by
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let w (x : ℝ) : ℂ := ↑(Real.smoothTransition (x / L + 1) - Real.smoothTransition (x / L))
+  have hw : ContDiff ℝ ∞ w := Complex.ofRealCLM.contDiff.comp
+    ((Real.smoothTransition.contDiff.comp ((contDiff_id.div_const L).add contDiff_const)).sub
+      (Real.smoothTransition.contDiff.comp (contDiff_id.div_const L)))
+  apply compactWindowLift γ (cyclicLiftSupport γ) w hw
+  intro x hx
+  change x ∉ Icc (-L) L at hx
+  rcases (show x < -L ∨ L < x by simpa only [mem_Icc, not_and_or, not_le] using hx) with h | h
+  · have h' : x / L ≤ -1 := (div_le_iff₀ hL).2 (by linarith)
+    simp [w, Real.smoothTransition.zero_of_nonpos (show x / L + 1 ≤ 0 by linarith),
+      Real.smoothTransition.zero_of_nonpos (show x / L ≤ 0 by linarith)]
+  · have h' : 1 ≤ x / L := (le_div_iff₀ hL).2 (by linarith)
+    simp [w, Real.smoothTransition.one_of_one_le h',
+      Real.smoothTransition.one_of_one_le (show 1 ≤ x / L + 1 by linarith)]
 
 private def cyclicExponentialLift (γ : ℝ) (hγ : 1 < γ) : S →L[ℂ] E :=
   (supportedToLogDecayCLM univ univ_nonempty (cyclicLiftSupport γ)).comp (cyclicCompactLift γ hγ)
