@@ -1380,6 +1380,11 @@ theorem cyclicQuotientMellinCoeff_absoluteBasis :
   exact ⟨_, hm ▸ circleBasis_map transfer cyclicFourierCoeff_unconditionalBasis.1,
     hm ▸ circleAbsolute_map transfer cyclicFourierCoeff_absolute⟩
 
+private theorem intervalRadius_gt_one (γ a : ℝ) (hγ : 1 < γ) (ha : 0 < a)
+    (hwide : Real.log γ < 2 * Real.log a) : 1 < a := by
+  by_contra! h
+  linarith [Real.log_nonpos ha.le h, Real.log_pos hγ]
+
 /-- Paper: Proposition 4.2.2.5(2), p. 173. For an interval wider than a
 fundamental interval, all monomials have lifts supported in that same interval,
 whose classes are an absolute Schauder basis for the fixed-support quotient. -/
@@ -1390,7 +1395,26 @@ theorem compactIntervalPeriodization_absoluteBasis (a b : ℝ) (ha : 0 < a) (hb 
     ∃ u : ℤ → D[K], (∀ m, P (u m) = cyclicExponential m) ∧
       let basis := P.ker.mkQL ∘ u ∘ freq
       let coeff := fun n ↦ (cyclicFourierCoeff (freq n)).comp (P.ker.liftQL P le_rfl)
-      IsSchauderBasis basis coeff ∧ SchauderBasis.IsAbsolute basis coeff := by sorry
+      IsSchauderBasis basis coeff ∧ SchauderBasis.IsAbsolute basis coeff := by
+  let K := symmInterval[a,b]
+  let P := Φ[K]
+  obtain ⟨e, he⟩ := compactIntervalPeriodization_quotient_equiv γ hγ a b
+    (intervalRadius_gt_one γ a hγ ha hwide) hb hwide
+  have heq : e.toContinuousLinearMap = P.ker.liftQL P le_rfl := by
+    ext v
+    obtain ⟨f, rfl⟩ := P.ker.mkQ_surjective v
+    exact he f
+  choose u hu using fun m : ℤ ↦ P.ker.mkQ_surjective (e.symm (cyclicExponential m))
+  refine ⟨u, fun m ↦ ?_, ?_⟩
+  · calc
+      P (u m) = e (P.ker.mkQL (u m)) := (he _).symm
+      _ = cyclicExponential m := (congrArg e (hu m)).trans (e.apply_symm_apply _)
+  · have hv : P.ker.mkQL ∘ u ∘ freq = e.symm ∘ (cyclicExponential ∘ freq) :=
+      funext fun n ↦ hu (freq n)
+    change IsSchauderBasis (P.ker.mkQL ∘ u ∘ freq) _ ∧ SchauderBasis.IsAbsolute (P.ker.mkQL ∘ u ∘ freq) _
+    rw [hv, ← heq]
+    exact ⟨circleBasis_map e.symm cyclicExponential_absoluteBasis.1,
+      circleAbsolute_map e.symm cyclicExponential_absoluteBasis.2⟩
 
 /-- Paper: Proposition 4.2.2.5(2), p. 173. Descending the restricted Mellin
 evaluations gives an absolute Schauder basis of the strong fixed-support quotient dual. -/
