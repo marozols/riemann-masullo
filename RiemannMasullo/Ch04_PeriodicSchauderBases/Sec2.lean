@@ -838,7 +838,8 @@ theorem cyclicSchwartzPeriodization_hasSection :
 /-- Paper: Remark 4.2.2.6, p. 173. Periodization on exponential Schwartz
 profiles has a continuous linear right inverse. -/
 theorem cyclicPeriodization_hasSection :
-    ∃ s : S →L[ℂ] E, Function.RightInverse s (cyclicPeriodizationCLM γ hγ) := by sorry
+    ∃ s : S →L[ℂ] E, Function.RightInverse s (cyclicPeriodizationCLM γ hγ) := by
+  exact ⟨cyclicExponentialLift γ hγ, cyclicExponentialLift_rightInverse γ hγ⟩
 
 /-- Paper: Remark 4.2.2.6, p. 173. The circle Schwartz space is topologically
 and linearly isomorphic to the space of rapidly decreasing integer sequences. -/
