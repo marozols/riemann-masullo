@@ -417,7 +417,24 @@ theorem exists_schwartz_verticalTrace_mellin_of_weighted_schwartz (σ : ℝ) (h�
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform is holomorphic
 in the interior of the strip of Schwartz weights. -/
 theorem differentiableOn_mellin_of_weighted_schwartz :
-    DifferentiableOn ℂ (mellin (fromLog f)) (openStrip a b) := by sorry
+    DifferentiableOn ℂ (mellin (fromLog f)) (openStrip a b) := by
+  have hloc : LocallyIntegrableOn (fun t ↦ f (Real.log t)) (Ioi 0) volume :=
+    (f.continuous.comp_continuousOn (Real.continuousOn_log.mono
+      (fun x hx ↦ ne_of_gt hx))).locallyIntegrableOn measurableSet_Ioi
+  have bound {c : ℝ} (hc : c ∈ Icc a b) {l : Filter ℝ} (hl : ∀ᶠ t in l, 0 < t) :
+      (fun t ↦ f (Real.log t)) =O[l] (fun t : ℝ ↦ t ^ (-c)) := by
+    obtain ⟨g, hg⟩ := hWeighted c hc
+    apply Asymptotics.IsBigO.of_bound (SchwartzMap.seminorm ℂ 0 0 g)
+    filter_upwards [hl] with t ht
+    rw [Real.norm_of_nonneg (Real.rpow_nonneg ht.le _), Real.rpow_neg ht.le, ← div_eq_mul_inv,
+      le_div_iff₀ (Real.rpow_pos_of_pos ht _), Real.rpow_def_of_pos ht, mul_comm (Real.log t)]
+    simpa only [hg, norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le, mul_comm]
+      using g.norm_le_seminorm ℂ (Real.log t)
+  intro s hs
+  apply DifferentiableAt.differentiableWithinAt
+  exact mellin_differentiableAt_of_isBigO_rpow hloc
+    (bound (right_mem_Icc.mpr hab.le) (eventually_gt_atTop 0)) hs.2
+    (bound (left_mem_Icc.mpr hab.le) self_mem_nhdsWithin) hs.1
 
 /-- Paper: Proposition B.2.2.3(2), p. 601. The rapid decay bound holds
 uniformly across the full closed strip, including the two boundary lines. -/
