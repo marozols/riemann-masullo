@@ -87,29 +87,12 @@ theorem compactSupportStageTopology_univ [CompactSpace X] :
     (restrictUniv ∘ fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) _ = _
   rw [← induced_compose, ← restrictUniv.isInducing.eq_induced]
 
-open scoped ComplexOrder in
-/-- Paper: Definition C.5.1.1, p. 721. For compact X, the inductive limit topology
-agrees with the topology induced by the inclusion into continuous maps. -/
-theorem compactSupportLCTopology_of_compact [CompactSpace X] :
-    compactSupportLCTopology X E =
-      TopologicalSpace.induced (CompactlySupportedContinuousMap.toContinuousMap :
-        C_c(X, E) → C(X, E)) inferInstance := by
-  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
-    { toFun := CompactlySupportedContinuousMap.toContinuousMap
-      map_add' := fun _ _ ↦ rfl
-      map_smul' := fun _ _ ↦ rfl }
-  let : TopologicalSpace C_c(X, E) := induced inclusion inferInstance
-  let : Module ℝ E := Module.restrictScalars ℝ ℂ E
-  let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ E
-  let : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
-  let : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
-  let : LocallyConvexSpace ℂ E := LocallyConvexSpace.ofBasisZero ℂ E id _
-    (LocallyConvexSpace.convex_basis_zero ℝ E)
-    (fun _ h ↦ convex_RCLike_iff_convex_real.mpr h.2)
-  let : PolynormableSpace ℂ C_c(X, E) := PolynormableSpace.induced inclusion
-  let (K : Compacts X) := compactSupportStageTopology (E := E) K
-  have hStage (K : Compacts X) : Continuous (compactSupportStage (E := E) K).subtype := by
-    apply continuous_induced_rng.mpr
+private theorem isEmbedding_compactSupportStage_toContinuousMap (K : Compacts X) :
+    letI := compactSupportStageTopology (E := E) K
+    IsEmbedding (fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) := by
+  let := compactSupportStageTopology (E := E) K
+  let inclusion (f : compactSupportStage (E := E) K) := f.val.toContinuousMap
+  have hCont : Continuous inclusion := by
     apply ContinuousMap.continuous_compactOpen.mpr
     intro L hL U hU
     let val : ↥(K : Set X) → X := Subtype.val
@@ -124,7 +107,7 @@ theorem compactSupportLCTopology_of_compact [CompactSpace X] :
         hx ((mem_compactSupportStage_iff K f.val).mp f.property hs)
     -- Off the supporting set, the compact-open condition only tests the value zero.
     have hMapsTo (f : compactSupportStage (E := E) K) :
-        MapsTo ((inclusion ∘ (compactSupportStage (E := E) K).subtype) f) L U ↔
+        MapsTo (inclusion f) L U ↔
           MapsTo (restrict f) (val ⁻¹' L) U ∧
             ∀ x ∈ L, x ∉ (K : Set X) → (0 : E) ∈ U := by
       constructor
@@ -141,6 +124,27 @@ theorem compactSupportLCTopology_of_compact [CompactSpace X] :
     simp_rw [hMapsTo]
     exact ((ContinuousMap.isOpen_setOfPred_mapsTo hPreimage hU).preimage hRestrict).inter
       isOpen_const
+  let val : C(↥(K : Set X), X) := ⟨Subtype.val, continuous_subtype_val⟩
+  refine ⟨IsInducing.of_comp hCont (ContinuousMap.continuous_precomp val) ⟨rfl⟩, ?_⟩
+  intro f g h
+  exact Subtype.ext (DFunLike.ext _ _ fun x ↦ congrArg (fun u : C(X, E) ↦ u x) h)
+
+/-- Paper: Definition C.5.1.1, p. 721. For compact X, the inductive limit topology
+agrees with the topology induced by the inclusion into continuous maps. -/
+theorem compactSupportLCTopology_of_compact [CompactSpace X] :
+    compactSupportLCTopology X E =
+      TopologicalSpace.induced (CompactlySupportedContinuousMap.toContinuousMap :
+        C_c(X, E) → C(X, E)) inferInstance := by
+  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  let : TopologicalSpace C_c(X, E) := induced inclusion inferInstance
+  let := polynormableSpace_continuousMap ℂ X E
+  let : PolynormableSpace ℂ C_c(X, E) := PolynormableSpace.induced inclusion
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  have hStage (K : Compacts X) : Continuous (compactSupportStage (E := E) K).subtype :=
+    continuous_induced_rng.mpr (isEmbedding_compactSupportStage_toContinuousMap (E := E) K).continuous
   -- Every map belongs to the whole-space stage.
   let K : Compacts X := ⟨univ, isCompact_univ⟩
   let lift : C_c(X, E) → compactSupportStage (E := E) K :=
@@ -218,12 +222,38 @@ theorem compactSupportLCTopology_t2 :
   exact T2Space.of_injective_continuous (f := fun f : C_c(X, E) ↦ (f : X → E))
     DFunLike.coe_injective (continuous_pi fun x ↦ continuous_compactSupport_eval x)
 
+private theorem continuous_compactSupport_toContinuousMap :
+    Continuous[compactSupportLCTopology X E, _]
+      (CompactlySupportedContinuousMap.toContinuousMap : C_c(X, E) → C(X, E)) := by
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  let := polynormableSpace_continuousMap ℂ X E
+  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  exact continuous_of_continuous_comp_compactSupportStage inclusion
+    (fun K ↦ (isEmbedding_compactSupportStage_toContinuousMap (E := E) K).continuous)
+
 /-- Paper: Lemma C.5.1.3(1), p. 721. The fixed-support stage embeds with its
 uniform-convergence topology into the inductive limit. -/
 theorem isEmbedding_compactSupportStage (K : Compacts X) :
     letI := compactSupportLCTopology X E
     letI := compactSupportStageTopology (E := E) K
-    IsEmbedding ((compactSupportStage (E := E) K).subtype : _ → C_c(X, E)) := by sorry
+    IsEmbedding ((compactSupportStage (E := E) K).subtype : _ → C_c(X, E)) := by
+  let := compactSupportLCTopology X E
+  let (L : Compacts X) := compactSupportStageTopology (E := E) L
+  let restrict : compactSupportStage (E := E) K →ₗ[ℂ] C(↥(K : Set X), E) :=
+    { toFun := fun f ↦ f.val.toContinuousMap.comp ⟨Subtype.val, continuous_subtype_val⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have := isTopologicalAddGroup_induced restrict
+  let P : SeminormFamily ℂ C_c(X, E)
+      {p : Seminorm ℂ C_c(X, E) // ∀ L : Compacts X,
+        Continuous (p ∘ (compactSupportStage (E := E) L).subtype)} := Subtype.val
+  have hP : WithSeminorms P := ⟨rfl⟩
+  refine IsEmbedding.of_comp (hP.continuous_of_continuous_comp _ fun p ↦ p.property K)
+    (continuous_compactSupport_toContinuousMap (X := X) (E := E)) ?_
+  exact isEmbedding_compactSupportStage_toContinuousMap K
 
 /-- Paper: Lemma C.5.1.3(1), p. 721. The continuous maps supported in a fixed compact
 set form a closed subset in the inductive limit topology. -/
