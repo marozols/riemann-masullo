@@ -256,7 +256,10 @@ def logExponentialDecayTwist (I : Set ℝ) (a : I) : logExponentialDecaySubmodul
 exp(ax) times the original logarithmic profile. -/
 theorem logExponentialDecayTwist_apply (I : Set ℝ) (a : I)
     (f : logExponentialDecaySubmodule I) (x : ℝ) :
-    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by sorry
+    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by
+  exact congrFun (LinearEquiv.ofInjective_symm_apply realSchwartzCoe
+    (h := DFunLike.coe_injective)
+    ⟨logExponentialWeight a f.val, logExponentialDecay_weight_mem_range I a f⟩) x
 
 /-- Paper: Definition D.3.2.1, p. 801. The topology is induced by
 all weighted Schwartz profiles, using the usual seminorms on the real Schwartz space.
