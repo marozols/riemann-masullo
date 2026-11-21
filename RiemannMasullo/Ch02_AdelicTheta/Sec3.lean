@@ -248,7 +248,7 @@ def sLocalAdelicTheta : ℬₛ →ₗ[ℂ] C(Iₛ, ℂ) :=
 /-- Paper: Equation (2.3.1.2), p. 99. Evaluating S-local theta at an idele
 gives the sum of the evaluations at its S-unit multiples. -/
 theorem sLocalAdelicTheta_apply (f : ℬₛ) (g : Iₛ) :
-    sLocalAdelicTheta F S f g = thetaSum f g := by sorry
+    sLocalAdelicTheta F S f g = thetaSum f g := rfl
 
 /-- Paper: Proposition 2.3.1.2(1), p. 100. S-local theta is invariant under
 left translation by S-units, expressed as constancy on each class fiber. -/

@@ -8,7 +8,10 @@ public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
 
 import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
+import RiemannMasullo.ForMathlib.NumberTheory.LSeries.Convergence
 
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
@@ -116,7 +119,16 @@ theorem realHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F) (hv : v.
     ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm.toMonoidHom x) =
-        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by sorry
+        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
+  let e := (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm
+  let i : ℝˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_realUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equation (3.2.1.5), p. 123. A complex local unitary character has a
 unique imaginary radial exponent and integer angular weight.
@@ -126,7 +138,16 @@ theorem complexHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F)
     ∃! a : ℂ × ℤ, a.1.re = 0 ∧ ∀ x : ℂˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm.toMonoidHom x) =
-        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by sorry
+        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by
+  let e := (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm
+  let i : ℂˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_complexUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equations (3.2.1.3)–(3.2.1.5), p. 123. The global gamma factor
 multiplies the real and complex local gamma factors, using the local radial
@@ -294,16 +315,82 @@ theorem finiteHeckeL_seriesSummable (χ : U[F]) (s : halfPlane) :
   exact LSeriesSummable_heckeLFunction _ s.property fun v _ ↦
     (norm_ideleClassNormTwist_zero_localValue χ v).le
 
+/-- Each formal local Euler factor has a geometric Dirichlet series with the stated analytic
+value in the half-plane of absolute convergence. -/
+private theorem LSeriesHasSum_finiteHeckeEulerFactor (χ : U[F])
+    (v : HeightOneSpectrum (𝓞 F)) {s : ℂ} (hs : 1 < s.re) :
+    LSeriesHasSum (χ₀(χ).localEulerFactor v) s (finiteHeckeEulerFactor χ v s) := by
+  classical
+  let a := if χ₀(χ).IsUnramifiedAt v then χ₀(χ).localValue v else 0
+  let q := v.asIdeal.absNorm
+  let z := a * (q : ℂ) ^ (-s)
+  have hq : 1 < q := NumberField.HeightOneSpectrum.one_lt_absNorm v
+  have hq' : (1 : ℝ) < q := by exact_mod_cast hq
+  have ha : ‖a‖ ≤ 1 := by
+    by_cases h : χ₀(χ).IsUnramifiedAt v <;> simp [a, h, norm_ideleClassNormTwist_zero_localValue]
+  have hz : ‖z‖ < 1 := by
+    change ‖a * ((q : ℝ) : ℂ) ^ (-s)‖ < 1
+    rw [norm_mul, Complex.norm_cpow_eq_rpow_re_of_pos (by linarith : 0 < (q : ℝ)) _,
+      Complex.neg_re]
+    exact (mul_le_of_le_one_left (Real.rpow_nonneg (Nat.cast_nonneg _) _) ha).trans_lt
+      (Real.rpow_lt_one_of_one_lt_of_neg hq' (by linarith))
+  have hval : finiteHeckeEulerFactor χ v s = (1 - z)⁻¹ := by
+    by_cases h : χ₀(χ).IsUnramifiedAt v <;> simp [finiteHeckeEulerFactor, z, a, q, h]
+  rw [hval, HeckeCharacter.localEulerFactor, card_residueField_adicCompletion,
+    hecke_localPowerSeries_eq_mk]
+  obtain ⟨hpow, hout⟩ := LSeries_term_geometric_ofPowerSeries hq a s
+  apply (Nat.pow_right_injective hq).hasSum_iff hout |>.mp
+  exact (hasSum_geometric_of_norm_lt_one hz).congr_fun hpow
+
+/-- Paper: Definition 3.2.1.4, pp. 123–124. The partial Hecke Euler products converge
+uniformly to the Hecke Dirichlet series on every closed half-plane to the right of one. -/
+theorem finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane (χ : U[F]) {a : ℝ} (ha : 1 < a) :
+    TendstoUniformlyOn
+      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦ fun s ↦ ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
+      χ₀(χ).LSeries atTop {s : ℂ | a ≤ s.re} := by
+  obtain ⟨r, hr, hra⟩ := exists_between ha
+  let Places := HeightOneSpectrum (𝓞 F)
+  let ψ := χ₀(χ)
+  let f := ψ.localEulerFactor
+  let u (v : Places) := 2 * (v.asIdeal.absNorm : ℝ) ^ (-r)
+  have hu : Summable u := ((summable_absNorm_rpow F hr).comp_injective
+    (fun v w (h : (v : Places).asIdeal = w.asIdeal) ↦ HeightOneSpectrum.ext h)).mul_left 2
+  have hlocal (v : Places) := LSeries_heckeLocalEulerFactor_bound ψ v (s := (r : ℂ)) hr
+    (fun _ ↦ (norm_ideleClassNormTwist_zero_localValue χ v).le)
+  have hp := LSeries_finset_prod_bound f (r : ℂ) (u := u)
+    (fun v ↦ (hlocal v).1) (fun v ↦ (hlocal v).2)
+  have hu₀ (v : Places) : 0 ≤ u v :=
+    mul_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+  have hC (S : Finset Places) :
+      (∑' n, ‖LSeries.term ⇑(∏ v ∈ S, f v) (r : ℂ) n‖) ≤ Real.exp (∑' v, u v) :=
+    (hp S).2.trans (Real.exp_le_exp.mpr (hu.sum_le_tsum S (fun v _ ↦ hu₀ v)))
+  have h := tendstoUniformlyOn_LSeries_of_eventuallyEq
+    (fun S : Finset Places ↦ ⇑(∏ v ∈ S, f v)) ψ.LFunction hra (Real.exp_pos _).le
+    (fun S ↦ (hp S).1) (finiteHeckeL_seriesSummable χ ⟨(r : ℂ), hr⟩) hC
+    (heckeLocalEulerFactor_eventually_prod_eq ψ)
+  apply h.congr
+  exact Filter.Eventually.of_forall fun S s hs ↦
+    (LSeriesHasSum_finset_prod f _ s (fun v ↦ LSeriesHasSum_finiteHeckeEulerFactor χ v
+      (ha.trans_le hs)) S).LSeries_eq
+
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Hecke L-function
 is the value of the convergent Euler product with the ramified factors omitted. -/
 theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
-    HasProd (fun v ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ s) := by sorry
+    HasProd (fun v ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ s) := by
+  have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s.val.re) s.property
+  exact h.tendsto_at (x := s.val) (Set.mem_ofPred.mpr (le_refl s.val.re))
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
 theorem finiteHeckeL_hasProdUniformlyOn (χ : U[F]) (K : Set halfPlane) (hK : IsCompact K) :
-    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K :=
-  by sorry
+    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K := by
+  apply hasProdUniformlyOn_iff_tendstoUniformlyOn.mpr
+  rcases K.eq_empty_or_nonempty with rfl | hne
+  · exact tendstoUniformlyOn_empty
+  · obtain ⟨s₀, _, hmin⟩ := hK.exists_isMinOn hne
+      (Complex.continuous_re.comp continuous_subtype_val).continuousOn
+    have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s₀.val.re) s₀.property
+    exact (h.comp (fun s : halfPlane ↦ s.val)).mono fun s hs ↦ hmin hs
 
 /-- Paper: Definition 3.2.1.4, p. 124. The finite Hecke L-function admits
 a meromorphic continuation to the complex plane. -/
@@ -361,11 +448,18 @@ def ideleNormBand (F : Type*) [Field F] [NumberField F] (a b : ℝ) : Set 𝕀[F
 /-- Paper: §3.2.2, p. 124. The identity lies in a closed norm band precisely
 when the band contains one. -/
 theorem one_mem_ideleNormBand (a b : ℝ) :
-    (1 : 𝕀[F]) ∈ ideleNormBand F a b ↔ a ≤ 1 ∧ 1 ≤ b := by sorry
+    (1 : 𝕀[F]) ∈ ideleNormBand F a b ↔ a ≤ 1 ∧ 1 ≤ b := by
+  simp [ideleNormBand]
 
 /-- Paper: §3.2.2, p. 124. The surjective idele class norm takes values
 other than one, so its abscissa is defined. -/
-theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by sorry
+theorem ideleClassNorm_ne_one : ∃ g : C[F], ideleClassNorm F g ≠ 1 := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  let t := Units.mk0 (2 : ℝ≥0) (by norm_num)
+  obtain ⟨g, hg⟩ := hsurj t
+  refine ⟨g, fun h ↦ ?_⟩
+  have ht := congrArg Units.val (hg.symm.trans h)
+  norm_num [t] at ht
 
 local notation "rightHalf" =>
   (relativeRightHalfPlane (ideleClassNorm F) (isProperMap_ideleClassNorm F)

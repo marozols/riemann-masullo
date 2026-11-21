@@ -2326,7 +2326,7 @@ private theorem sInteger_units_finiteness :
 
 /-- The S-idele classes embed as an open subgroup of the global idele class group,
 and this embedding preserves the norm. -/
-private theorem sIdeleClassGroup_openEmbedding :
+theorem sIdeleClassGroup_openEmbedding :
     ∃ j : SIdeleClassGroup F S →* C[F], IsOpenEmbedding j ∧
       (∀ c, ideleClassNorm F (j c) = sIdeleClassNorm F S c) ∧
       ∀ u : (integralAdelesOutside F S)ˣ, j (QuotientGroup.mk u) =

@@ -441,10 +441,10 @@ def IsNuclearOperator (A : E →L[ℂ] F) : Prop :=
           let yB : Submodule.span ℂ B := T xU
           (yB : F) = A x
 
-/-- Paper: §C.3.1, p. 694. A continuous rank-one operator is nuclear.
-Deviation: This is a check of the local factorization definition. -/
-theorem isNuclearOperator_smulRight (φ : E →L[ℂ] ℂ) (y : F) :
-    IsNuclearOperator (φ.smulRight y) := by
+/-- The image of the scalar closed unit ball under multiplication by a fixed vector
+is a Banach disc, since its span is finite-dimensional and its gauge is a norm. -/
+private theorem isBanachDisc_toSpanSingleton (y : F) :
+    IsBanachDisc (ContinuousLinearMap.toSpanSingleton ℂ y '' Metric.closedBall (0 : ℂ) 1) := by
   let D := Metric.closedBall (0 : ℂ) 1
   let f := ContinuousLinearMap.toSpanSingleton ℂ y
   let B := f '' D
@@ -484,9 +484,15 @@ theorem isNuclearOperator_smulRight (φ : E →L[ℂ] ℂ) (y : F) :
     NormedAddCommGroup.ofSeparation fun z hz ↦ (gauge_eq_zero aB hb).mp hz
   let : FiniteDimensional ℂ (WithLocalSeminorm pB) :=
     Module.Finite.of_surjective (show ℂ →ₗ[ℂ] WithLocalSeminorm pB from g.toLinearMap) hg
-  have hB : IsBanachDisc B :=
-    ⟨(NormedSpace.isVonNBounded_closedBall ℂ ℂ 1).image f, bB, cB, aB,
-      inferInstance, FiniteDimensional.completeSpace ℂ (WithLocalSeminorm pB)⟩
+  exact ⟨(NormedSpace.isVonNBounded_closedBall ℂ ℂ 1).image f, bB, cB, aB,
+    inferInstance, FiniteDimensional.completeSpace ℂ (WithLocalSeminorm pB)⟩
+
+/-- Paper: §C.3.1, p. 694. A continuous rank-one operator is nuclear.
+Deviation: This is a check of the local factorization definition. -/
+theorem isNuclearOperator_smulRight (φ : E →L[ℂ] ℂ) (y : F) :
+    IsNuclearOperator (φ.smulRight y) := by
+  let B := ContinuousLinearMap.toSpanSingleton ℂ y '' Metric.closedBall (0 : ℂ) 1
+  have hB : IsBanachDisc B := isBanachDisc_toSpanSingleton y
   -- The source gauge is the seminorm x ↦ ‖φ x‖, so φ extends to the completion.
   let q := (normSeminorm ℂ ℂ).comp φ.toLinearMap
   let U := q.ball 0 1
@@ -498,20 +504,19 @@ theorem isNuclearOperator_smulRight (φ : E →L[ℂ] ℂ) (y : F) :
     change ‖φ x‖ ≤ 1 * gauge U x
     rw [one_mul]
     exact ge_of_eq (congrFun (q.restrictScalars ℝ).gauge_ball x))
-  let yB : WithLocalSeminorm pB := g 1
+  let yB : Submodule.span ℂ B :=
+    ⟨y, Submodule.subset_span ⟨1, by simp [Metric.mem_closedBall], by simp⟩⟩
   refine ⟨U, hU, q.balanced_ball_zero 1, q.convex_ball 0 1, B, hB, ?_,
     ψ.fromCompletion.smulRight yB, isBanachNuclear_smulRight _ _, ?_⟩
   · intro x hx
     refine ⟨φ x, ?_, rfl⟩
-    change φ x ∈ Metric.closedBall (0 : ℂ) 1
     rw [Metric.mem_closedBall, dist_zero_right]
     exact (show ‖φ x‖ < 1 from q.mem_ball_zero.mp hx).le
   · intro x
     let xU : WithLocalSeminorm pU := x
-    change (↑(show S from ψ.fromCompletion xU • yB) : F) = φ x • y
+    change (↑(show Submodule.span ℂ B from ψ.fromCompletion xU • yB) : F) = φ x • y
     rw [ψ.fromCompletion_apply_coe]
-    change φ x • (1 : ℂ) • y = φ x • y
-    rw [one_smul]
+    rfl
 
 /-- Paper: (C.3.1.3), p. 694. A nuclear presentation is a pointwise operator sum
 of rank-one maps with summable coefficients, equicontinuous functionals and
@@ -528,18 +533,243 @@ structure NuclearPresentation (A : E →L[ℂ] F) where
   equicontinuous : EquicontinuousAt (fun n x ↦ functional n x) 0
   hasSum : ∀ x, HasSum (fun n ↦ (coeff n * functional n x) • (vector n : F)) (A x)
 
+-- Keep the section hypotheses in the existing signature.
+set_option linter.unusedSectionVars false in
 /-- Paper: (C.3.1.3), p. 694. A rank-one map can be presented with one term and
 the given functional, with any prescribed nonzero coefficient for that term.
 Deviation: This is a check of the normalization in the presentation definition. -/
 theorem nuclearPresentation_smulRight (φ : E →L[ℂ] ℂ) (y : F) (c : ℂ) (hc : c ≠ 0) :
     ∃ r : NuclearPresentation (φ.smulRight y),
       r.coeff 0 = c ∧ r.functional 0 = φ ∧ (r.vector 0 : F) = c⁻¹ • y ∧
-        ∀ n, r.coeff (n + 1) = 0 := by sorry
+        ∀ n, r.coeff (n + 1) = 0 := by
+  let z : F := c⁻¹ • y
+  let B := ContinuousLinearMap.toSpanSingleton ℂ z '' Metric.closedBall (0 : ℂ) 1
+  have hz : z ∈ B := ⟨1, by simp [Metric.mem_closedBall], by simp⟩
+  let r : NuclearPresentation (φ.smulRight y) :=
+    { coeff := fun n ↦ if n = 0 then c else 0
+      functional := fun _ ↦ φ
+      disc := B
+      isBanachDisc := isBanachDisc_toSpanSingleton z
+      vector := fun _ ↦ ⟨z, Submodule.subset_span hz⟩
+      vector_mem := fun _ ↦ hz
+      summable_coeff := by
+        simpa only [apply_ite, norm_zero] using (hasSum_ite_eq (0 : ℕ) ‖c‖).summable
+      equicontinuous :=
+        ((equicontinuousAt_unique (F := fun (_ : Unit) x ↦ φ x)).mpr
+          φ.continuous.continuousAt).comp (fun _ ↦ ())
+      hasSum := by
+        intro x
+        rw [ContinuousLinearMap.smulRight_apply]
+        refine (hasSum_ite_eq (0 : ℕ) (φ x • y)).congr_fun ?_
+        intro n
+        by_cases hn : n = 0
+        · simp only [hn, ite_true, z, mul_comm c, mul_smul, smul_inv_smul₀ hc]
+        · simp [hn] }
+  exact ⟨r, by simp [r], rfl, rfl, fun n ↦ by simp [r]⟩
+
+omit [IsUniformAddGroup F] [T2Space F] in
+/-- The inclusion of a Banach disc's gauge space into the ambient space is continuous. -/
+private theorem continuous_banachDisc_subtype {B : Set F} (hB : IsBanachDisc B) :
+    Continuous (fun z : WithLocalSeminorm (gaugeSeminorm hB.balanced hB.convex hB.absorbent) ↦
+      (show Submodule.span ℂ B from z).val) := by
+  let G := WithLocalSeminorm (gaugeSeminorm hB.balanced hB.convex hB.absorbent)
+  let i : G →ₗ[ℂ] F := (Submodule.span ℂ B).subtype
+  let hF := PolynormableSpace.withSeminorms ℂ F
+  refine hF.continuous_of_continuous_comp i fun j ↦ ?_
+  obtain ⟨R, _, hR⟩ := hF.isVonNBounded_iff_seminorm_bounded.mp hB.bounded j
+  refine Seminorm.continuous' (r := R) (mem_of_superset (Metric.ball_mem_nhds (0 : G) one_pos) ?_)
+  intro z hz
+  rw [Metric.mem_ball, dist_zero_right] at hz
+  have hzB : (show Submodule.span ℂ B from z) ∈ ((↑) ⁻¹' B : Set (Submodule.span ℂ B)) :=
+    setOfPred_gauge_lt_one_subset_self hB.convex hB.absorbent.zero_mem hB.absorbent hz
+  rw [Seminorm.mem_closedBall_zero]
+  exact (hR (i z) hzB).le
+
+/-- In a Banach-space series with bounded factors, summable coefficients can absorb the
+rescaling needed to make the two factors norm-null. -/
+private theorem isBanachNuclear_of_bounded_series {X Y : Type*}
+    [SeminormedAddCommGroup X] [NormedSpace ℂ X] [SeminormedAddCommGroup Y] [NormedSpace ℂ Y]
+    (T : X →L[ℂ] Y) (c : ℕ → ℂ) (φ : ℕ → X →L[ℂ] ℂ) (y : ℕ → Y)
+    (hc : Summable (fun n ↦ ‖c n‖)) (hφ : ∃ C, ∀ n, ‖φ n‖ ≤ C)
+    (hy : ∀ n, ‖y n‖ ≤ 1) (hT : ∀ x, HasSum (fun n ↦ (c n * φ n x) • y n) (T x)) :
+    IsBanachNuclear T := by
+  -- Add a positive geometric series so that every tail is strictly positive.
+  let a (n : ℕ) := ‖c n‖ + (1 / 2 : ℝ) ^ n
+  have ha : Summable a := hc.add (summable_geometric_of_lt_one (by norm_num) (by norm_num))
+  have ha_pos (n : ℕ) : 0 < a n := by dsimp [a]; positivity
+  let t (n : ℕ) := ∑' k : ℕ, a (k + n)
+  have ht_add (n : ℕ) : t n = a n + t (n + 1) := by
+    simpa only [t, zero_add, Nat.add_right_comm, Nat.add_assoc] using
+      ((summable_nat_add_iff n).mpr ha).tsum_eq_zero_add
+  have ht_pos (n : ℕ) : 0 < t n :=
+    ((summable_nat_add_iff n).mpr ha).tsum_pos (fun k ↦ (ha_pos (k + n)).le) 0 (ha_pos (0 + n))
+  let s (n : ℕ) := Real.sqrt (Real.sqrt (t n))
+  have hs_pos (n : ℕ) : 0 < s n := Real.sqrt_pos_of_pos (Real.sqrt_pos_of_pos (ht_pos n))
+  have hs_sq (n : ℕ) : s n * s n = Real.sqrt (t n) := Real.mul_self_sqrt (Real.sqrt_nonneg _)
+  have hs_lim : Tendsto s atTop (𝓝 0) := by
+    simpa only [s, t, Real.sqrt_zero] using (tendsto_sum_nat_add a).sqrt.sqrt
+  let d (n : ℕ) : ℂ := s n
+  have hd_ne (n : ℕ) : d n ≠ 0 := Complex.ofReal_ne_zero.mpr (hs_pos n).ne'
+  have hd_norm (n : ℕ) : ‖d n‖ = s n := by
+    dsimp [d]
+    rw [Complex.norm_real, Real.norm_of_nonneg (hs_pos n).le]
+  refine ⟨fun n ↦ c n / (d n * d n), fun n ↦ d n • φ n, fun n ↦ d n • y n, ?_, ?_, ?_, ?_⟩
+  · -- The rescaled coefficient norms are dominated by a telescoping series.
+    have hbound (n : ℕ) : ‖c n‖ / Real.sqrt (t n) ≤
+        2 * (Real.sqrt (t n) - Real.sqrt (t (n + 1))) := by
+      have hle : Real.sqrt (t (n + 1)) ≤ Real.sqrt (t n) :=
+        Real.sqrt_le_sqrt (by linarith [ht_add n, ha_pos n])
+      rw [div_le_iff₀ (Real.sqrt_pos_of_pos (ht_pos n))]
+      have hdiff := mul_nonneg (sub_nonneg.mpr hle) (sub_nonneg.mpr hle)
+      nlinarith [Real.mul_self_sqrt (ht_pos n).le, Real.mul_self_sqrt (ht_pos (n + 1)).le,
+        ht_add n, show ‖c n‖ ≤ a n from le_add_of_nonneg_right (by positivity)]
+    refine summable_of_sum_range_le (c := 2 * Real.sqrt (t 0)) (fun n ↦ norm_nonneg _) fun N ↦ ?_
+    calc
+      _ ≤ ∑ n ∈ Finset.range N, 2 * (Real.sqrt (t n) - Real.sqrt (t (n + 1))) :=
+        Finset.sum_le_sum fun n _ ↦ by rw [norm_div, norm_mul, hd_norm, hs_sq]; exact hbound n
+      _ ≤ _ := by
+        rw [← Finset.mul_sum, Finset.sum_range_sub']
+        linarith [Real.sqrt_nonneg (t N)]
+  · obtain ⟨C, hC⟩ := hφ
+    rw [tendsto_zero_iff_norm_tendsto_zero]
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds
+      (show Tendsto (fun n ↦ s n * C) atTop (𝓝 0) by simpa using hs_lim.mul_const C)
+      (fun n ↦ norm_nonneg _) (fun n ↦ ?_)
+    rw [norm_smul, hd_norm]
+    exact mul_le_mul_of_nonneg_left (hC n) (hs_pos n).le
+  · rw [tendsto_zero_iff_norm_tendsto_zero]
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds hs_lim
+      (fun n ↦ norm_nonneg _) (fun n ↦ ?_)
+    rw [norm_smul, hd_norm]
+    exact mul_le_of_le_one_right (hs_pos n).le (hy n)
+  · intro x
+    refine (hT x).congr_fun fun n ↦ ?_
+    simp only [smul_apply, smul_smul, smul_eq_mul]
+    congr 1
+    calc
+      _ = (c n / (d n * d n) * (d n * d n)) * φ n x := by ring
+      _ = c n * φ n x := by rw [div_mul_cancel₀ _ (mul_ne_zero (hd_ne n) (hd_ne n))]
 
 /-- Paper: Lemma C.3.1.2, p. 694. A continuous linear operator is nuclear exactly
 when it has a nuclear presentation. -/
 theorem isNuclearOperator_iff_nonempty_presentation (A : E →L[ℂ] F) :
-    IsNuclearOperator A ↔ Nonempty (NuclearPresentation A) := by sorry
+    IsNuclearOperator A ↔ Nonempty (NuclearPresentation A) := by
+  constructor
+  · rintro ⟨U, hU, bU, cU, B, hB, _, T, ⟨c, φ, y, hc, hφ, hy, hT⟩, hA⟩
+    let p := gaugeSeminorm bU cU (absorbent_nhds_zero hU)
+    let G := WithLocalSeminorm (gaugeSeminorm hB.balanced hB.convex hB.absorbent)
+    let i : E →ₗ[ℂ] LocalBanach p := Completion.toComplL.toLinearMap.comp LinearMap.id
+    have hi : Continuous i :=
+      (PolynormableSpace.withSeminorms ℂ E).continuous_normedSpace_rng (LocalBanach p) i
+        ⟨{⟨p, continuous_gauge cU hU⟩}, 1, by
+          simpa using (show (normSeminorm ℂ _).comp i ≤ p from
+            fun x ↦ (localBanach_norm_coe p x).le)⟩
+    let j : G →L[ℂ] F := ⟨(Submodule.span ℂ B).subtype, continuous_banachDisc_subtype hB⟩
+    obtain ⟨R, hR, hyR⟩ := (Metric.isBounded_range_of_tendsto y hy).exists_pos_norm_lt
+    obtain ⟨C, _, hφC⟩ := (Metric.isBounded_range_of_tendsto φ hφ).exists_pos_norm_le
+    let r : ℂ := R
+    have hr : r ≠ 0 := Complex.ofReal_ne_zero.mpr hR.ne'
+    have hr_norm : ‖r‖ = R := by
+      dsimp [r]
+      rw [Complex.norm_real, Real.norm_of_nonneg hR.le]
+    refine ⟨⟨fun n ↦ c n * r, fun n ↦ (φ n).comp ⟨i, hi⟩, B, hB,
+      fun n ↦ (r⁻¹ • y n : G), ?_, ?_, ?_, ?_⟩⟩
+    · intro n
+      apply setOfPred_gauge_lt_one_subset_self hB.convex hB.absorbent.zero_mem hB.absorbent
+      change ‖(r⁻¹ • y n : G)‖ < 1
+      rw [norm_smul, norm_inv, hr_norm, inv_mul_lt_iff₀ hR, mul_one]
+      exact hyR _ (mem_range_self n)
+    · simpa only [norm_mul] using hc.mul_right ‖r‖
+    · refine Metric.equicontinuousAt_of_continuity_modulus (fun x ↦ C * ‖i x‖) ?_ _
+        (Eventually.of_forall fun x n ↦ ?_)
+      · have hi0 : Tendsto i (𝓝 0) (𝓝 0) := by simpa only [map_zero] using hi.tendsto 0
+        simpa only [norm_zero, mul_zero] using hi0.norm.const_mul C
+      · change dist (φ n (i 0)) (φ n (i x)) ≤ C * ‖i x‖
+        rw [map_zero i, map_zero, dist_zero_left]
+        exact ((φ n).le_opNorm (i x)).trans
+          (mul_le_mul_of_nonneg_right (hφC _ (mem_range_self n)) (norm_nonneg _))
+    · intro x
+      have hs := j.hasSum (hT (i x))
+      rw [show j (T (i x)) = A x from hA x] at hs
+      refine hs.congr_fun fun n ↦ ?_
+      change (c n * r * φ n (i x)) • j (r⁻¹ • y n) =
+        j ((c n * φ n (i x)) • y n)
+      rw [map_smul, map_smul, smul_smul, mul_right_comm (c n) r, mul_inv_cancel_right₀ hr]
+  · rintro ⟨r⟩
+    have hseminorm := ((norm_withSeminorms ℂ ℂ).equicontinuous_tfae
+      (fun n ↦ (r.functional n).toLinearMap)).out 1 4
+    obtain ⟨p, hp, hφ⟩ := (hseminorm.mp r.equicontinuous) ()
+    -- Scale the source gauge so the resulting operator has norm strictly less than one.
+    let C := (∑' n, ‖r.coeff n‖) + 1
+    have hC : 0 < C := by dsimp [C]; positivity
+    let q : Seminorm ℂ E := C.toNNReal • p
+    have hq (x : E) : q x = C * p x := by
+      change (C.toNNReal • p) x = _
+      rw [smul_apply, NNReal.smul_def, smul_eq_mul, Real.coe_toNNReal _ hC.le]
+    have hq_cont : Continuous q := by
+      change Continuous (fun x ↦ q x)
+      simp_rw [hq]
+      exact hp.const_mul C
+    let U := q.ball 0 1
+    have hU : U ∈ 𝓝 0 := (Seminorm.continuous_iff one_pos).mp hq_cont
+    let bU := q.balanced_ball_zero 1
+    let cU := q.convex_ball 0 1
+    let pU := gaugeSeminorm bU cU (absorbent_nhds_zero hU)
+    let X := LocalBanach pU
+    let i : E →ₗ[ℂ] X := Completion.toComplL.toLinearMap.comp LinearMap.id
+    have hi : DenseRange i := Completion.denseRange_coe (α := WithLocalSeminorm pU)
+    have hi_norm (x : E) : ‖i x‖ = q x :=
+      (localBanach_norm_coe pU x).trans (congrFun (q.restrictScalars ℝ).gauge_ball x)
+    let G := WithLocalSeminorm
+      (gaugeSeminorm r.isBanachDisc.balanced r.isBanachDisc.convex r.isBanachDisc.absorbent)
+    let : CompleteSpace G := r.isBanachDisc.complete
+    let j : G →L[ℂ] F := ⟨(Submodule.span ℂ r.disc).subtype,
+      continuous_banachDisc_subtype r.isBanachDisc⟩
+    let y (n : ℕ) : G := r.vector n
+    have hy (n : ℕ) : ‖y n‖ ≤ 1 := gauge_le_one_of_mem
+      (show (r.vector n) ∈ ((↑) ⁻¹' r.disc : Set (Submodule.span ℂ r.disc)) from r.vector_mem n)
+    have hbound (n : ℕ) (x : E) : ‖r.functional n x‖ ≤ C⁻¹ * ‖i x‖ := by
+      rw [hi_norm, hq, ← mul_assoc, inv_mul_cancel₀ hC.ne', one_mul]
+      exact hφ n x
+    let ψ (n : ℕ) : X →L[ℂ] ℂ := (r.functional n).toLinearMap.extendOfNorm i
+    have hψ (n : ℕ) : ‖ψ n‖ ≤ C⁻¹ :=
+      LinearMap.opNorm_extendOfNorm_le hi (inv_nonneg.mpr hC.le) (hbound n)
+    have hψi (n : ℕ) (x : E) : ψ n (i x) = r.functional n x :=
+      LinearMap.extendOfNorm_eq hi ⟨C⁻¹, hbound n⟩ x
+    let term (n : ℕ) : X →L[ℂ] G := r.coeff n • (ψ n).smulRight (y n)
+    have hterm (n : ℕ) : ‖term n‖ ≤ ‖r.coeff n‖ * C⁻¹ := by
+      change ‖r.coeff n • (ψ n).smulRight (y n)‖ ≤ _
+      rw [norm_smul, ContinuousLinearMap.norm_smulRight_apply]
+      exact mul_le_mul_of_nonneg_left
+        ((mul_le_of_le_one_right (norm_nonneg _) (hy n)).trans (hψ n)) (norm_nonneg _)
+    have hterm_norm : Summable (fun n ↦ ‖term n‖) :=
+      (r.summable_coeff.mul_right C⁻¹).of_nonneg_of_le (fun n ↦ norm_nonneg _) hterm
+    let T : X →L[ℂ] G := ∑' n, term n
+    have hseries (x : X) : HasSum (fun n ↦ (r.coeff n * ψ n x) • y n) (T x) := by
+      simpa only [term, ContinuousLinearMap.apply_apply, smul_apply,
+        ContinuousLinearMap.smulRight_apply, smul_smul] using
+        (ContinuousLinearMap.apply ℂ G x).hasSum hterm_norm.of_norm.hasSum
+    have hA (x : E) : j (T (i x)) = A x := by
+      have hjy (n : ℕ) : j (y n) = (r.vector n : F) := rfl
+      apply HasSum.unique _ (r.hasSum x)
+      simpa only [map_smul, hψi, hjy] using j.hasSum (hseries (i x))
+    refine ⟨U, hU, bU, cU, r.disc, r.isBanachDisc, ?_, T,
+      isBanachNuclear_of_bounded_series T r.coeff ψ y r.summable_coeff ⟨C⁻¹, hψ⟩ hy hseries, hA⟩
+    intro x hx
+    rw [← hA x]
+    apply setOfPred_gauge_lt_one_subset_self r.isBanachDisc.convex
+      r.isBanachDisc.absorbent.zero_mem r.isBanachDisc.absorbent
+    change ‖T (i x)‖ < 1
+    have hT : ‖T‖ ≤ (∑' n, ‖r.coeff n‖) * C⁻¹ := by
+      refine (norm_tsum_le_tsum_norm hterm_norm).trans ?_
+      rw [← r.summable_coeff.tsum_mul_right]
+      exact hterm_norm.tsum_le_tsum hterm (r.summable_coeff.mul_right C⁻¹)
+    have hT_one : ‖T‖ < 1 := hT.trans_lt (by
+      rw [mul_inv_lt_iff₀ hC, one_mul]
+      exact lt_add_one _)
+    exact ((T.le_opNorm (i x)).trans
+      (mul_le_of_le_one_right (norm_nonneg _) (by simpa only [hi_norm] using
+        (q.mem_ball_zero.mp hx).le))).trans_lt hT_one
 
 /-- Paper: Lemma C.3.1.2, p. 694. A nuclear operator admits a presentation with
 functionals tending to zero uniformly on one zero-neighborhood and vectors

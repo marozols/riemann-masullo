@@ -5,10 +5,13 @@ public import Mathlib.Analysis.Calculus.ContDiff.Basic
 public import Mathlib.Analysis.Calculus.Deriv.Basic
 public import Mathlib.Analysis.InnerProductSpace.PiL2
 public import Mathlib.Topology.Compactness.Paracompact
-public import Mathlib.Topology.ContinuousMap.CompactlySupported
+public import RiemannMasullo.ForMathlib.Topology.ContinuousMap.CompactlySupported
 public import Mathlib.Topology.Sets.Compacts
 public import RiemannMasullo.ForMathlib.Topology.UniformSpace.CompactConvergence
-import Mathlib.Topology.ContinuousMap.LocallyConvex
+import Mathlib.Data.Finsupp.ToDFinsupp
+import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
+import RiemannMasullo.ForMathlib.Topology.Compactness.Paracompact
+import RiemannMasullo.ForMathlib.Topology.ContinuousMap.LocallyConvex
 
 /-!
 # Vector-valued continuous and differentiable functions
@@ -84,29 +87,12 @@ theorem compactSupportStageTopology_univ [CompactSpace X] :
     (restrictUniv ∘ fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) _ = _
   rw [← induced_compose, ← restrictUniv.isInducing.eq_induced]
 
-open scoped ComplexOrder in
-/-- Paper: Definition C.5.1.1, p. 721. For compact X, the inductive limit topology
-agrees with the topology induced by the inclusion into continuous maps. -/
-theorem compactSupportLCTopology_of_compact [CompactSpace X] :
-    compactSupportLCTopology X E =
-      TopologicalSpace.induced (CompactlySupportedContinuousMap.toContinuousMap :
-        C_c(X, E) → C(X, E)) inferInstance := by
-  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
-    { toFun := CompactlySupportedContinuousMap.toContinuousMap
-      map_add' := fun _ _ ↦ rfl
-      map_smul' := fun _ _ ↦ rfl }
-  let : TopologicalSpace C_c(X, E) := induced inclusion inferInstance
-  let : Module ℝ E := Module.restrictScalars ℝ ℂ E
-  let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ E
-  let : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
-  let : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
-  let : LocallyConvexSpace ℂ E := LocallyConvexSpace.ofBasisZero ℂ E id _
-    (LocallyConvexSpace.convex_basis_zero ℝ E)
-    (fun _ h ↦ convex_RCLike_iff_convex_real.mpr h.2)
-  let : PolynormableSpace ℂ C_c(X, E) := PolynormableSpace.induced inclusion
-  let (K : Compacts X) := compactSupportStageTopology (E := E) K
-  have hStage (K : Compacts X) : Continuous (compactSupportStage (E := E) K).subtype := by
-    apply continuous_induced_rng.mpr
+private theorem isEmbedding_compactSupportStage_toContinuousMap (K : Compacts X) :
+    letI := compactSupportStageTopology (E := E) K
+    IsEmbedding (fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) := by
+  let := compactSupportStageTopology (E := E) K
+  let inclusion (f : compactSupportStage (E := E) K) := f.val.toContinuousMap
+  have hCont : Continuous inclusion := by
     apply ContinuousMap.continuous_compactOpen.mpr
     intro L hL U hU
     let val : ↥(K : Set X) → X := Subtype.val
@@ -121,7 +107,7 @@ theorem compactSupportLCTopology_of_compact [CompactSpace X] :
         hx ((mem_compactSupportStage_iff K f.val).mp f.property hs)
     -- Off the supporting set, the compact-open condition only tests the value zero.
     have hMapsTo (f : compactSupportStage (E := E) K) :
-        MapsTo ((inclusion ∘ (compactSupportStage (E := E) K).subtype) f) L U ↔
+        MapsTo (inclusion f) L U ↔
           MapsTo (restrict f) (val ⁻¹' L) U ∧
             ∀ x ∈ L, x ∉ (K : Set X) → (0 : E) ∈ U := by
       constructor
@@ -138,6 +124,27 @@ theorem compactSupportLCTopology_of_compact [CompactSpace X] :
     simp_rw [hMapsTo]
     exact ((ContinuousMap.isOpen_setOfPred_mapsTo hPreimage hU).preimage hRestrict).inter
       isOpen_const
+  let val : C(↥(K : Set X), X) := ⟨Subtype.val, continuous_subtype_val⟩
+  refine ⟨IsInducing.of_comp hCont (ContinuousMap.continuous_precomp val) ⟨rfl⟩, ?_⟩
+  intro f g h
+  exact Subtype.ext (DFunLike.ext _ _ fun x ↦ congrArg (fun u : C(X, E) ↦ u x) h)
+
+/-- Paper: Definition C.5.1.1, p. 721. For compact X, the inductive limit topology
+agrees with the topology induced by the inclusion into continuous maps. -/
+theorem compactSupportLCTopology_of_compact [CompactSpace X] :
+    compactSupportLCTopology X E =
+      TopologicalSpace.induced (CompactlySupportedContinuousMap.toContinuousMap :
+        C_c(X, E) → C(X, E)) inferInstance := by
+  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  let : TopologicalSpace C_c(X, E) := induced inclusion inferInstance
+  let := polynormableSpace_continuousMap ℂ X E
+  let : PolynormableSpace ℂ C_c(X, E) := PolynormableSpace.induced inclusion
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  have hStage (K : Compacts X) : Continuous (compactSupportStage (E := E) K).subtype :=
+    continuous_induced_rng.mpr (isEmbedding_compactSupportStage_toContinuousMap (E := E) K).continuous
   -- Every map belongs to the whole-space stage.
   let K : Compacts X := ⟨univ, isCompact_univ⟩
   let lift : C_c(X, E) → compactSupportStage (E := E) K :=
@@ -215,18 +222,48 @@ theorem compactSupportLCTopology_t2 :
   exact T2Space.of_injective_continuous (f := fun f : C_c(X, E) ↦ (f : X → E))
     DFunLike.coe_injective (continuous_pi fun x ↦ continuous_compactSupport_eval x)
 
+private theorem continuous_compactSupport_toContinuousMap :
+    Continuous[compactSupportLCTopology X E, _]
+      (CompactlySupportedContinuousMap.toContinuousMap : C_c(X, E) → C(X, E)) := by
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  let := polynormableSpace_continuousMap ℂ X E
+  let inclusion : C_c(X, E) →ₗ[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  exact continuous_of_continuous_comp_compactSupportStage inclusion
+    (fun K ↦ (isEmbedding_compactSupportStage_toContinuousMap (E := E) K).continuous)
+
 /-- Paper: Lemma C.5.1.3(1), p. 721. The fixed-support stage embeds with its
 uniform-convergence topology into the inductive limit. -/
 theorem isEmbedding_compactSupportStage (K : Compacts X) :
     letI := compactSupportLCTopology X E
     letI := compactSupportStageTopology (E := E) K
-    IsEmbedding ((compactSupportStage (E := E) K).subtype : _ → C_c(X, E)) := by sorry
+    IsEmbedding ((compactSupportStage (E := E) K).subtype : _ → C_c(X, E)) := by
+  let := compactSupportLCTopology X E
+  let (L : Compacts X) := compactSupportStageTopology (E := E) L
+  let restrict : compactSupportStage (E := E) K →ₗ[ℂ] C(↥(K : Set X), E) :=
+    { toFun := fun f ↦ f.val.toContinuousMap.comp ⟨Subtype.val, continuous_subtype_val⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have := isTopologicalAddGroup_induced restrict
+  let P : SeminormFamily ℂ C_c(X, E)
+      {p : Seminorm ℂ C_c(X, E) // ∀ L : Compacts X,
+        Continuous (p ∘ (compactSupportStage (E := E) L).subtype)} := Subtype.val
+  have hP : WithSeminorms P := ⟨rfl⟩
+  refine IsEmbedding.of_comp (hP.continuous_of_continuous_comp _ fun p ↦ p.property K)
+    (continuous_compactSupport_toContinuousMap (X := X) (E := E)) ?_
+  exact isEmbedding_compactSupportStage_toContinuousMap K
 
 /-- Paper: Lemma C.5.1.3(1), p. 721. The continuous maps supported in a fixed compact
 set form a closed subset in the inductive limit topology. -/
 theorem isClosed_compactSupportStage (K : Compacts X) :
     letI := compactSupportLCTopology X E
-    IsClosed (compactSupportStage (E := E) K : Set C_c(X, E)) := by sorry
+    IsClosed (compactSupportStage (E := E) K : Set C_c(X, E)) := by
+  let := compactSupportLCTopology X E
+  simp only [compactSupportStage, Submodule.coe_iInf]
+  exact isClosed_iInter fun x ↦ isClosed_iInter fun _ ↦
+    isClosed_eq (continuous_compactSupport_eval (E := E) x) continuous_const
 
 /-- Paper: Lemma C.5.1.3(2), p. 721. Restriction to each summand identifies compactly
 supported maps on a topological disjoint union with the locally convex direct sum. -/
@@ -251,33 +288,96 @@ theorem compactSupportLCTopology_polynormable :
         Continuous (p ∘ (compactSupportStage (E := E) K).subtype)} := Subtype.val
   exact (show WithSeminorms P from ⟨rfl⟩).toPolynormableSpace
 
-/-- Paper: Lemma C.5.1.3(3), p. 721. For a paracompact domain and quasi-complete
-target, the inductive limit of compact support stages is quasi-complete. -/
-theorem compactSupport_quasiComplete [ParacompactSpace X] :
-    letI := IsTopologicalAddGroup.rightUniformSpace E
-    letI := compactSupportLCTopology X E
-    letI := compactSupportLCTopology_polynormable (X := X) (E := E)
-    letI := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
-    letI := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
-    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C_c(X, E) := by sorry
+omit [T2Space X] [LocallyCompactSpace X] [T2Space E] [PolynormableSpace ℂ E] in
+/-- Along a sequence visiting each compact set finitely often, a single continuous seminorm
+dominates any prescribed sequence of continuous evaluation seminorms. -/
+private theorem exists_compactSupport_seminorm_dominating_evals (x : ℕ → X)
+    (hx : ∀ K : Set X, IsCompact K → (x ⁻¹' K).Finite)
+    (q : ℕ → Seminorm ℂ E) (hq : ∀ n, Continuous (q n)) :
+    ∃ Q : Seminorm ℂ C_c(X, E), Continuous[compactSupportLCTopology X E, _] Q ∧
+      ∀ (f : C_c(X, E)) n, q n (f (x n)) ≤ Q f := by
+  classical
+  let := compactSupportLCTopology X E
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  have hfin (f : C_c(X, E)) : (support fun n ↦ f (x n)).Finite :=
+    (hx _ f.hasCompactSupport).subset fun _ hn ↦ subset_tsupport f hn
+  -- Compact support makes the evaluation sequence a vector in the algebraic direct sum.
+  let v : C_c(X, E) →ₗ[ℂ] (⨁ _ : ℕ, E) :=
+    { toFun := fun f ↦ (Finsupp.ofSupportFinite _ (hfin f)).toDFinsupp
+      map_add' := fun f g ↦ DFinsupp.ext fun n ↦ CompactlySupportedContinuousMap.add_apply _ f g
+      map_smul' := fun c f ↦ DFinsupp.ext fun n ↦ CompactlySupportedContinuousMap.smul_apply c f _ }
+  let Q := (directSumSeminorm q).comp v
+  let P : SeminormFamily ℂ C_c(X, E)
+      {p : Seminorm ℂ C_c(X, E) // ∀ K : Compacts X,
+        Continuous (p ∘ (compactSupportStage (E := E) K).subtype)} := Subtype.val
+  have hP : WithSeminorms P := ⟨rfl⟩
+  refine ⟨Q, hP.continuous_seminorm ⟨Q, fun K ↦ ?_⟩, fun f n ↦ ?_⟩
+  · let s := (hx K K.isCompact).toFinset
+    have hs (f : compactSupportStage (E := E) K) : (v f.val).support ⊆ s := by
+      intro n hn
+      apply (hx K K.isCompact).mem_toFinset.mpr
+      by_contra hout
+      have hf := f.property
+      simp only [compactSupportStage, Submodule.mem_iInf, LinearMap.mem_ker] at hf
+      exact (DFinsupp.mem_support_iff.mp hn) (hf (x n) hout)
+    apply (continuous_finsetSum s fun n _ ↦
+      (hq n).comp (continuous_compactSupportStage_eval K (x n))).congr
+    exact fun f ↦ (directSumSeminorm_apply q (v f.val) s (hs f)).symm
+  · change q n ((v f) n) ≤ directSumSeminorm q (v f)
+    simpa only [Finset.sum_singleton] using sum_le_directSumSeminorm q (v f) {n}
 
 /-- Paper: Lemma C.5.1.3(4), p. 721. For a paracompact domain, the supports of all maps
 in a bounded family in the inductive limit lie in a single compact set. -/
 theorem compactSupport_bounded_subset_stage [ParacompactSpace X] :
     letI := compactSupportLCTopology X E
     ∀ B : Set C_c(X, E), IsVonNBounded ℂ B →
-      ∃ K : Compacts X, B ⊆ (compactSupportStage (E := E) K : Set C_c(X, E)) := by sorry
+      ∃ K : Compacts X, B ⊆ (compactSupportStage (E := E) K : Set C_c(X, E)) := by
+  classical
+  let := compactSupportLCTopology X E
+  let := compactSupportLCTopology_polynormable (X := X) (E := E)
+  intro B hB
+  by_contra hstage
+  let S := {x : X | ∃ f ∈ B, f x ≠ 0}
+  have hS (K : Set X) (hK : IsCompact K) : ¬ S ⊆ K := by
+    intro hSK
+    apply hstage
+    refine ⟨⟨K, hK⟩, fun f hf ↦ ?_⟩
+    apply (mem_compactSupportStage_iff _ f).mpr
+    exact hK.isClosed.closure_subset_iff.mpr fun y hy ↦ hSK ⟨f, hf, hy⟩
+  obtain ⟨x, hxS, hx⟩ := exists_seq_finite_preimage_of_not_subset_compact hS
+  choose f hf hfx using hxS
+  -- Normalize a separating seminorm to reach n on the nth selected function.
+  have hsep (n : ℕ) : ∃ q : Seminorm ℂ E, Continuous q ∧ (n : ℝ) ≤ q (f n (x n)) := by
+    obtain ⟨p, hp⟩ := (PolynormableSpace.withSeminorms ℂ E).separating_of_T1 _ (hfx n)
+    have hpos : 0 < p.val (f n (x n)) := lt_of_le_of_ne (apply_nonneg _ _) hp.symm
+    let w : NNReal := ⟨(n : ℝ) / p.val (f n (x n)), div_nonneg (Nat.cast_nonneg n) hpos.le⟩
+    refine ⟨w • p.val, ?_, ?_⟩
+    · exact (continuous_const.mul p.property : Continuous (fun z ↦ (w : ℝ) * p.val z))
+    · change (n : ℝ) ≤ ((n : ℝ) / p.val (f n (x n))) * p.val (f n (x n))
+      rw [div_mul_cancel₀ _ hpos.ne']
+  choose q hq hlarge using hsep
+  obtain ⟨Q, hQ, hdom⟩ := exists_compactSupport_seminorm_dominating_evals x hx q hq
+  have hbounded := (PolynormableSpace.withSeminorms ℂ C_c(X, E)).isVonNBounded_iff_seminorm_bounded.mp hB
+  obtain ⟨R, _, hR⟩ := hbounded ⟨Q, hQ⟩
+  obtain ⟨n, hn⟩ := exists_nat_gt R
+  exact (not_lt_of_ge hn.le) (((hlarge n).trans (hdom (f n) n)).trans_lt (hR (f n) (hf n)))
 
 /-- Paper: Lemma C.5.1.3(5), p. 721. Compactly supported continuous maps are dense
 among continuous maps for the compact-open topology. -/
 theorem denseRange_compactSupport_toContinuousMap :
-    DenseRange (CompactlySupportedContinuousMap.toContinuousMap : C_c(X, E) → C(X, E)) := by sorry
+    DenseRange (CompactlySupportedContinuousMap.toContinuousMap : C_c(X, E) → C(X, E)) := by
+  let : Module ℝ E := Module.restrictScalars ℝ ℂ E
+  let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ E
+  let : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
+  exact denseRange_toContinuousMap_of_real_smul
 
 /-- Paper: Lemma C.5.1.3(6), p. 721. The compact-open continuous-map space of a
 quasi-complete locally convex target has its topology generated by continuous seminorms. -/
 theorem continuousMap_polynormable :
     letI := IsTopologicalAddGroup.rightUniformSpace E
-    QuasiCompleteSpace ℂ E → PolynormableSpace ℂ C(X, E) := by sorry
+    QuasiCompleteSpace ℂ E → PolynormableSpace ℂ C(X, E) := by
+  intro _
+  exact polynormableSpace_continuousMap ℂ X E
 
 /-- Paper: Lemma C.5.1.3(6), p. 721. The compact-open continuous-map space of a
 quasi-complete locally convex target is quasi-complete. Mathlib supplies Hausdorffness. -/
@@ -289,13 +389,89 @@ theorem continuousMap_quasiComplete :
   refine ⟨fun {s} hb hs ↦ isComplete_continuousMap_of_isComplete_eval hs fun x ↦ ?_⟩
   exact hE.quasiComplete (hb.image (ContinuousMap.evalCLM ℂ x)).closure isClosed_closure
 
+private theorem isClosed_range_compactSupportStage_toContinuousMap (K : Compacts X) :
+    IsClosed (range fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) := by
+  have hrange : (range fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) =
+      {f : C(X, E) | MapsTo f (K : Set X)ᶜ {0}} := by
+    ext f
+    constructor
+    · rintro ⟨g, rfl⟩ x hx
+      have hs := (mem_compactSupportStage_iff K g.val).mp g.property
+      exact image_eq_zero_of_notMem_tsupport fun h ↦ hx (hs h)
+    · intro hf
+      have hs : tsupport f ⊆ (K : Set X) := by
+        rw [tsupport, K.isCompact.isClosed.closure_subset_iff, Function.support_subset_iff']
+        exact fun x hx ↦ hf hx
+      let g : C_c(X, E) := ⟨f, K.isCompact.of_isClosed_subset (isClosed_tsupport f) hs⟩
+      exact ⟨⟨g, (mem_compactSupportStage_iff K g).mpr hs⟩, rfl⟩
+  rw [hrange]
+  exact ContinuousMap.isClosed_setOfPred_mapsTo isClosed_singleton _
+
+/-- Paper: Lemma C.5.1.3(3), p. 721. For a paracompact domain and quasi-complete
+target, the inductive limit of compact support stages is quasi-complete. -/
+theorem compactSupport_quasiComplete [ParacompactSpace X] :
+    letI := IsTopologicalAddGroup.rightUniformSpace E
+    letI := compactSupportLCTopology X E
+    letI := compactSupportLCTopology_polynormable (X := X) (E := E)
+    letI := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
+    letI := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
+    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C_c(X, E) := by
+  let := IsTopologicalAddGroup.rightUniformSpace E
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have := isUniformAddGroup_continuousMap X E
+  let := compactSupportLCTopology X E
+  let := compactSupportLCTopology_polynormable (X := X) (E := E)
+  let := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
+  let := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
+  have : IsUniformAddGroup C_c(X, E) := isUniformAddGroup_of_addCommGroup
+  intro hE
+  refine ⟨fun {B} hb hclosed ↦ ?_⟩
+  obtain ⟨K, hK⟩ := compactSupport_bounded_subset_stage B hb
+  let inclusion : C_c(X, E) →L[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl
+      cont := continuous_compactSupport_toContinuousMap }
+  let stage := compactSupportStage (E := E) K
+  have : IsUniformAddGroup stage := .comap stage.subtype
+  let j := inclusion.toLinearMap.comp stage.subtype
+  have hj : IsClosedEmbedding j := by
+    refine ⟨?_, isClosed_range_compactSupportStage_toContinuousMap K⟩
+    change @IsEmbedding _ _ (induced stage.subtype (compactSupportLCTopology X E)) _ j
+    have ht : compactSupportStageTopology (E := E) K =
+        induced stage.subtype (compactSupportLCTopology X E) := by
+      let := compactSupportStageTopology (E := E) K
+      exact (isEmbedding_compactSupportStage (E := E) K).isInducing.eq_induced
+    rw [← ht]
+    exact isEmbedding_compactSupportStage_toContinuousMap K
+  let S : Set stage := Subtype.val ⁻¹' B
+  have hS : Subtype.val '' S = B := Subtype.coe_image_of_subset hK
+  have hjS : j '' S = inclusion '' B := by
+    rw [← hS, image_image]
+    rfl
+  have complete : IsComplete (j '' S) := (continuousMap_quasiComplete hE).quasiComplete
+    (hjS ▸ hb.image inclusion) (hj.isClosedMap _ (hclosed.preimage continuous_subtype_val))
+  rw [← hS]
+  exact Subtype.isComplete_iff.mp ((AddMonoidHom.isUniformInducing_of_isInducing
+    (f := j) hj.isInducing).isComplete_iff.mp complete)
+
 /-- Paper: Example C.5.1.5, p. 722. Positive integer translates of a nonzero continuous
 map supported in the unit interval converge to zero in the compact-open topology.
 Deviation: The same formulation covers the scalar example and its Fréchet-valued version. -/
 theorem compactSupport_translate_tendsto_compactOpen (f : C_c(ℝ, E)) (hf : f ≠ 0)
     (hK : tsupport (f : ℝ → E) ⊆ Icc 0 1)
     (g : ℕ → C_c(ℝ, E)) (hg : ∀ n x, g n x = f (x - n)) :
-    Tendsto (fun n ↦ (g n).toContinuousMap) atTop (𝓝 0) := by sorry
+    Tendsto (fun n ↦ (g n).toContinuousMap) atTop (𝓝 0) := by
+  apply ContinuousMap.tendsto_nhds_compactOpen.mpr
+  intro K hcompact U _ hU
+  obtain ⟨R, hR⟩ := hcompact.bddAbove
+  obtain ⟨N, hN⟩ := exists_nat_gt R
+  filter_upwards [eventually_ge_atTop N] with n hn x hx
+  have hneg : x - n < 0 := sub_neg.mpr ((hR hx).trans_lt (hN.trans_le (Nat.cast_le.mpr hn)))
+  have hout : x - n ∉ tsupport (f : ℝ → E) := fun hs ↦ hneg.not_ge (hK hs).1
+  change g n x ∈ U
+  rw [hg, image_eq_zero_of_notMem_tsupport hout]
+  exact hU hx
 
 /-- Paper: Example C.5.1.5, p. 722. Positive integer translates of a nonzero continuous
 map supported in the unit interval have no limit in the inductive limit topology.
@@ -304,7 +480,22 @@ theorem compactSupport_translate_no_inductiveLimit (hE : IsFrechetTVS E)
     (f : C_c(ℝ, E)) (hf : f ≠ 0) (hK : tsupport (f : ℝ → E) ⊆ Icc 0 1)
     (g : ℕ → C_c(ℝ, E)) (hg : ∀ n x, g n x = f (x - n)) :
     letI := compactSupportLCTopology ℝ E
-    ¬ ∃ a : C_c(ℝ, E), Tendsto g atTop (𝓝 a) := by sorry
+    ¬ ∃ a : C_c(ℝ, E), Tendsto g atTop (𝓝 a) := by
+  let := compactSupportLCTopology ℝ E
+  let := compactSupportLCTopology_polynormable (X := ℝ) (E := E)
+  let := PolynormableSpace.isTopologicalAddGroup ℂ C_c(ℝ, E)
+  rintro ⟨a, ha⟩
+  obtain ⟨K, hKr⟩ := compactSupport_bounded_subset_stage (range g) (ha.isVonNBounded_range ℂ)
+  obtain ⟨R, hR⟩ := K.isCompact.bddAbove
+  obtain ⟨y, hy⟩ : ∃ y : ℝ, f y ≠ 0 := by
+    by_contra! h
+    exact hf (CompactlySupportedContinuousMap.ext h)
+  have hy0 : 0 ≤ y := (hK (subset_tsupport f hy)).1
+  obtain ⟨n, hn⟩ := exists_nat_gt R
+  have hnz : g n (y + n) ≠ 0 := by simpa only [hg, add_sub_cancel_right] using hy
+  have hmem := (mem_compactSupportStage_iff K (g n)).mp (hKr (mem_range_self n))
+    (subset_tsupport (g n) hnz)
+  exact (hn.trans_le (le_add_of_nonneg_left hy0)).not_ge (hR hmem)
 
 -- TODO(paper-gap): The last sentence of Example C.5.1.5 extends the distinction to
 -- compact manifolds, where the two topologies agree.
@@ -346,7 +537,32 @@ def WeaklyContDiffOn (k : Type*) [RCLike k] [NormedAlgebra k ℂ]
 equivalent to existence of a unique weak differential. -/
 theorem weaklyDifferentiableOn_iff_existsUnique {Ω : Set V} (hΩ : IsOpen Ω) (f : V → E) :
     WeaklyDifferentiableOn k f Ω ↔
-      ∃! D : Ω × V → PettisWeakCompletion E, HasWeakDifferentialOn k f D := by sorry
+      ∃! D : Ω × V → PettisWeakCompletion E, HasWeakDifferentialOn k f D := by
+  constructor
+  · intro hf
+    let D (p : Ω × V) : Module.Dual ℂ (StrongDual ℂ E) :=
+      { toFun := fun φ ↦ fderivWithin k (φ ∘ f) Ω p.1 p.2
+        map_add' := fun φ ψ ↦ by
+          change fderivWithin k ((φ ∘ f) + (ψ ∘ f)) Ω p.1 p.2 = _
+          rw [fderivWithin_add (hΩ.uniqueDiffOn p.1 p.1.property)
+            (hf φ p.1 p.1.property) (hf ψ p.1 p.1.property)]
+          rfl
+        map_smul' := fun c φ ↦ by
+          change fderivWithin k (c • (φ ∘ f)) Ω p.1 p.2 = _
+          rw [fderivWithin_const_smul (hΩ.uniqueDiffOn p.1 p.1.property)
+            (hf φ p.1 p.1.property)]
+          rfl }
+    refine ⟨D, fun φ x ↦ ⟨_, (hf φ x x.property).hasFDerivWithinAt, fun _ ↦ rfl⟩, ?_⟩
+    intro D' hD'
+    funext ⟨x, v⟩
+    apply LinearMap.ext
+    intro φ
+    obtain ⟨L, hL, heval⟩ := hD' φ x
+    rw [heval, ← hL.fderivWithin (hΩ.uniqueDiffOn x x.property)]
+    rfl
+  · rintro ⟨D, hD, _⟩ φ x hx
+    obtain ⟨L, hL, _⟩ := hD φ ⟨x, hx⟩
+    exact hL.differentiableWithinAt
 
 /-- Paper: Definition C.5.1.6, p. 723. Weak continuous differentiability on an open
 set means continuous differentiability of each scalar evaluation. -/
@@ -408,7 +624,59 @@ Deviation: In (C.5.1.14) the base point is the first argument and the direction 
 theorem hasWeakCompletionDifferentialOn_iff {Ω : Set W} (hΩ : IsOpen Ω) (f : W → E)
     (D : Ω × W → PettisWeakCompletion E) :
     HasWeakCompletionDifferentialOn (k := k) f D ↔
-      HasWeakDifferentialOn k f D ∧ Continuous D := by sorry
+      HasWeakDifferentialOn k f D ∧ Continuous D := by
+  let ev (φ : StrongDual ℂ E) : PettisWeakCompletion E →ₗ[k] ℂ :=
+    { toFun := fun z ↦ (show Module.Dual ℂ (StrongDual ℂ E) from z) φ
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun c z ↦ by
+        change algebraMap k ℂ c * _ = c • _
+        rw [Algebra.smul_def] }
+  let rem (x : Ω) (y : W) : PettisWeakCompletion E :=
+    ((‖y - (x : W)‖⁻¹ : ℝ) : ℂ) •
+      (toPettisWeakCompletion E (f y) - toPettisWeakCompletion E (f x) - D (x, y - (x : W)))
+  have scalar (x : Ω) (φ : StrongDual ℂ E) (L : W →L[k] ℂ)
+      (heval : ∀ v, ev φ (D (x, v)) = L v) :
+      HasFDerivWithinAt (φ ∘ f) L Ω x ↔
+        Tendsto (fun y ↦ ev φ (rem x y)) (𝓝[Ω \ {(x : W)}] (x : W)) (𝓝 0) := by
+    rw [← hasFDerivWithinAt_sdiff_singleton_self, hasFDerivWithinAt_iff_tendsto]
+    conv_rhs => rw [tendsto_zero_iff_norm_tendsto_zero]
+    change _ ↔ Tendsto (fun y ↦ ‖((‖y - (x : W)‖⁻¹ : ℝ) : ℂ) *
+      (φ (f y) - φ (f x) - ev φ (D (x, y - (x : W))))‖) _ _
+    simp only [heval, norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_inv,
+      abs_of_nonneg (norm_nonneg _), Function.comp_apply]
+  constructor
+  · rintro ⟨hc, h⟩
+    refine ⟨fun φ x ↦ ?_, hc⟩
+    obtain ⟨⟨A, hA⟩, hrem⟩ := h x
+    let L : W →L[k] ℂ := ((ev φ).comp A).toContinuousLinearMap
+    have heval (v : W) : ev φ (D (x, v)) = L v := by
+      rw [hA]
+      rfl
+    refine ⟨L, (scalar x φ L heval).2 ?_, heval⟩
+    exact ((WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).1 hrem) φ
+  · rintro ⟨h, hc⟩
+    refine ⟨hc, fun x ↦ ?_⟩
+    have eval_eq (φ : StrongDual ℂ E) (v : W) :
+        ev φ (D (x, v)) = fderivWithin k (φ ∘ f) Ω x v := by
+      obtain ⟨L, hL, heval⟩ := h φ x
+      rw [hL.fderivWithin (hΩ.uniqueDiffOn x x.property)]
+      exact heval v
+    constructor
+    · refine ⟨{ toFun := fun v ↦ D (x, v)
+                map_add' := fun v w ↦ ?_
+                map_smul' := fun c v ↦ ?_ }, fun _ ↦ rfl⟩
+      · apply LinearMap.ext
+        intro φ
+        change ev φ (D (x, v + w)) = ev φ (D (x, v) + D (x, w))
+        rw [map_add, eval_eq, eval_eq, eval_eq, map_add]
+      · apply LinearMap.ext
+        intro φ
+        change ev φ (D (x, c • v)) = algebraMap k ℂ c * ev φ (D (x, v))
+        rw [eval_eq, eval_eq, map_smul, Algebra.smul_def]
+    · apply (WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).2
+      intro φ
+      obtain ⟨L, hL, heval⟩ := h φ x
+      exact (scalar x φ L heval).1 hL
 
 /-- Paper: Lemma C.5.1.12, p. 725. A continuous differential in the weak completion
 gives the weak Gâteaux derivatives, with derivative zero in the zero direction. -/
