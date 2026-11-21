@@ -138,7 +138,16 @@ theorem complexHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F)
     ∃! a : ℂ × ℤ, a.1.re = 0 ∧ ∀ x : ℂˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm.toMonoidHom x) =
-        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by sorry
+        ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by
+  let e := (InfinitePlace.Completion.ringEquivComplexOfIsComplex hv).symm
+  let i : ℂˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_complexUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equations (3.2.1.3)–(3.2.1.5), p. 123. The global gamma factor
 multiplies the real and complex local gamma factors, using the local radial
