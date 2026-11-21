@@ -5,6 +5,7 @@ import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
 import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.MeasureTheory.Measure.SeparableMeasure
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Montel
 import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
 import Mathlib.Analysis.SpecialFunctions.ExpDeriv
@@ -292,7 +293,34 @@ theorem schwartzBergman_frechet (I : Set ℝ) (hI : IsOpen I) (hInt : OrdConnect
 
 /-- Paper: Lemma D.3.1.2, p. 799. The Schwartz–Bergman space is separable. -/
 theorem schwartzBergman_separable (I : Set ℝ) (hI : IsOpen I) (hInt : OrdConnected I)
-    (hne : I.Nonempty) : SeparableSpace (SchwartzBergman I) := by sorry
+    (hne : I.Nonempty) : SeparableSpace (SchwartzBergman I) := by
+  let : Nonempty I := hne.to_subtype
+  obtain ⟨a,ha⟩ := TopologicalSpace.exists_dense_seq I
+  have hbr (x : I) : (∃ n, (a n : ℝ) < x) ∧ ∃ n, (x : ℝ) < a n := by
+    obtain ⟨l,r,hl,hr⟩ := exists_bracketing_lines hI x
+    exact ⟨ha.exists_mem_open isOpen_Iio ⟨l,hl⟩, ha.exists_mem_open isOpen_Ioi ⟨r,hr⟩⟩
+  obtain ⟨_, P, hP, hval⟩ := schwartzBergman_lp_generates I hI hInt hne a hbr 2 (by norm_num) (by norm_num)
+  let L (i : ℕ × ℕ) := (weightedSchwartzLp (a i.1) i.2 2).toLinearMap.comp (bergmanLine hI hInt (a i.1))
+  let T := LinearMap.pi L
+  have heq (i : ℕ × ℕ) : P i = (normSeminorm ℂ _).comp (L i) := by
+    ext f
+    change P i f = bergmanLpSeminorm hI hInt 2 (a i.1) i.2 f
+    rw [bergmanLpSeminorm_apply, ← toReal_eLpNorm]
+    exact (ENNReal.toReal_ofReal (apply_nonneg (P i) f)).symm.trans (congrArg ENNReal.toReal (hval i f))
+  have hprod := withSeminorms_pi fun _ : ℕ × ℕ ↦ norm_withSeminorms ℂ (Lp ℂ 2 (volume : Measure ℝ))
+  have hi : IsInducing T := by
+    constructor
+    refine hP.topologicalSpace_eq_iInf.trans ?_
+    refine Eq.trans ?_ (WithSeminorms.topologicalSpace_eq_iInf (t := TopologicalSpace.induced T inferInstance)
+      (T.withSeminorms_induced hprod)).symm
+    rw [iInf_sigma]
+    congr 1
+    funext i
+    rw [heq, iInf_unique]
+    rfl
+  have : Fact ((2 : ℝ≥0∞) ≠ ⊤) := ⟨by norm_num⟩
+  have := hi.secondCountableTopology
+  infer_instance
 
 end Bergman
 
