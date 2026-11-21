@@ -262,13 +262,6 @@ is the archimedean gamma factor times Mathlib's finite Hecke L-series. -/
 def completedHeckeL (χ : U[F]) (s : halfPlane) : ℂ :=
   heckeGammaFactor χ s * χ₀(χ).LSeries s
 
-/-- Paper: Definition 3.2.1.2, p. 123. For the trivial character the completed
-L-function on the half-plane is the corresponding gamma product times Dedekind zeta. -/
-theorem completedHeckeL_one_eq_dedekindZeta (s : halfPlane) :
-    completedHeckeL (1 : U[F]) s =
-      Complex.Gammaℝ s ^ InfinitePlace.nrRealPlaces F *
-        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F * dedekindZeta F s := by sorry
-
 /-- Paper: Proposition 3.2.1.3, p. 123. The completed Hecke L-function extends
 meromorphically to the complex plane. We use Mathlib's normal form at poles. -/
 theorem completedHeckeL_exists_continuation (χ : U[F]) :
@@ -471,6 +464,34 @@ theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
     HasProd (fun v ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ s) := by
   have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s.val.re) s.property
   exact h.tendsto_at (x := s.val) (Set.mem_ofPred.mpr (le_refl s.val.re))
+
+/-- Paper: Definition 3.2.1.2, p. 123. For the trivial character the completed
+L-function on the half-plane is the corresponding gamma product times Dedekind zeta. -/
+theorem completedHeckeL_one_eq_dedekindZeta (s : halfPlane) :
+    completedHeckeL (1 : U[F]) s =
+      Complex.Gammaℝ s ^ InfinitePlace.nrRealPlaces F *
+        (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F * dedekindZeta F s := by
+  classical
+  have hχ : χ₀((1 : U[F])) = 1 := by
+    ext1 g
+    change (1 : ℂ) * _ ^ (0 : ℂ) = 1
+    simp
+  have hlocal (v : HeightOneSpectrum (𝓞 F)) :
+      finiteHeckeEulerFactor (1 : U[F]) v s =
+        (1 - (v.asIdeal.absNorm : ℂ) ^ (-(s : ℂ)))⁻¹ := by
+    have hunit (u : (v.adicCompletion F)ˣ) : (1 : 𝒳[F]).restrict v u = 1 := by
+      rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+      rfl
+    have hu : (1 : 𝒳[F]).IsUnramifiedAt v := HeckeCharacter.isUnramifiedAt_iff.mpr fun x ↦
+      hunit (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom x)
+    let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+    let u := Units.mk0 (val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose : v.adicCompletion F)
+      val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose_spec.ne_zero
+    have hval : (1 : 𝒳[F]).localValue v = 1 := hunit u
+    rw [finiteHeckeEulerFactor, hχ, ite_eq_left hu, hval, one_mul]
+  have h := (finiteHeckeL_hasProd (1 : U[F]) s).unique
+    ((dedekindZeta_hasProd F s.property).congr_fun hlocal)
+  exact congrArg₂ (· * ·) (heckeGammaFactor_one s) h
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
