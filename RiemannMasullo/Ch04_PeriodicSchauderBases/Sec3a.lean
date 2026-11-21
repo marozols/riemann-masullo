@@ -8,6 +8,7 @@ public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
 import Mathlib.MeasureTheory.Function.AEEqOfIntegral
 import Mathlib.MeasureTheory.Measure.SeparableMeasure
+import RiemannMasullo.ForMathlib.Analysis.Fourier.CompactGroup
 import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
 import RiemannMasullo.ForMathlib.MeasureTheory.Integral.Prod
 
@@ -354,10 +355,47 @@ theorem regularIsotypicComponent_equivariant (ω : PontryaginDual K) (k : K) (f 
 -- TODO(paper-gap): (4.3.2.5) needs measure normalization. For G = ℝ>0,
 -- ν = dt/t and ν₁ = 2 δ₁, the only component is multiplication by 2.
 
+/-- One constant bounds all the finite sums of squared coordinate norms.
+It records the total mass of the kernel and the change of Haar normalization. -/
+private theorem exists_regularIsotypicComponent_bound :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ (f : RegularL2 ν) (s : Finset (PontryaginDual K)),
+      ∑ ω ∈ s, ‖regularIsotypicComponent m hm ν ν₁ τ hτ ω f‖ ^ 2 ≤ C * ‖f‖ ^ 2 := by
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have : positiveRealHaar.IsHaarMeasure := positiveRealHaar_isHaarMeasure
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let logHomeo := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.toHomeomorph.symm
+  have : LocallyCompactSpace ℝ≥0ˣ := logHomeo.isOpenEmbedding.locallyCompactSpace
+  obtain ⟨j, hj⟩ := exists_regularIsotypic_sectionEquiv m hm τ hτ
+  let η := ν₁.prod positiveRealHaar
+  have : (η.map j).IsHaarMeasure := j.isHaarMeasure_map η
+  let c := Measure.haarScalarFactor (η.map j) ν
+  have hμ : η.map j = c • ν := Measure.isMulLeftInvariant_eq_smul _ _
+  refine ⟨ν₁.real univ * (c : ℝ), mul_nonneg measureReal_nonneg c.coe_nonneg, fun f s ↦ ?_⟩
+  have hmem : MemLp (f : G → ℂ) 2 (η.map j) := hμ ▸ (Lp.memLp f).smul_measure_nnreal
+  have hcomp := hmem.comp_of_map j.continuous.measurable.aemeasurable
+  have hb := sum_sq_character_integral_prod_le ν₁ hcomp
+    (fun ω ↦ regularIsotypicComponent m hm ν ν₁ τ hτ ω f) (fun ω ↦ by
+      simpa only [regularIsotypicComponent, Function.comp_apply, hj] using (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω f).2.coeFn_toLp) s
+  have hn : ‖f‖ ^ 2 = ∫ x, ‖f x‖ ^ 2 ∂ν := by
+    simpa only [Lp.toLp_coeFn] using norm_sq_toLp_two (Lp.memLp f)
+  have heq : ∫ x, ‖f x‖ ^ 2 ∂η.map j = ∫ p, ‖f (j p)‖ ^ 2 ∂η :=
+    integral_map j.continuous.measurable.aemeasurable (hmem.aestronglyMeasurable.norm.pow 2)
+  calc
+    _ ≤ ν₁.real univ * ∫ p, ‖f (j p)‖ ^ 2 ∂η := hb
+    _ = _ := by
+      rw [← heq, hμ, integral_smul_nnreal_measure, hn, mul_assoc]
+      rfl
+
 /-- Paper: (4.3.2.7), p. 178. The family of all coordinates belongs to the
 Hilbert direct sum. -/
 theorem regularIsotypicTransform_memℓp (f : RegularL2 ν) :
-    Memℓp (fun ω : PontryaginDual K ↦ regularIsotypicComponent m hm ν ν₁ τ hτ ω f) 2 := by sorry
+    Memℓp (fun ω : PontryaginDual K ↦ regularIsotypicComponent m hm ν ν₁ τ hτ ω f) 2 := by
+  obtain ⟨C, _, hC⟩ := exists_regularIsotypicComponent_bound m hm ν ν₁ τ hτ
+  apply memℓp_gen' (C := C * ‖f‖ ^ 2)
+  intro s
+  simpa using hC f s
 
 /-- Paper: (4.3.2.7), p. 178. The transform takes all the character
 coordinates together in the Hilbert direct sum. -/
