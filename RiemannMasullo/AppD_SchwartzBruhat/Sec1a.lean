@@ -15,6 +15,8 @@ import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
 import Mathlib.Analysis.Calculus.ContDiff.Comp
 import Mathlib.Analysis.Calculus.ContDiff.Operations
+import Mathlib.MeasureTheory.Measure.Haar.Unique
+import RiemannMasullo.ForMathlib.MeasureTheory.Measure.Haar.Extension
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
@@ -480,7 +482,51 @@ include hH in
 /-- Paper: Theorem D.1.2.1, p. 747. There is a unique quotient Haar measure
 satisfying Weil's formula for compactly supported continuous functions. -/
 theorem weilQuotientMeasure_existsUnique :
-    ∃! ν : Measure (G ⧸ H), IsWeilQuotientMeasure H μ μH ν := by sorry
+    ∃! ν : Measure (G ⧸ H), IsWeilQuotientMeasure H μ μH ν := by
+  let : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  let : IsClosed (H : Set G) := hH
+  let h := TopologicalGroup.IsSES.ofClosedSubgroup H hH
+  let ν₀ : Measure (G ⧸ H) := MeasureTheory.Measure.haar
+  let μ₀ := h.inducedMeasure μH ν₀
+  let c := Measure.haarScalarFactor μ μ₀
+  have hc : c ≠ 0 := (Measure.haarScalarFactor_pos_of_isHaarMeasure μ μ₀).ne'
+  have hμ : μ = c • μ₀ := Measure.isMulLeftInvariant_eq_smul_of_regular μ μ₀
+  let ν := c • ν₀
+  let hνH : ν.IsHaarMeasure := Measure.IsHaarMeasure.nnreal_smul ν₀ hc
+  have hν : IsWeilQuotientMeasure H μ μH ν := by
+    refine ⟨hνH, inferInstance, ?_⟩
+    intro f hf
+    let f' : CompactlySupportedContinuousMap G ℂ := ⟨f, hf⟩
+    have hfib (q : G ⧸ H) : h.pushforward μH f' q = lcaCosetIntegral H μH f q := by
+      obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective q
+      change h.pushforward μH f' ((QuotientGroup.mk' H) x) = _
+      rw [h.pushforward_apply_apply]
+      exact (lcaCosetIntegral_mk H μH f x (h.pullback f' x).integrable).symm
+    change (∫ x, f' x ∂μ) = ∫ q, lcaCosetIntegral H μH f q ∂(c • ν₀)
+    rw [hμ, integral_smul_nnreal_measure, integral_smul_nnreal_measure,
+      integral_inducedMeasure_complex h μH ν₀ f', h.integrate_apply]
+    simp_rw [hfib]
+  refine ⟨ν, hν, ?_⟩
+  intro ν' hν'
+  let : ν'.IsHaarMeasure := hν'.1
+  let : ν'.Regular := hν'.2.1
+  let d := Measure.haarScalarFactor ν' ν
+  have hνeq : ν' = d • ν := Measure.isMulLeftInvariant_eq_smul_of_regular ν' ν
+  obtain ⟨g, hg, hnonneg, hpos⟩ := exists_continuous_nonneg_pos (1 : G)
+  let f : C(G, ℂ) := ⟨fun x ↦ (g x : ℂ), Complex.continuous_ofReal.comp g.continuous⟩
+  have hf : HasCompactSupport (f : G → ℂ) := hg.comp_left Complex.ofReal_zero
+  have hI : (∫ x, f x ∂μ) ≠ 0 := by
+    change (∫ x, (g x : ℂ) ∂μ) ≠ 0
+    rw [integral_complex_ofReal]
+    exact Complex.ofReal_ne_zero.mpr (g.continuous.integral_pos_of_hasCompactSupport_nonneg_ne_zero
+      hg hnonneg hpos).ne'
+  have hscalar := hν'.2.2 f hf
+  rw [hνeq, integral_smul_nnreal_measure, ← hν.2.2 f hf] at hscalar
+  have hunit : d = 1 := by
+    have he : (1 : ℂ) * (∫ x, f x ∂μ) = ((d : ℝ) : ℂ) * (∫ x, f x ∂μ) := by
+      simpa only [one_mul, NNReal.smul_def, Complex.real_smul] using hscalar
+    exact_mod_cast (mul_right_cancel₀ hI he).symm
+  simpa [hunit] using hνeq
 
 -- TODO(paper-gap): Theorem D.1.2.1 also asserts a.e. existence of the fibre integral
 -- for every measurable function. For H = G = ℝ and f = 1, the sole fibre has infinite integral.
