@@ -776,6 +776,38 @@ theorem cyclicQuotient_surjOn_interval (a b : ℝ) (ha : 1 < a) (hb : 0 < b)
     SurjOn (fun x : ℝ ↦ ((x / Real.log γ : ℝ) : T))
       (symmInterval[a, b] : Set ℝ) univ := by sorry
 
+/-- A transition of width d and its translate by a period give a smooth window.
+On any period starting at A, only two translates contribute to the sum. -/
+private theorem exists_intervalWindow (A L d : ℝ) (hd : 0 < d) (hdL : d ≤ L) :
+    ∃ w : ℝ → ℂ, ContDiff ℝ ∞ w ∧ (∀ x ∉ Icc A (A+L+d), w x = 0) ∧
+      ∀ x ∈ Ico A (A+L), HasSum (fun k : ℤ ↦ w (x + k * L)) 1 := by
+  let H (x : ℝ) := Real.smoothTransition ((x-A)/d)
+  have hH : ContDiff ℝ ∞ H := Real.smoothTransition.contDiff.comp ((contDiff_id.sub contDiff_const).div_const d)
+  have h₀ {x : ℝ} (hx : x ≤ A) : H x = 0 := Real.smoothTransition.zero_of_nonpos
+    (div_nonpos_of_nonpos_of_nonneg (sub_nonpos.mpr hx) hd.le)
+  have h₁ {x : ℝ} (hx : A+d ≤ x) : H x = 1 := Real.smoothTransition.one_of_one_le
+    ((one_le_div hd).mpr (by linarith))
+  let w (x : ℝ) : ℂ := ↑(H x - H (x-L))
+  refine ⟨w, Complex.ofRealCLM.contDiff.comp (hH.sub (hH.comp (contDiff_id.sub contDiff_const))), ?_, ?_⟩
+  · intro x hx
+    rcases (show x < A ∨ A+L+d < x by simpa only [mem_Icc, not_and_or, not_le] using hx) with h | h
+    · simp [w, h₀ h.le, h₀ (show x-L ≤ A by linarith)]
+    · simp [w, h₁ (show A+d ≤ x by linarith), h₁ (show A+d ≤ x-L by linarith)]
+  · intro x hx
+    have hs (k : ℤ) (hk : k ∉ ({0,1} : Finset ℤ)) : w (x+k*L) = 0 := by
+      have hk' : k ≤ -1 ∨ 2 ≤ k := by
+        simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+        omega
+      rcases hk' with h | h
+      · have hmul := mul_le_mul_of_nonneg_right (show (k : ℝ) ≤ -1 by exact_mod_cast h) (hd.le.trans hdL)
+        simp [w, h₀ (show x + k*L ≤ A by linarith [hx.2]), h₀ (show x + k*L-L ≤ A by linarith [hx.2])]
+      · have hmul := mul_le_mul_of_nonneg_right (show 2 ≤ (k : ℝ) by exact_mod_cast h) (hd.le.trans hdL)
+        simp [w, h₁ (show A+d ≤ x+k*L by linarith [hx.1]), h₁ (show A+d ≤ x+k*L-L by linarith [hx.1])]
+    have hfin : HasSum (fun k : ℤ ↦ w (x+k*L)) (∑ k ∈ ({0, 1} : Finset ℤ), w (x+k*L)) :=
+      hasSum_sum_of_ne_finset_zero hs
+    convert hfin using 1
+    simp [w, h₀ (show x-L ≤ A by linarith [hx.2]), h₁ (show A+d ≤ x+L by linarith [hx.1])]
+
 /-- Paper: Proposition 4.2.2.2(1), p. 171. Periodization gives a continuous
 linear isomorphism from the fixed-support interval quotient to the smooth circle space.
 Deviation: This states the strict-width interval case treated on p. 172. -/
@@ -783,7 +815,59 @@ theorem compactIntervalPeriodization_quotient_equiv (a b : ℝ) (ha : 1 < a) (hb
     (hwide : Real.log γ < 2 * Real.log a) :
     let K := symmInterval[a, b]
     let P := Φ[K]
-    ∃ e : (D[K] ⧸ P.ker) ≃L[ℂ] S, ∀ f : D[K], e (P.ker.mkQL f) = P f := by sorry
+    ∃ e : (D[K] ⧸ P.ker) ≃L[ℂ] S, ∀ f : D[K], e (P.ker.mkQL f) = P f := by
+  let K := symmInterval[a,b]
+  let A := Real.log b - Real.log a
+  let B := Real.log b + Real.log a
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let d := min L (B - A - L)
+  have hd : 0 < d := lt_min hL (by dsimp [A, B, L]; linarith)
+  have hdL : d ≤ L := min_le_left _ _
+  have hdB : d ≤ B-A-L := min_le_right _ _
+  obtain ⟨w, hw, hsupp, hsum⟩ := exists_intervalWindow A L d hd hdL
+  have hK (x : ℝ) (hx : x ∉ K) : w x = 0 := by
+    apply hsupp x
+    intro h
+    exact hx ⟨h.1, h.2.trans (by linarith : A+L+d ≤ B)⟩
+  let J := compactWindowLift γ K w hw hK
+  let P := Φ[K]
+  have right (f : S) : P (J f) = f := by
+    refine Subtype.ext (funext fun z ↦ ?_)
+    let r := (AddCircle.equivIco (1 : ℝ) (A/L)) (z.2.1 0)
+    have hr : (r : ℝ) ∈ Ico (A/L) (A/L+1) := r.property
+    let x := (r : ℝ) * L
+    have hx : x ∈ Ico A (A+L) := by
+      refine ⟨(div_le_iff₀ hL).mp hr.1, ?_⟩
+      have hu := mul_lt_mul_of_pos_right hr.2 hL
+      rwa [add_mul, div_mul_cancel₀ _ hL.ne', one_mul] at hu
+    have he : (point ((r : ℝ) : T)) = z := by
+      refine Prod.ext (Subsingleton.elim _ _) (Prod.ext ?_ (Subsingleton.elim _ _))
+      funext j
+      have hj : j = 0 := Subsingleton.elim _ _
+      subst j
+      exact AddCircle.coe_equivIco
+    have hval (k : ℤ) : (J f : ℝ → ℂ) (x+k*L) = w (x+k*L) * f z := by
+      change _ * f (point (↑((x + k*L)/L) : T)) = _
+      have hk : ((k : ℝ) : T) = 0 := (AddCircle.coe_eq_zero_iff (p := (1 : ℝ))).mpr ⟨k, by simp [zsmul_eq_mul]⟩
+      have hid : L⁻¹ * (x + k*L) = (r : ℝ) + k := by
+        dsimp [x]
+        rw [← add_mul, mul_left_comm, inv_mul_cancel₀ hL.ne', mul_one]
+      rw [div_eq_inv_mul, hid, AddCircle.coe_add, hk, add_zero, he]
+    have hi := cyclicPeriodization_hasSum γ hγ (compactLogProfileInclusion K (J f)) x
+    have h := (hsum x hx).mul_right (f z)
+    have hu := hi.unique (h.congr_fun fun k ↦ hval k)
+    change (P (J f)).val (point (↑(x / L) : T)) = 1 * f z at hu
+    simpa only [x, mul_div_cancel_right₀ _ hL.ne', he, one_mul] using hu
+  let surj : Surjective P := fun f ↦ ⟨J f, right f⟩
+  let e := P.toLinearMap.quotKerEquivOfSurjective surj
+  have he (f : D[K]) : e (P.ker.mkQL f) = P f := P.toLinearMap.quotKerEquivOfSurjective_apply_mk _ f
+  refine ⟨{ e with continuous_toFun := (P.ker.liftQL P le_rfl).continuous,
+                   continuous_invFun := (P.ker.mkQL.continuous.comp J.continuous).congr ?_ }, he⟩
+  intro f
+  change P.ker.mkQL (J f) = e.symm f
+  apply e.injective
+  rw [he, right, e.apply_symm_apply]
 
 -- TODO(paper-gap): Proposition 4.2.2.2(2) with a = γ, b = 1, and A₀ = γ
 -- forces ψ to be supported in {1}. For a nonzero smooth bump u supported
