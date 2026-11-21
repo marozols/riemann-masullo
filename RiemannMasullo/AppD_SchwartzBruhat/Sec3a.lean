@@ -1,5 +1,9 @@
 module
 
+import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
+import Mathlib.Analysis.MellinInversion
+import RiemannMasullo.ForMathlib.Analysis.Complex.PhragmenLindelof
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.ChangeVariables
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec2b
 import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
@@ -657,12 +661,325 @@ integral converges absolutely. The profile is pulled back by the real logarithm.
 theorem positiveRealExponentialDecay_mellinConvergent (f : E) (s : ℂ) (hs : s.re ∈ I) :
     MellinConvergent (fun t ↦ f.val (Real.log t)) s := by sorry
 
+section MellinIsomorphism
+
+open scoped Asymptotics FourierTransform
+
+local notation "linePoint" => (fun (a y : ℝ) ↦ (a : ℂ) + y * Complex.I)
+local notation "profile" => (fun (f : ℝ → ℂ) (t : ℝ) ↦ f (Real.log t))
+
+/-- The Fourier argument corresponding to a unit of imaginary Mellin height. -/
+private def fourierFrequencyScale :=
+  (LinearEquiv.smulOfNeZero ℝ ℝ (2 * Real.pi)⁻¹
+    (inv_ne_zero (mul_ne_zero two_ne_zero Real.pi_ne_zero))).toContinuousLinearEquiv
+
+/-- Paper: Proposition D.3.2.5, p. 802. Reflection, Fourier transform, and rescaling
+turn an exponential twist into its vertical Mellin trace. -/
+private def mellinLineEquiv : 𝓢(ℝ, ℂ) ≃L[ℂ] 𝓢(ℝ, ℂ) :=
+  (schwartzChangeVariable ℂ (LinearIsometryEquiv.neg ℝ : ℝ ≃ₗᵢ[ℝ] ℝ).toContinuousLinearEquiv).trans
+    ((FourierTransform.fourierCLE ℂ 𝓢(ℝ, ℂ)).trans (schwartzChangeVariable ℂ fourierFrequencyScale))
+
+private theorem mellinLineEquiv_twist {I : Set ℝ} (a : I) (f : logExponentialDecaySubmodule I) (y : ℝ) :
+    mellinLineEquiv (logExponentialDecayTwist I a f) y = mellin (profile f.val) (linePoint a y) := by
+  let g := logExponentialDecayTwist I a f
+  let r := schwartzChangeVariable ℂ (LinearIsometryEquiv.neg ℝ : ℝ ≃ₗᵢ[ℝ] ℝ).toContinuousLinearEquiv g
+  change (𝓕 r) ((2 * Real.pi)⁻¹ * y) = _
+  rw [SchwartzMap.fourier_coe, mellin_eq_fourier]
+  simp only [Complex.add_re, Complex.ofReal_re, Complex.mul_I_re, Complex.ofReal_im,
+    neg_zero, add_zero, Complex.add_im, Complex.mul_I_im, zero_add, Real.log_exp, div_eq_inv_mul]
+  apply congrArg (fun h : ℝ → ℂ ↦ 𝓕 h ((2 * Real.pi)⁻¹ * y))
+  funext x
+  change logExponentialDecayTwist I a f (-x) = _
+  rw [logExponentialDecayTwist_apply I a f (-x)]
+  simp only [Complex.real_smul, mul_neg, neg_mul]
+
+private theorem mellinLineEquiv_symm_apply {F : ℂ → ℂ} (a : ℝ) (g : 𝓢(ℝ, ℂ))
+    (hg : ∀ y, g y = F (linePoint a y)) (x : ℝ) :
+    mellinLineEquiv.symm g x = (Real.exp (a * x) : ℂ) * mellinInv a F (Real.exp x) := by
+  let r := (schwartzChangeVariable ℂ fourierFrequencyScale).symm g
+  change (𝓕⁻ r) (-x) = _
+  rw [SchwartzMap.fourierInv_coe, mellinInv_eq_fourierInv a F (Real.exp_pos x), Real.log_exp]
+  have eq : ⇑r = (fun y : ℝ ↦ F (a + 2 * (Real.pi : ℂ) * y * Complex.I)) := by
+    funext y
+    change g (((2 * Real.pi)⁻¹)⁻¹ * y) = _
+    rw [inv_inv, hg]
+    push_cast
+    rfl
+  rw [eq, smul_eq_mul, ← mul_assoc]
+  have hpow : ((Real.exp x : ℝ) : ℂ) ^ (-(a : ℂ)) = (Real.exp (-(a * x)) : ℂ) := by
+    rw [Complex.cpow_def_of_ne_zero (by exact_mod_cast (Real.exp_pos x).ne'),
+      ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp, Complex.ofReal_exp]
+    congr 1
+    push_cast
+    ring
+  rw [hpow, ← Complex.ofReal_mul, ← Real.exp_add, add_neg_cancel, Real.exp_zero, Complex.ofReal_one, one_mul]
+
+private theorem mellinProfile_differentiable {I : Set ℝ} (hI : IsOpen I)
+    (f : logExponentialDecaySubmodule I) : DifferentiableOn ℂ (mellin (profile f.val)) (Complex.re ⁻¹' I) := by
+  intro z hz
+  let a : I := ⟨z.re, hz⟩
+  have cont : Continuous f.val := by
+    have eq : f.val = (fun u : ℝ ↦ (Real.exp (-((a : ℝ) * u)) : ℂ) * logExponentialDecayTwist I a f u) := by
+      funext x
+      rw [logExponentialDecayTwist_apply I a f x, ← mul_assoc, ← Complex.ofReal_mul,
+        ← Real.exp_add, neg_add_cancel, Real.exp_zero, Complex.ofReal_one, one_mul]
+    rw [eq]
+    exact (by fun_prop : Continuous (fun u : ℝ ↦ (Real.exp (-((a : ℝ) * u)) : ℂ))).mul
+      (logExponentialDecayTwist I a f).continuous
+  obtain ⟨l, r, hl, hr⟩ := exists_bracketing_lines hI a
+  have hloc : LocallyIntegrableOn (profile f.val) (Ioi 0) volume :=
+    (cont.comp_continuousOn (Real.continuousOn_log.mono (fun x hx ↦ ne_of_gt hx))).locallyIntegrableOn measurableSet_Ioi
+  have bound (c : I) {L : Filter ℝ} (hL : ∀ᶠ t in L, 0 < t) :
+      profile f.val =O[L] (fun t : ℝ ↦ t ^ (-(c : ℝ))) := by
+    let g := logExponentialDecayTwist I c f
+    apply Asymptotics.IsBigO.of_bound (SchwartzMap.seminorm ℂ 0 0 g)
+    filter_upwards [hL] with t ht
+    rw [Real.norm_of_nonneg (Real.rpow_nonneg ht.le _), Real.rpow_neg ht.le, ← div_eq_mul_inv,
+      le_div_iff₀ (Real.rpow_pos_of_pos ht _), Real.rpow_def_of_pos ht, mul_comm (Real.log t)]
+    simpa only [g, logExponentialDecayTwist_apply, norm_mul, Complex.norm_real,
+      Real.norm_of_nonneg (Real.exp_pos _).le, mul_comm] using g.norm_le_seminorm ℂ (Real.log t)
+  exact (mellin_differentiableAt_of_isBigO_rpow hloc (bound r (eventually_gt_atTop 0)) hr
+    (bound l self_mem_nhdsWithin) hl).differentiableWithinAt
+
+private theorem mellinProfile_strip_bound {I : Set ℝ} (l r : I) (f : logExponentialDecaySubmodule I) :
+    ∃ C : ℝ, ∀ z : ℂ, z.re ∈ Icc (l : ℝ) r → ‖mellin (profile f.val) z‖ ≤ C := by
+  let G (a : I) := logExponentialDecayTwist I a f
+  let B (x : ℝ) := ‖G l (-x)‖ + ‖G r (-x)‖
+  have hi (a : I) : Integrable (fun x : ℝ ↦ ‖G a (-x)‖) :=
+    ((Measure.measurePreserving_neg (volume : Measure ℝ)).integrable_comp
+      ((G a).integrable (μ := volume)).norm.aestronglyMeasurable).2 (G a).integrable.norm
+  refine ⟨∫ x, B x, fun z hz ↦ ?_⟩
+  rw [mellin_eq_fourier]
+  apply (Real.norm_fourier_le_integral_norm _ _).trans
+  apply integral_mono_of_nonneg (.of_forall fun _ ↦ norm_nonneg _) ((hi l).add (hi r))
+  filter_upwards with x
+  change ‖Real.exp (-z.re * x) • f.val (Real.log (Real.exp (-x)))‖ ≤ ‖G l (-x)‖ + ‖G r (-x)‖
+  simp only [G, logExponentialDecayTwist_apply, norm_mul, Complex.norm_real, norm_smul, Real.log_exp,
+    Real.norm_of_nonneg (Real.exp_pos _).le, mul_neg, ← neg_mul]
+  rcases le_total x 0 with hx | hx
+  · apply le_add_of_nonneg_of_le (by positivity)
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonpos_right (neg_le_neg hz.2) hx)) (norm_nonneg _)
+  · apply le_add_of_le_of_nonneg _ (by positivity)
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_right (neg_le_neg hz.1) hx)) (norm_nonneg _)
+
+private theorem mellinProfile_weighted_edge {I : Set ℝ} (a : I) (k : ℕ) (f : logExponentialDecaySubmodule I) :
+    ∃ C : ℝ, ∀ z : ℂ, z.re = a → ‖z ^ k * mellin (profile f.val) z‖ ≤ C := by
+  let g := mellinLineEquiv (logExponentialDecayTwist I a f)
+  let w := fun y : ℝ ↦ (linePoint a y)^k
+  have hw : w.HasTemperateGrowth := by dsimp [w]; fun_prop
+  let h := SchwartzMap.smulLeftCLM ℂ w g
+  refine ⟨SchwartzMap.seminorm ℂ 0 0 h, fun z hz ↦ ?_⟩
+  have heq : linePoint a z.im = z := hz ▸ Complex.re_add_im z
+  have hval : h z.im = z ^ k * mellin (profile f.val) z := by
+    change SchwartzMap.smulLeftCLM ℂ w g z.im = _
+    rw [SchwartzMap.smulLeftCLM_apply_apply hw]
+    change (linePoint a z.im)^k * mellinLineEquiv (logExponentialDecayTwist I a f) z.im = _
+    rw [mellinLineEquiv_twist, heq]
+  rw [← hval]
+  exact h.norm_le_seminorm ℂ _
+
+private theorem mellinProfile_mem_bergman {I : Set ℝ} (hI : IsOpen I)
+    (f : logExponentialDecaySubmodule I) :
+    (Complex.re ⁻¹' I).indicator (mellin (profile f.val)) ∈ schwartzBergmanSubmodule I := by
+  let F := mellin (profile f.val)
+  have hf := mellinProfile_differentiable hI f
+  refine ⟨fun z hz ↦ indicator_of_notMem hz _, ?_, ?_⟩
+  · exact hf.congr fun z hz ↦ indicator_of_mem hz _
+  intro l r hlr hsub k
+  let a : I := ⟨l, hsub (left_mem_Icc.mpr hlr)⟩
+  let b : I := ⟨r, hsub (right_mem_Icc.mpr hlr)⟩
+  obtain ⟨A, hA⟩ := mellinProfile_weighted_edge a k f
+  obtain ⟨B, hB⟩ := mellinProfile_weighted_edge b k f
+  refine ⟨max A B, ?_⟩
+  rintro _ ⟨z, hz, rfl⟩
+  change ‖z ^ k * (Complex.re ⁻¹' I).indicator F z‖ ≤ _
+  rw [indicator_of_mem (show z ∈ Complex.re ⁻¹' I from hsub hz)]
+  rcases hlr.eq_or_lt with heq | hlt
+  · exact (hA z (show z.re = l by linarith [hz.1, hz.2])).trans (le_max_left _ _)
+  have hd : DiffContOnCl ℂ F (Complex.re ⁻¹' Ioo l r) := by
+    refine ⟨hf.mono (preimage_mono (Ioo_subset_Icc_self.trans hsub)), ?_⟩
+    rw [Complex.closure_preimage_re, closure_Ioo hlt.ne]
+    exact hf.continuousOn.mono (preimage_mono hsub)
+  obtain ⟨M, hM⟩ := mellinProfile_strip_bound a b f
+  exact norm_pow_mul_le_on_verticalStrip hlt hd hM k
+    (fun w hw ↦ (hA w hw).trans (le_max_left _ _)) (fun w hw ↦ (hB w hw).trans (le_max_right _ _)) z hz
+
+/-- Moving the inverse contour between two lines preserves its value at every positive argument. -/
+private theorem bergmanInv_shift_lt {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (F : SchwartzBergman I) (a b : I) (hab : (a : ℝ) < b) (u : ℝ) :
+    mellinInv a F.val (Real.exp u) = mellinInv b F.val (Real.exp u) := by
+  let z : ℂ := ((a : ℝ) + (b : ℝ)) / 2
+  have haz : (a : ℝ) < z.re := by dsimp [z]; simp; linarith
+  have hzb : z.re < (b : ℝ) := by dsimp [z]; simp; linarith
+  let phase (w : ℂ) := Complex.exp (-(w * u))
+  let K (w : ℂ) := phase w * F.val w
+  let G (w : ℂ) := (w - z) * K w
+  have hphase (w : ℂ) : ‖phase w‖ = Real.exp (-w.re * u) := by simp [phase, Complex.norm_exp, Complex.mul_re]
+  have hpow (w : ℂ) : ((Real.exp u : ℝ) : ℂ) ^ (-w) = phase w := by
+    rw [Complex.cpow_def_of_ne_zero (by exact_mod_cast (Real.exp_pos u).ne'),
+      ← Complex.ofReal_log (Real.exp_pos u).le, Real.log_exp]
+    dsimp [phase]
+    ring_nf
+  have line (s : I) : Integrable (fun y ↦ K (linePoint s y)) := by
+    obtain ⟨T, hT, _⟩ := schwartzBergman_schwartzLine_topology I hI hInt ⟨s, s.property⟩
+    have heq (y : ℝ) : T F s y = F.val (linePoint s y) := by simpa [weightedVerticalTrace] using hT F s y
+    have htrace : Integrable (fun y : ℝ ↦ F.val (linePoint s y)) :=
+      (T F s).integrable.congr (.of_forall heq)
+    have hc : Continuous (fun y : ℝ ↦ phase (linePoint s y)) := by dsimp [phase]; fun_prop
+    have hb (y : ℝ) : ‖phase (linePoint s y)‖ ≤ Real.exp (-(s : ℝ) * u) := by rw [hphase]; simp
+    exact htrace.bdd_mul hc.aestronglyMeasurable (.of_forall hb)
+  have eqline (s : I) (hs : (s : ℝ) ≠ z.re) (y : ℝ) : G (linePoint s y) / (linePoint s y - z) = K (linePoint s y) := by
+    have hne : linePoint s y ≠ z := fun he ↦ hs (by simpa using congrArg Complex.re he)
+    dsimp only [G]
+    field_simp [sub_ne_zero.mpr hne]
+  obtain ⟨l, _, hla, _⟩ := exists_bracketing_lines hI a
+  obtain ⟨_, r, _, hbr⟩ := exists_bracketing_lines hI b
+  have hG : DifferentiableOn ℂ G (Complex.re ⁻¹' Ioo (l : ℝ) r) :=
+    (differentiable_id.sub_const z).differentiableOn.mul ((by dsimp [phase]; fun_prop : Differentiable ℂ phase).differentiableOn.mul
+      (F.property.2.1.mono (preimage_mono (Ioo_subset_Icc_self.trans (hInt.out l.property r.property)))))
+  obtain ⟨A,hA⟩ := F.property.2.2 a b hab.le (hInt.out a.property b.property) 1
+  obtain ⟨B,hB⟩ := F.property.2.2 a b hab.le (hInt.out a.property b.property) 2
+  obtain ⟨P,hP⟩ := (isCompact_Icc (a := (a : ℝ)) (b := (b : ℝ))).bddAbove_image
+    (f := fun s : ℝ ↦ Real.exp (-s * u)) (by fun_prop)
+  let C := max P 0 * (max B 0 + ‖z‖ * max A 0)
+  have hC : 0 ≤ C := by dsimp [C]; positivity
+  have hdec : ∀ᶠ y : ℝ in comap abs atTop, ∀ s ∈ Icc (a : ℝ) b, ‖G (linePoint s y)‖ ≤ C / |y| := by
+    have ht : Tendsto (abs : ℝ → ℝ) (comap abs atTop) atTop := tendsto_comap
+    filter_upwards [ht.eventually (eventually_gt_atTop 0)] with y hy s hs
+    let w := linePoint s y
+    have hw : w ∈ Complex.re ⁻¹' Icc (a : ℝ) b := by simpa [w] using hs
+    have him : |y| ≤ ‖w‖ := by simpa [w] using Complex.abs_im_le_norm w
+    have ha := hA (mem_image_of_mem _ hw)
+    have hb := hB (mem_image_of_mem _ hw)
+    simp only [pow_one, norm_mul, norm_pow] at ha hb
+    have hp : ‖phase w‖ ≤ max P 0 := (hphase w).le.trans
+      ((hP (mem_image_of_mem _ hw)).trans (le_max_left _ _))
+    apply (le_div_iff₀ hy).mpr
+    calc ‖G w‖ * |y| = ‖phase w‖ * (‖w-z‖ * |y| * ‖F.val w‖) := by simp only [G,K,norm_mul]; ring
+      _ ≤ max P 0 * ((‖w‖ + ‖z‖) * ‖w‖ * ‖F.val w‖) := by gcongr; exact norm_sub_le _ _
+      _ ≤ C := by
+        apply mul_le_mul_of_nonneg_left _ (le_max_right P 0)
+        calc _ = ‖w‖ ^ 2 * ‖F.val w‖ + ‖z‖ * (‖w‖ * ‖F.val w‖) := by ring
+          _ ≤ _ := add_le_add (hb.trans (le_max_left _ _))
+            (mul_le_mul_of_nonneg_left (ha.trans (le_max_left _ _)) (norm_nonneg _))
+  have h := verticalCauchyIntegral_sub_eq hG hla hbr ⟨haz,hzb⟩ hC hdec
+    (by simpa only [Complex.VerticalIntegrable, eqline a haz.ne] using line a)
+    (by simpa only [Complex.VerticalIntegrable, eqline b hzb.ne'] using line b)
+  simp only [eqline b hzb.ne', eqline a haz.ne] at h
+  have hi : (∫ y : ℝ, K (linePoint b y)) = ∫ y : ℝ, K (linePoint a y) :=
+    sub_eq_zero.mp (by simpa [G] using h)
+  simp only [mellinInv, hpow, smul_eq_mul]
+  exact congrArg (fun v : ℂ ↦ (1 / (2 * Real.pi) : ℝ) • v) hi.symm
+
+private theorem bergmanInv_shift {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (F : SchwartzBergman I) (a b : I) (u : ℝ) :
+    mellinInv a F.val (Real.exp u) = mellinInv b F.val (Real.exp u) := by
+  rcases lt_trichotomy (a : ℝ) (b : ℝ) with h | h | h
+  · exact bergmanInv_shift_lt hI hInt F a b h u
+  · rw [h]
+  · exact (bergmanInv_shift_lt hI hInt F b a h u).symm
+
+/-- The Mellin transform of a logarithmic profile, extended by zero outside the strip. -/
+private def stripMellinLinear {I : Set ℝ} (hI : IsOpen I) : PositiveRealExponentialDecay I →ₗ[ℂ] SchwartzBergman I := by
+  let B (f : PositiveRealExponentialDecay I) : SchwartzBergman I :=
+    ⟨(Complex.re ⁻¹' I).indicator (mellin (profile f.val)), mellinProfile_mem_bergman hI f⟩
+  let L (a : I) : PositiveRealExponentialDecay I →ₗ[ℂ] 𝓢(ℝ, ℂ) :=
+    mellinLineEquiv.toLinearMap.comp (logExponentialDecayTwist I a)
+  have hv (f : PositiveRealExponentialDecay I) (z : ℂ) (hz : z.re ∈ I) :
+      (B f).val z = L ⟨z.re, hz⟩ f z.im := by
+    change (Complex.re ⁻¹' I).indicator _ z = mellinLineEquiv (logExponentialDecayTwist I _ f) z.im
+    rw [indicator_of_mem (show z ∈ Complex.re ⁻¹' I from hz), mellinLineEquiv_twist ⟨z.re, hz⟩ f z.im]
+    simp [Complex.re_add_im]
+  refine ⟨⟨B, ?_⟩, ?_⟩
+  · intro f g
+    apply Subtype.ext
+    funext z
+    change (B (f+g)).val z = (B f).val z + (B g).val z
+    by_cases hz : z.re ∈ I
+    · rw [hv _ _ hz, hv f _ hz, hv g _ hz, map_add]; rfl
+    · simp [B, indicator_of_notMem (show z ∉ Complex.re ⁻¹' I from hz)]
+  · intro c f
+    apply Subtype.ext
+    funext z
+    change (B (c • f)).val z = c • (B f).val z
+    by_cases hz : z.re ∈ I
+    · rw [hv _ _ hz, hv f _ hz, map_smul]; rfl
+    · simp [B, indicator_of_notMem (show z ∉ Complex.re ⁻¹' I from hz)]
+
+private theorem stripMellinLinear_apply {I : Set ℝ} (hI : IsOpen I)
+    (f : PositiveRealExponentialDecay I) (s : ℂ) (hs : s.re ∈ I) :
+    (stripMellinLinear hI f).val s = mellin (profile f.val) s :=
+  indicator_of_mem (show s ∈ Complex.re ⁻¹' I from hs) _
+
 /-- Paper: Proposition D.3.2.5, p. 802. The Mellin integral induces a unique
 continuous linear equivalence with the Schwartz–Bergman space on the strip. -/
 theorem existsUnique_positiveRealFourierMellin (hOpen : IsOpen I) (hInt : OrdConnected I)
     (hne : I.Nonempty) :
     ∃! M : E ≃L[ℂ] SchwartzBergman I, ∀ (f : E) (s : ℂ), s.re ∈ I →
-      (M f).val s = mellin (fun t ↦ f.val (Real.log t)) s := by sorry
+      (M f).val s = mellin (fun t ↦ f.val (Real.log t)) s := by
+  let M := stripMellinLinear hOpen
+  let U := mellinLineEquiv
+  obtain ⟨T, hval, hT⟩ := schwartzBergman_schwartzLine_topology I hOpen hInt hne
+  have hline (F : SchwartzBergman I) (a : I) (y : ℝ) : T F a y = F.val (linePoint a y) := by
+    simpa only [weightedVerticalTrace, pow_zero, one_mul] using hval F a y
+  have hcomm (f : PositiveRealExponentialDecay I) (a : I) : T (M f) a = U (logExponentialDecayTwist I a f) := by
+    ext y
+    rw [hline, show (M f).val (linePoint a y) = _ from stripMellinLinear_apply hOpen f _ (by simp)]
+    exact (mellinLineEquiv_twist a f y).symm
+  have hE := positiveRealExponentialDecay_isEmbedding I hne
+  have inj : Injective M := by
+    intro f g h
+    apply hE.injective
+    funext a
+    apply U.injective
+    rw [← hcomm, ← hcomm, h]
+  have surj : Surjective M := by
+    intro F
+    obtain ⟨c,hc⟩ := hne
+    let f (u : ℝ) := mellinInv c F.val (Real.exp u)
+    have htw (a : I) (u : ℝ) : U.symm (T F a) u = (Real.exp ((a : ℝ) * u) : ℂ) * f u := by
+      rw [mellinLineEquiv_symm_apply a (T F a) (hline F a)]
+      exact congrArg (_ * ·) (bergmanInv_shift hOpen hInt F a ⟨c,hc⟩ u)
+    have hf : f ∈ logExponentialDecaySubmodule I := by
+      apply (Submodule.mem_iInf _).mpr
+      intro a
+      exact ⟨U.symm (T F a), funext (htw a)⟩
+    let g : PositiveRealExponentialDecay I := ⟨f,hf⟩
+    have hg (a : I) : logExponentialDecayTwist I a g = U.symm (T F a) := by
+      ext u
+      exact (logExponentialDecayTwist_apply I a g u).trans (htw a u).symm
+    refine ⟨g, hT.injective ?_⟩
+    funext a
+    rw [hcomm, hg, U.apply_symm_apply]
+  let e := LinearEquiv.ofBijective M ⟨inj,surj⟩
+  let A : PositiveRealExponentialDecay I ≃L[ℂ] SchwartzBergman I := {
+    toLinearEquiv := e
+    continuous_toFun := by
+      apply hT.continuous_iff.mpr
+      apply continuous_pi
+      intro a
+      exact (U.continuous.comp ((continuous_apply a).comp hE.continuous)).congr fun f ↦ (hcomm f a).symm
+    continuous_invFun := by
+      apply hE.continuous_iff.mpr
+      apply continuous_pi
+      intro a
+      apply (U.symm.continuous.comp ((continuous_apply a).comp hT.continuous)).congr
+      intro F
+      change U.symm (T F a) = logExponentialDecayTwist I a (e.symm F)
+      apply U.injective
+      rw [U.apply_symm_apply, ← hcomm]
+      exact congrArg (fun G ↦ T G a) (e.apply_symm_apply F).symm }
+  refine ⟨A, stripMellinLinear_apply hOpen, ?_⟩
+  intro A' hA'
+  apply ContinuousLinearEquiv.ext
+  funext f
+  apply hT.injective
+  funext a
+  ext y
+  rw [hline, hline, hA' f _ (by simp)]
+  exact (stripMellinLinear_apply hOpen f _ (by simp)).symm
+
+end MellinIsomorphism
 
 /-- Paper: Definition D.3.2.6, p. 803. The Fourier–Mellin transform is
 the continuous linear equivalence furnished by the Mellin integral. -/
