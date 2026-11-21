@@ -9,6 +9,7 @@ public import RiemannMasullo.ForMathlib.Topology.ContinuousMap.CompactlySupporte
 public import Mathlib.Topology.Sets.Compacts
 public import RiemannMasullo.ForMathlib.Topology.UniformSpace.CompactConvergence
 import Mathlib.Data.Finsupp.ToDFinsupp
+import RiemannMasullo.ForMathlib.Analysis.Calculus.FDeriv.Partial
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
 import RiemannMasullo.ForMathlib.Topology.Compactness.LocallyCompact
 import RiemannMasullo.ForMathlib.Topology.Compactness.Paracompact
@@ -876,8 +877,44 @@ exactly when each weak coordinate partial exists and is continuous. -/
 theorem weaklyContDiffOn_iff_continuous_weakPartials {Ω : Set V} (hΩ : IsOpen Ω)
     (hd : 1 ≤ d) (f : V → E) :
     WeaklyContDiffOn k f Ω ↔
-      ∀ i : Fin d, ∃ D : Ω → PettisWeakCompletion E, HasWeakPartialOn i f D ∧ Continuous D :=
-  by sorry
+      ∀ i : Fin d, ∃ D : Ω → PettisWeakCompletion E, HasWeakPartialOn i f D ∧ Continuous D := by
+  classical
+  let e (i : Fin d) := EuclideanSpace.single i (1 : k)
+  constructor
+  · rintro ⟨D, hD, hc⟩ i
+    refine ⟨fun x ↦ D (x, e i), ?_, hc.comp (continuous_id.prodMk continuous_const)⟩
+    intro φ x
+    obtain ⟨L, hL, heval⟩ := hD φ x
+    rw [heval (e i)]
+    exact hL.hasLineDerivWithinAt (e i)
+  · intro h
+    choose P hP hPc using h
+    let D (p : Ω × V) : PettisWeakCompletion E := ∑ i, algebraMap k ℂ (p.2 i) • P i p.1
+    refine ⟨D, ?_, continuous_finsetSum _ fun i _ ↦ ?_⟩
+    · intro φ x
+      let ev : PettisWeakCompletion E →L[ℂ] ℂ := WeakBilin.eval _ φ
+      let a (i : Fin d) (y : V) := if hy : y ∈ Ω then ev (P i ⟨y, hy⟩) else 0
+      have hval (i : Fin d) (y : Ω) : a i y = ev (P i y) := dite_eq_left y.property
+      have hc (i : Fin d) : ContinuousAt (a i) (x : V) := by
+        apply ContinuousOn.continuousAt (s := Ω) _ (hΩ.mem_nhds x.property)
+        apply continuousOn_iff_continuous_domRestrict.mpr
+        change Continuous (fun y : Ω ↦ a i y)
+        simp_rw [hval]
+        exact ev.continuous.comp (hPc i)
+      have ha (i : Fin d) : ∀ᶠ y in 𝓝 (x : V),
+          HasLineDerivAt k (φ ∘ f) (a i y) y (e i) := by
+        filter_upwards [hΩ.mem_nhds x.property] with y hy
+        have hp : HasLineDerivWithinAt k (φ ∘ f) (ev (P i ⟨y, hy⟩)) Ω y (e i) := hP i φ ⟨y, hy⟩
+        simpa only [a, dite_eq_left hy] using hp.hasLineDerivAt (hΩ.mem_nhds hy)
+      refine ⟨_, (hasFDerivAt_of_continuous_coordinate_derivatives a ha hc).hasFDerivWithinAt,
+        fun v ↦ ?_⟩
+      change ev (∑ i, algebraMap k ℂ (v i) • P i x) = _
+      rw [map_sum]
+      simp only [map_smul, sum_apply, ContinuousLinearMap.smulRight_apply, hval, Algebra.smul_def]
+      rfl
+    · exact ((continuous_algebraMap k ℂ).comp
+        ((EuclideanSpace.proj (𝕜 := k) i).continuous.comp continuous_snd)).smul
+        ((hPc i).comp continuous_fst)
 
 /-- Paper: Lemma C.5.1.16(1), p. 729. Weak Gâteaux differentiability gives weak
 differentiability in each standard coordinate direction. -/
