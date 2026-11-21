@@ -621,7 +621,9 @@ theorem positiveRealExponentialDecay_montel (hInt : OrdConnected I) (hne : I.Non
 
 /-- Paper: Lemma D.3.2.3(2), p. 801. The strong dual is complete. -/
 theorem positiveRealExponentialDecay_strongDual_complete (hInt : OrdConnected I) (hne : I.Nonempty) :
-    CompleteSpace D := by sorry
+    CompleteSpace D := by
+  obtain ⟨_, _, hmetric, _⟩ := positiveRealExponentialDecay_frechet I hInt hne
+  infer_instance
 
 /-- Paper: Lemma D.3.2.3(2), p. 801. The strong dual is nuclear. -/
 theorem positiveRealExponentialDecay_strongDual_nuclear (hInt : OrdConnected I) (hne : I.Nonempty) :
