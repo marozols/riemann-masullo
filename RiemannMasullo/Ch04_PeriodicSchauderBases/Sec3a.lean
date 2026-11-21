@@ -8,8 +8,10 @@ public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
 import Mathlib.MeasureTheory.Function.AEEqOfIntegral
 import Mathlib.MeasureTheory.Function.ContinuousMapDense
+import Mathlib.MeasureTheory.Function.LpSeminorm.Prod
 import Mathlib.MeasureTheory.Measure.SeparableMeasure
 import RiemannMasullo.ForMathlib.Analysis.Fourier.CompactGroup
+import RiemannMasullo.ForMathlib.Analysis.InnerProductSpace.Subspace
 import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
 import RiemannMasullo.ForMathlib.MeasureTheory.Integral.Prod
 
@@ -547,10 +549,121 @@ theorem regularIsotypicTransform_continuousLinear :
   intro s
   simpa [L, T, regularIsotypicTransform, mul_pow, Real.sq_sqrt hB] using hbound f s
 
+/-- Lift each prescribed coefficient along the section and multiply by its character.
+The lifts are orthogonal, have a common squared-norm scale, and have the expected
+character integrals. -/
+private theorem exists_regularIsotypic_synthesisFamily
+    (y : lp (fun _ : PontryaginDual K ↦ RegularL2 positiveRealHaar) 2) :
+    ∃ (B : ℝ) (v : PontryaginDual K → RegularL2 ν),
+      (∀ ω, ‖v ω‖ ^ 2 = B * ‖y ω‖ ^ 2) ∧
+      (Pairwise fun χ ψ ↦ ⟪v χ, v ψ⟫_ℂ = 0) ∧
+      ∀ χ ω, regularIsotypicComponent m hm ν ν₁ τ hτ χ (v ω) =
+        (∫ a, star (χ a : ℂ) * (ω a : ℂ) ∂ν₁) • y ω := by
+  classical
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have : positiveRealHaar.IsHaarMeasure := positiveRealHaar_isHaarMeasure
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let logHomeo := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.toHomeomorph.symm
+  have : LocallyCompactSpace ℝ≥0ˣ := logHomeo.isOpenEmbedding.locallyCompactSpace
+  obtain ⟨j, hj⟩ := exists_regularIsotypic_sectionEquiv m hm τ hτ
+  have : SecondCountableTopology (K × ℝ≥0ˣ) := j.toHomeomorph.isEmbedding.secondCountableTopology
+  let η := ν₁.prod positiveRealHaar
+  have : (ν.map j.symm).IsHaarMeasure := j.symm.isHaarMeasure_map ν
+  let c := Measure.haarScalarFactor (ν.map j.symm) η
+  have hμ : ν.map j.symm = c • η := Measure.isMulLeftInvariant_eq_smul _ _
+  have hint {E : Type} [NormedAddCommGroup E] [NormedSpace ℝ E] (F : K × ℝ≥0ˣ → E) :
+      ∫ x, F (j.symm x) ∂ν = c • ∫ p, F p ∂η := by
+    have he := integral_map_equiv (μ := ν) j.symm.toHomeomorph.toMeasurableEquiv F
+    change ∫ p, F p ∂ν.map j.symm = ∫ x, F (j.symm x) ∂ν at he
+    rw [← he, hμ, integral_smul_nnreal_measure]
+  let A (ω : PontryaginDual K) (p : K × ℝ≥0ˣ) : ℂ := (ω p.1 : ℂ) * y ω p.2
+  have hA (ω : PontryaginDual K) : MemLp (A ω) 2 η := by
+    have hy := (Lp.memLp (y ω)).comp_snd ν₁
+    apply hy.of_le
+    · have hc : Continuous (fun p : K × ℝ≥0ˣ ↦ (ω p.1 : ℂ)) := by fun_prop
+      exact hc.aestronglyMeasurable.mul hy.aestronglyMeasurable
+    · exact ae_of_all _ fun p ↦ by simp [A]
+  have hv (ω : PontryaginDual K) : MemLp (A ω ∘ j.symm) 2 ν :=
+    (show MemLp (A ω) 2 (ν.map j.symm) from hμ ▸ (hA ω).smul_measure_nnreal).comp_of_map
+      j.symm.continuous.measurable.aemeasurable
+  let v (ω : PontryaginDual K) := (hv ω).toLp (A ω ∘ j.symm)
+  refine ⟨(c : ℝ) * ν₁.real univ, v, fun ω ↦ ?_, fun χ ψ hχψ ↦ ?_, fun χ ω ↦ ?_⟩
+  · have hy : ‖y ω‖ ^ 2 = ∫ t, ‖y ω t‖ ^ 2 ∂positiveRealHaar := by
+      simpa only [Lp.toLp_coeFn] using norm_sq_toLp_two (Lp.memLp (y ω))
+    rw [norm_sq_toLp_two (hv ω), hy]
+    have he := hint (fun p ↦ ‖A ω p‖ ^ 2)
+    change ∫ x, ‖A ω (j.symm x)‖ ^ 2 ∂ν = _ at he ⊢
+    rw [he]
+    have he' := integral_fun_snd (μ := ν₁) (ν := positiveRealHaar) (fun t ↦ ‖y ω t‖ ^ 2)
+    simp only [A, norm_mul, Circle.norm_coe, one_mul]
+    rw [he', mul_assoc]
+    rfl
+  · change ⟪v χ, v ψ⟫_ℂ = 0
+    rw [L2.inner_def]
+    let F (p : K × ℝ≥0ˣ) := (star (χ p.1 : ℂ) * (ψ p.1 : ℂ)) *
+      (star (y χ p.2) * y ψ p.2)
+    calc
+      _ = ∫ x, F (j.symm x) ∂ν := by
+        apply integral_congr_ae
+        filter_upwards [(hv χ).coeFn_toLp, (hv ψ).coeFn_toLp] with x hx hy
+        change ⟪v χ x, v ψ x⟫_ℂ = _
+        rw [show v χ x = _ from hx, show v ψ x = _ from hy]
+        simp only [RCLike.inner_apply, Function.comp_apply, F, A, starRingEnd_apply, star_mul']
+        ring
+      _ = 0 := by
+        rw [hint, show (∫ p, F p ∂η) = _ from integral_prod_mul
+          (fun a ↦ star (χ a : ℂ) * (ψ a : ℂ)) (fun t ↦ star (y χ t) * y ψ t)]
+        rw [integral_character_pair ν₁ χ ψ]
+        simp [hχψ]
+  · let d := ∫ a, star (χ a : ℂ) * (ω a : ℂ) ∂ν₁
+    apply Lp.ext
+    have hC := (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ χ (v ω)).2.coeFn_toLp
+    have ha := regularIsotypic_section_ae m hm ν ν₁ τ hτ (hv ω).coeFn_toLp
+    filter_upwards [hC, Lp.coeFn_smul d (y ω), ha] with t ht hs hrep
+    change regularIsotypicComponent m hm ν ν₁ τ hτ χ (v ω) t = (d • y ω) t
+    rw [show regularIsotypicComponent m hm ν ν₁ τ hτ χ (v ω) t = _ from ht, hs]
+    change _ = d * y ω t
+    rw [show d * y ω t = _ from (integral_mul_const (y ω t) _).symm]
+    apply integral_congr_ae
+    filter_upwards [hrep] with a ha
+    rw [show v ω ((a : G)⁻¹ * τ t) = _ from ha]
+    simp only [Function.comp_apply, ← hj (a, t), j.symm_apply_apply, A, mul_assoc]
+
 /-- Paper: Lemma 4.3.2.2, p. 179. Every square-summable family of L²
 coordinates is in the range of the transform. -/
 theorem regularIsotypicTransform_surjective :
-    Surjective (regularIsotypicTransform m hm ν ν₁ τ hτ) := by sorry
+    Surjective (regularIsotypicTransform m hm ν ν₁ τ hτ) := by
+  classical
+  intro y
+  obtain ⟨T, hT⟩ := regularIsotypicTransform_continuousLinear m hm ν ν₁ τ hτ
+  obtain ⟨B, v, hn, ho, hcoord⟩ := exists_regularIsotypic_synthesisFamily m hm ν ν₁ τ hτ y
+  have hy : Summable (fun ω ↦ ‖y ω‖ ^ 2) := by
+    simpa using (lp.memℓp y).summable (by norm_num)
+  have hs : Summable v := (summable_iff_summable_sq_norm_of_orthogonal ho).2
+    (by simpa only [hn] using hy.mul_left B)
+  let d : ℂ := ν₁.real univ
+  have hd : d ≠ 0 := by
+    have : CompactSpace K := isCompact_iff_compactSpace.mp
+      (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+    dsimp [d]
+    exact_mod_cast (measureReal_univ_pos (μ := ν₁)).ne'
+  have hsingle (ω : PontryaginDual K) : T (v ω) = d • lp.single 2 ω (y ω) := by
+    apply lp.ext
+    funext χ
+    rw [hT]
+    change regularIsotypicComponent m hm ν ν₁ τ hτ χ (v ω) = _
+    rw [hcoord, integral_character_pair, lp.coeFn_smul, Pi.smul_apply]
+    by_cases h : χ = ω
+    · subst χ
+      simp [d]
+    · simp [h]
+  have hsum : HasSum (fun ω ↦ d • lp.single 2 ω (y ω)) (T (∑' ω, v ω)) :=
+    (hs.hasSum.map T T.continuous).congr_fun fun ω ↦ (hsingle ω).symm
+  have he := hsum.unique ((lp.hasSum_single (by simp) y).const_smul d)
+  refine ⟨d⁻¹ • ∑' ω, v ω, ?_⟩
+  rw [← hT, map_smul, he, smul_smul, inv_mul_cancel₀ hd, one_smul]
 
 /-- Paper: Lemma 4.3.2.2, p. 179. The Hilbert sum of the isotypic coordinates
 determines the original L² class.
