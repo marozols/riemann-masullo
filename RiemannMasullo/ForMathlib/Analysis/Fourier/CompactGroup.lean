@@ -1,0 +1,128 @@
+module
+
+public import Mathlib.Analysis.InnerProductSpace.Orthonormal
+public import Mathlib.MeasureTheory.Function.L2Space
+public import Mathlib.MeasureTheory.Group.Integral
+public import Mathlib.Topology.Algebra.PontryaginDual
+
+import RiemannMasullo.ForMathlib.MeasureTheory.Integral.Prod
+
+/-! # Bessel’s inequality for characters of compact groups -/
+
+public noncomputable section
+
+open Filter MeasureTheory Set
+open scoped InnerProductSpace
+
+namespace RiemannMasullo
+
+variable {K : Type*} [CommGroup K] [TopologicalSpace K] [IsTopologicalGroup K]
+  [CompactSpace K] [MeasurableSpace K] [BorelSpace K]
+  (μ : Measure K) [IsFiniteMeasure μ] [μ.IsMulLeftInvariant] [NeZero μ]
+
+/-- Squaring the L² norm recovers the integral of the squared pointwise norm. -/
+theorem norm_sq_toLp_two {α : Type*} [MeasurableSpace α] {ν : Measure α}
+    {u : α → ℂ} (hu : MemLp u 2 ν) :
+    ‖hu.toLp u‖ ^ 2 = ∫ a, ‖u a‖ ^ 2 ∂ν := by
+  rw [← @real_inner_self_eq_norm_sq (Lp ℂ 2 ν), L2.inner_def]
+  apply integral_congr_ae
+  filter_upwards [hu.coeFn_toLp] with a ha
+  rw [ha, real_inner_self_eq_norm_sq]
+
+omit [CompactSpace K] [IsFiniteMeasure μ] [NeZero μ] in
+private theorem integral_character_pair_zero {χ ψ : PontryaginDual K} (hne : χ ≠ ψ) :
+    ∫ a, star (χ a : ℂ) * (ψ a : ℂ) ∂μ = 0 := by
+  obtain ⟨b, hb⟩ : ∃ b : K, χ b ≠ ψ b := by
+    by_contra! h
+    exact hne (DFunLike.ext _ _ h)
+  let F := fun a : K ↦ star (χ a : ℂ) * (ψ a : ℂ)
+  have hF (a : K) : F (b * a) = F b * F a := by
+    simp only [F, map_mul, Circle.coe_mul, star_mul']
+    ring
+  have hne' : F b ≠ 1 := by
+    intro he
+    apply hb
+    apply Subtype.ext
+    have hh := congrArg (fun z : ℂ ↦ (χ b : ℂ) * z) he
+    simpa [F, ← mul_assoc, ← Circle.coe_inv_eq_conj] using hh.symm
+  have h : F b * (∫ a, F a ∂μ) = 1 * (∫ a, F a ∂μ) := by
+    rw [one_mul, ← integral_const_mul, ← integral_mul_left_eq_self (μ := μ) F b]
+    exact integral_congr_ae (ae_of_all _ fun a ↦ (hF a).symm)
+  exact (mul_eq_mul_right_iff.mp h).resolve_left hne'
+
+/-- Bessel's inequality for continuous characters on a compact abelian group with
+finite nonzero invariant measure, including its total-mass factor. -/
+theorem sum_sq_character_integral_le {u : K → ℂ} (hu : MemLp u 2 μ)
+    (s : Finset (PontryaginDual K)) :
+    ∑ χ ∈ s, ‖∫ a, star (χ a : ℂ) * u a ∂μ‖ ^ 2 ≤
+      μ.real univ * ∫ a, ‖u a‖ ^ 2 ∂μ := by
+  let v (χ : PontryaginDual K) : C(K, ℂ) := ⟨fun a ↦ χ a, by fun_prop⟩
+  let V (χ : PontryaginDual K) := ContinuousMap.toLp 2 μ ℂ (v χ)
+  let r := Real.sqrt (μ.real univ)
+  have hr : 0 < r := Real.sqrt_pos.2 measureReal_univ_pos
+  have hr2 : r ^ 2 = μ.real univ := Real.sq_sqrt measureReal_nonneg
+  have hv (χ : PontryaginDual K) : ‖V χ‖ ^ 2 = μ.real univ := by
+    rw [← real_inner_self_eq_norm_sq, L2.inner_def]
+    calc
+      _ = ∫ _ : K, (1 : ℝ) ∂μ := by
+        apply integral_congr_ae
+        filter_upwards [(v χ).coeFn_toLp (p := 2) (𝕜 := ℂ) μ] with a ha
+        rw [ha, real_inner_self_eq_norm_sq]
+        simp [v]
+      _ = _ := by simp
+  let W (χ : PontryaginDual K) := ((r⁻¹ : ℝ) : ℂ) • V χ
+  have hW : Orthonormal ℂ W := by
+    constructor
+    · intro χ
+      have he : ‖V χ‖ = r := by nlinarith [hv χ, norm_nonneg (V χ)]
+      simp [W, norm_smul, Real.norm_eq_abs, abs_of_pos hr, he, hr.ne']
+    · intro χ ψ hne
+      have he : ⟪V χ, V ψ⟫_ℂ = 0 := by
+        rw [ContinuousMap.inner_toLp]
+        simpa [v, mul_comm] using integral_character_pair_zero μ hne
+      change ⟪((r⁻¹ : ℝ) : ℂ) • V χ, ((r⁻¹ : ℝ) : ℂ) • V ψ⟫_ℂ = 0
+      simp [inner_smul_left, inner_smul_right, he]
+  have hi (χ : PontryaginDual K) :
+      ⟪V χ, hu.toLp u⟫_ℂ = ∫ a, star (χ a : ℂ) * u a ∂μ := by
+    rw [L2.inner_def]
+    apply integral_congr_ae
+    filter_upwards [(v χ).coeFn_toLp (p := 2) (𝕜 := ℂ) μ, hu.coeFn_toLp] with a ha hb
+    rw [ha, hb]
+    simp [v, mul_comm]
+  have hrestore (χ : PontryaginDual K) : (r : ℂ) • W χ = V χ := by simp [W, smul_smul, hr.ne']
+  calc
+    _ = ∑ χ ∈ s, r ^ 2 * ‖⟪W χ, hu.toLp u⟫_ℂ‖ ^ 2 := by
+      apply Finset.sum_congr rfl
+      intro χ _
+      rw [← hi, ← hrestore χ, inner_smul_left]
+      simp [mul_pow, Real.norm_eq_abs, abs_of_pos hr]
+    _ = r ^ 2 * ∑ χ ∈ s, ‖⟪W χ, hu.toLp u⟫_ℂ‖ ^ 2 := (Finset.mul_sum ..).symm
+    _ ≤ r ^ 2 * ‖hu.toLp u‖ ^ 2 :=
+      mul_le_mul_of_nonneg_left (hW.sum_inner_products_le _) (sq_nonneg _)
+    _ = _ := by rw [hr2, norm_sq_toLp_two hu]
+
+/-- Bessel's inequality on the first factor of a product, integrated over the second factor. -/
+theorem sum_sq_character_integral_prod_le {β : Type*} [MeasurableSpace β]
+    {ν : Measure β} [SFinite ν] {u : K × β → ℂ} (hu : MemLp u 2 (μ.prod ν))
+    (v : PontryaginDual K → Lp ℂ 2 ν)
+    (hv : ∀ χ, (v χ : β → ℂ) =ᵐ[ν] fun b ↦ ∫ a, star (χ a : ℂ) * u (a, b) ∂μ)
+    (s : Finset (PontryaginDual K)) :
+    ∑ χ ∈ s, ‖v χ‖ ^ 2 ≤ μ.real univ * ∫ p, ‖u p‖ ^ 2 ∂μ.prod ν := by
+  have hsq := hu.norm.integrable_sq
+  have hvint (χ : PontryaginDual K) := (Lp.memLp (v χ)).norm.integrable_sq
+  have hn (χ : PontryaginDual K) : ‖v χ‖ ^ 2 = ∫ b, ‖v χ b‖ ^ 2 ∂ν := by
+    simpa only [Lp.toLp_coeFn] using norm_sq_toLp_two (Lp.memLp (v χ))
+  calc
+    _ = ∫ b, ∑ χ ∈ s, ‖v χ b‖ ^ 2 ∂ν := by
+      simp_rw [hn]
+      exact (integral_finsetSum _ fun i _ ↦ hvint i).symm
+    _ ≤ ∫ b, μ.real univ * ∫ a, ‖u (a, b)‖ ^ 2 ∂μ ∂ν := by
+      apply integral_mono_ae (integrable_finsetSum _ fun i _ ↦ hvint i)
+        (hsq.integral_prod_right.const_mul _)
+      have ha := (eventually_all_finset s).2 fun χ _ ↦ hv χ
+      filter_upwards [memLp_two_prod_left_ae hu, ha] with b hb hb'
+      simpa only [Finset.sum_congr rfl fun χ hχ ↦ congrArg (fun z : ℂ ↦ ‖z‖ ^ 2) (hb' χ hχ)]
+        using sum_sq_character_integral_le μ hb s
+    _ = _ := by rw [integral_const_mul, integral_prod_symm _ hsq]
+
+end RiemannMasullo
