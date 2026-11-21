@@ -6,6 +6,8 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import Mathlib.MeasureTheory.Measure.SeparableMeasure
+
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
 @[expose] public noncomputable section
@@ -30,7 +32,8 @@ abbrev RegularL2 (ν : Measure G) := Lp ℂ 2 ν
 /-- Paper: Definition 4.3.1.1, p. 175. Swapping the arguments of Mathlib's inner
 product gives the integral of the first function times the conjugate of the second. -/
 theorem regularL2_inner (ν : Measure G) (f h : RegularL2 ν) :
-    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by sorry
+    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by
+  rfl
 
 variable (ν : Measure G) [hν : ν.IsHaarMeasure]
 
@@ -50,7 +53,8 @@ theorem regularL2_haar_sigmaFinite : SigmaFinite ν := by sorry
 /-- Paper: Remark 4.3.1.4, p. 175. A continuous compactly supported function
 is square-integrable. -/
 theorem regularL2_memLp_compactlySupported (f : G →C_c ℂ) :
-    MemLp (f : G → ℂ) 2 ν := by sorry
+    MemLp (f : G → ℂ) 2 ν := by
+  exact f.continuous.memLp_of_hasCompactSupport f.hasCompactSupport
 
 /-- Paper: Remark 4.3.1.4, p. 175. Classes of continuous compactly
 supported functions are dense in Haar L². -/
@@ -58,7 +62,9 @@ theorem regularL2_compactlySupported_dense :
     DenseRange (fun f : G →C_c ℂ ↦ (regularL2_memLp_compactlySupported ν f).toLp f) := by sorry
 
 /-- Paper: Lemma 4.3.1.5(1), p. 176. The Haar L² space is separable. -/
-theorem regularL2_separable : SeparableSpace (RegularL2 ν) := by sorry
+theorem regularL2_separable : SeparableSpace (RegularL2 ν) := by
+  have : Fact ((2 : ℝ≥0∞) ≠ ∞) := ⟨by simp⟩
+  infer_instance
 
 /-- Paper: (4.3.1.4), p. 175. Left translation on Haar L² precomposes with
 multiplication by the inverse group element. -/

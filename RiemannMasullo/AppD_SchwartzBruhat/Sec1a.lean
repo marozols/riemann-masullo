@@ -557,7 +557,12 @@ def elementaryCover (xt : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin 
 for its real and torus coordinates. -/
 theorem elementaryCover_surjective (a : Fin r → ℤ) (b : F)
     (x : EuclideanSpace ℝ (Fin m)) (z : Fin n → AddCircle (1 : ℝ)) :
-    ∃ t : EuclideanSpace ℝ (Fin n), elementaryCover (x, t) a b = (x, z, a, b) := by sorry
+    ∃ t : EuclideanSpace ℝ (Fin n), elementaryCover (x, t) a b = (x, z, a, b) := by
+  choose s hs using fun i ↦ QuotientAddGroup.mk_surjective (z i)
+  refine ⟨WithLp.toLp 2 s, ?_⟩
+  simp only [elementaryCover, Prod.mk.injEq, true_and, and_true]
+  funext i
+  exact hs i
 
 /-- Paper: (D.1.3.3), p. 749. The mixed partial is evaluated on the cover by
 repeating differentiation along each coordinate vector according to its exponent. -/

@@ -302,7 +302,12 @@ theorem tamagawaFourier_eq_lcaFourier (μ : Measure R) (ψ : R → Circle) (f : 
     (y : R) (χ : PontryaginDual (Multiplicative R))
     (hχ : ∀ x : R, χ (Multiplicative.ofAdd x) = ψ (x * y)) :
     tamagawaFourier μ ψ f y = lcaFourier (G := Multiplicative R) μ
-      (fun x ↦ f x.toAdd) χ := by sorry
+      (fun x ↦ f x.toAdd) χ := by
+  unfold tamagawaFourier lcaFourier
+  congr 1
+  funext x
+  rw [← hχ]
+  rfl
 
 /-- Paper: §A.3.1.1, p. 557. A measure is self-dual when the pairing identifies the
 additive group with its Pontryagin dual and transports the measure to its Plancherel measure. -/

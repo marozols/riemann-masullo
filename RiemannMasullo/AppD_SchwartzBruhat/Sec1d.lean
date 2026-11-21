@@ -46,7 +46,21 @@ theorem mem_range_integralIdeleInsertion (g : 𝕀[F]) :
     g ∈ range (integralIdeleInsertion F S) ↔
       ∀ v : HeightOneSpectrum (𝓞 F), v ∉ S →
         g.val.2 v ∈ v.adicCompletionIntegers F ∧
-          g.inv.2 v ∈ v.adicCompletionIntegers F := by sorry
+          g.inv.2 v ∈ v.adicCompletionIntegers F := by
+  have hmem (a : 𝔸[F]) :
+      a ∈ integralAdelesOutside F S ↔
+        ∀ v : HeightOneSpectrum (𝓞 F), v ∉ S → a.2 v ∈ v.adicCompletionIntegers F := by
+    simp only [integralAdelesOutside, Subring.mem_iInf]
+    rfl
+  constructor
+  · rintro ⟨u, rfl⟩ v hv
+    exact ⟨(hmem _).mp u.val.property v hv, (hmem _).mp u.inv.property v hv⟩
+  · intro hg
+    let u : (integralAdelesOutside F S)ˣ :=
+      ⟨⟨g.val, (hmem _).mpr fun v hv ↦ (hg v hv).1⟩,
+        ⟨g.inv, (hmem _).mpr fun v hv ↦ (hg v hv).2⟩,
+        Subtype.ext g.val_inv, Subtype.ext g.inv_val⟩
+    exact ⟨u, Units.ext rfl⟩
 
 /-- Paper: Lemma D.1.10.1(1), p. 784. Insertion from the full S-stage is a continuous
 injective open map. -/

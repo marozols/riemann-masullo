@@ -4,14 +4,21 @@ public import RiemannMasullo.AppA_AlgebraicNT.Sec1
 public import Mathlib.Analysis.SpecialFunctions.Pow.Complex
 public import Mathlib.Geometry.Manifold.LocalDiffeomorph
 public import Mathlib.NumberTheory.NumberField.HeckeLFunction
+public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
+import RiemannMasullo.AppA_AlgebraicNT.Sec2
 
+import RiemannMasullo.ForMathlib.Analysis.Complex.CoveringMap
+import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual
+import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Cyclic
 
 /-!
 # Riemann surfaces of continuous quasi-characters
@@ -586,7 +593,18 @@ theorem continuous_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g
 /-- Paper: Equation (3.1.1.2), p. 119. Every real number occurs as an abscissa. -/
 theorem surjective_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g ≠ 1) :
     Surjective (quasiCharacterAbscissa m hm hne) := by
-  sorry
+  intro r
+  let n := (Units.coeHom ℝ≥0).comp m
+  let f := Complex.ofRealHom.toMonoidHom.comp
+    (NNReal.toRealHom.toMonoidHom.comp ((NNReal.rpowMonoidHom r).comp n))
+  have hc : Continuous f := Complex.continuous_ofReal.comp
+    ((NNReal.continuous_coe.comp (Units.continuous_val.comp hm.continuous)).rpow continuous_const
+      (fun g ↦ Or.inl (NNReal.coe_ne_zero.mpr (m g).ne_zero)))
+  let c : QuasiCharacter G := ⟨f, hc⟩
+  refine ⟨c, quasiCharacterAbscissa_of_unitary_twist m hm hne c 1 (r : ℂ) ?_⟩
+  intro g
+  rw [PontryaginDual.one_apply, Circle.coe_one, one_mul]
+  exact Complex.ofReal_cpow (NNReal.coe_nonneg _) r
 
 /-- Paper: Definition 3.1.1.2(1), p. 119. The relative vertical strip over an interval is
 the inverse image under the abscissa, with the topology inherited on its subtype.
@@ -647,6 +665,7 @@ theorem quasiCharacterAbscissa_dual [IsTopologicalGroup G] (hm : IsProperMap m)
   rw [map_inv, ← div_eq_mul_inv, norm_div, Complex.norm_of_nonneg hmod.le,
     Real.log_div hmod.ne' hnorm, sub_div, div_self hlog]
 
+open Filter in
 /-- Paper: Equation (3.1.1.4), p. 119. The duality map is an analytic automorphism and
 serves as its own inverse. -/
 theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous m)
@@ -654,9 +673,189 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
     letI := quasiCharacterChartedSpace m h
     ∃ e : Diffeomorph 𝓘(ℂ) 𝓘(ℂ) (QuasiCharacter G) (QuasiCharacter G) ω,
       (∀ c, e c = dualQuasiCharacter m hm c) ∧ ∀ c, e.symm c = dualQuasiCharacter m hm c := by
-  sorry
+  let := quasiCharacterChartedSpace m h
+  let D := dualQuasiCharacter m hm
+  have hD (c : QuasiCharacter G) (g : G) : D c g = (modℝ g : ℂ) / c g := by
+    change (modℝ g : ℂ) * c g⁻¹ = _
+    rw [map_inv, div_eq_mul_inv]
+  have hn (g : G) : (modℝ g : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (m g).ne_zero)
+  have hinv : Function.Involutive D := by
+    intro c
+    ext1 g
+    rw [hD, hD]
+    field_simp [hn g, ((Group.isUnit g).map c).ne_zero]
+  have hsmooth : ContMDiff 𝓘(ℂ) 𝓘(ℂ) ω D := by
+    intro c
+    let a := (h c).choose
+    let b := (h (D c)).choose
+    obtain ⟨ha, ha0, htwist⟩ := (h c).choose_spec
+    obtain ⟨hb, hb0, hdual⟩ := (h (D c)).choose_spec
+    have ht : -(a c) ∈ b.target := by
+      change -((h c).choose c) ∈ b.target
+      rw [ha0, neg_zero, ← hb0]
+      exact b.map_source hb
+    have hnear : ∀ᶠ z in 𝓝 (a c), z ∈ a.target ∧ -z ∈ b.target := by
+      filter_upwards [a.open_target.mem_nhds (a.map_source ha),
+        continuous_neg.continuousAt.preimage_mem_nhds (b.open_target.mem_nhds ht)] with z hz hz'
+      exact ⟨hz, hz'⟩
+    -- Duality sends a twist by z to a twist by -z in the chart at the dual character.
+    have hchart : D ∘ a.symm =ᶠ[𝓝 (a c)] b.symm ∘ Neg.neg := by
+      filter_upwards [hnear] with z hz
+      ext1 g
+      change D (a.symm z) g = b.symm (-z) g
+      rw [hD, htwist z hz.1 g, hdual (-z) hz.2 g, hD, Complex.cpow_neg]
+      simp only [div_eq_mul_inv, mul_inv_rev]
+      ring
+    apply contMDiffAt_iff.mpr
+    constructor
+    · apply (a.symm.continuousAt_iff_continuousAt_comp_right ha).mpr
+      exact ((b.continuousAt_symm ht).comp continuous_neg.continuousAt).congr_of_eventuallyEq hchart
+    · change ContDiffWithinAt ℂ ω (b ∘ D ∘ a.symm) (Set.range id) (a c)
+      apply ContDiffAt.contDiffWithinAt
+      apply (contDiff_neg.contDiffAt : ContDiffAt ℂ ω Neg.neg (a c)).congr_of_eventuallyEq
+      filter_upwards [hchart, hnear] with z he hz
+      exact (congrArg b he).trans (b.right_inv hz.2)
+  exact ⟨{
+    toFun := D
+    invFun := D
+    left_inv := hinv
+    right_inv := hinv
+    contMDiff_toFun := hsmooth
+    contMDiff_invFun := hsmooth }, fun _ ↦ rfl, fun _ ↦ rfl⟩
+
+/-- Paper: Following Equation (3.1.1.4), p. 119. Duality exchanges the components
+indexed by a norm-one character and its complex conjugate. -/
+theorem dualQuasiCharacter_image_component [IsTopologicalGroup G] (hm : IsProperMap m)
+    (hne : ∃ g, m g ≠ 1) (χ : PontryaginDual m.ker) :
+    dualQuasiCharacter m hm.continuous '' componentVerticalStrip m hm hne χ Set.univ =
+      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by sorry
 
 end Generalities
+
+section SplitCharacters
+
+local notation "valℝ" => fun (t : ℝ≥0ˣ) ↦ ((t : ℝ≥0) : ℝ)
+
+/-- The exponent of a positive-real character varies continuously in the compact-open topology. -/
+private theorem continuous_complexPowerExponent :
+    Continuous fun c : ℝ≥0ˣ →ₜ* ℂ ↦ (existsUnique_complexPower c).choose := by
+  let m := MonoidHom.id ℝ≥0ˣ
+  have hm : IsProperMap m := isProperMap_id
+  have hne : ∃ t, m t ≠ 1 := ⟨Units.mk0 2 (by norm_num), fun he ↦ by
+    have h := congrArg (fun u : ℝ≥0ˣ ↦ ((u : ℝ≥0) : ℝ)) he
+    norm_num [m] at h⟩
+  apply continuous_iff_continuousAt.mpr
+  intro c
+  obtain ⟨e, hc, -, he⟩ := hasNormTwistCharts_of_proper m hm hne c
+  apply (continuousAt_const.add (e.continuousAt hc) :
+    ContinuousAt (fun d ↦ (existsUnique_complexPower c).choose + e d) c).congr_of_eventuallyEq
+  filter_upwards [e.open_source.mem_nhds hc] with d hd
+  symm
+  change _ + e d = _
+  apply (existsUnique_complexPower d).choose_spec.2
+  intro t
+  have hv := he (e d) (e.map_source hd) t
+  rw [e.left_inv hd] at hv
+  rw [hv, (existsUnique_complexPower c).choose_spec.1 t,
+    Complex.cpow_add _ _ (Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr t.ne_zero))]
+  rfl
+
+/-- A continuous splitting determines both coordinates of a character, by restriction to
+the positive real section and to the compact norm-one subgroup. -/
+theorem quasiCharacterParametrization_of_split {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [LocallyCompactSpace G] (m : G →* ℝ≥0ˣ) (hm : Continuous m)
+    [CompactSpace m.ker] (σ : ℝ≥0ˣ →ₜ* G) (hσ : RightInverse σ m) :
+    ∃ e : QuasiCharacter G ≃ₜ (ℂ × PontryaginDual m.ker), ∀ c,
+      (∀ t, c (σ t) = (valℝ t : ℂ) ^ (e c).1) ∧
+        ∀ u : m.ker, ((e c).2 u : ℂ) = c u.val := by
+  have hrker (g : G) : g / σ (m g) ∈ m.ker := by
+    simp [MonoidHom.mem_ker, hσ (m g)]
+  let r : G →ₜ* m.ker :=
+    { toFun := fun g ↦ ⟨g / σ (m g), hrker g⟩
+      map_one' := Subtype.ext (by simp)
+      map_mul' := fun g h ↦ Subtype.ext (by simp [mul_div_mul_comm])
+      continuous_toFun := (continuous_id.div' (σ.continuous.comp hm)).subtype_mk hrker }
+  have hrσ (t : ℝ≥0ˣ) : r (σ t) = 1 := by
+    apply Subtype.ext
+    change σ t / σ (m (σ t)) = 1
+    simp [hσ t]
+  have hru (u : m.ker) : r u = u := by
+    apply Subtype.ext
+    change _ / σ (m u) = _
+    rw [u.prop, map_one, div_one]
+  let exponent (c : QuasiCharacter G) := (existsUnique_complexPower (c.comp σ)).choose
+  have hrad (c : QuasiCharacter G) (t : ℝ≥0ˣ) : c (σ t) = (valℝ t : ℂ) ^ exponent c :=
+    (existsUnique_complexPower (c.comp σ)).choose_spec.1 t
+  have hnorm (c : QuasiCharacter G) (u : m.ker) : ‖c (u : G)‖ = 1 := by
+    obtain ⟨B, hB⟩ := (isCompact_range (c.continuous.norm.comp
+      (continuous_subtype_val (p := fun g ↦ g ∈ m.ker)))).bddAbove
+    have hle (v : m.ker) : ‖c (v : G)‖ ≤ 1 := by
+      by_contra! h
+      obtain ⟨k, hk⟩ := pow_unbounded_of_one_lt B h
+      have hb := hB (Set.mem_range_self (v ^ k))
+      change ‖c ((v : G) ^ k)‖ ≤ B at hb
+      rw [map_pow, norm_pow] at hb
+      exact hk.not_ge hb
+    refine (hle u).antisymm ?_
+    have h := hle u⁻¹
+    rw [Subgroup.coe_inv, map_inv, norm_inv] at h
+    exact (inv_le_one₀ (norm_pos_iff.mpr ((Group.isUnit _).map c).ne_zero)).mp h
+  have hcircle (c : QuasiCharacter G) (u : m.ker) : c u ∈ Submonoid.unitSphere ℂ :=
+    mem_sphere_zero_iff_norm.mpr (hnorm c u)
+  let unitary (c : QuasiCharacter G) : PontryaginDual m.ker :=
+    { toFun := fun u ↦ ⟨c u, hcircle c u⟩
+      map_one' := Circle.ext (map_one c)
+      map_mul' := fun u v ↦ Circle.ext (map_mul c _ _)
+      continuous_toFun := (c.continuous.comp continuous_subtype_val).subtype_mk (hcircle c) }
+  have hpos (g : G) : 0 < valℝ (m g) := NNReal.coe_pos.mpr (pos_iff_ne_zero.mpr (m g).ne_zero)
+  have hbase : Continuous (fun g ↦ (valℝ (m g) : ℂ)) :=
+    Complex.continuous_ofReal.comp (NNReal.continuous_coe.comp (Units.continuous_val.comp hm))
+  -- Reconstruct each character from its values on the two factors.
+  let assemble (p : ℂ × PontryaginDual m.ker) : QuasiCharacter G :=
+    { toFun := fun g ↦ (p.2 (r g) : ℂ) * (valℝ (m g) : ℂ) ^ p.1
+      map_one' := by simp
+      map_mul' := fun g h ↦ by
+        simp only [map_mul, Circle.coe_mul, Units.val_mul, NNReal.coe_mul, Complex.ofReal_mul,
+          Complex.mul_cpow_ofReal_nonneg (hpos g).le (hpos h).le]
+        ring
+      continuous_toFun := (continuous_subtype_val.comp (p.2.continuous.comp r.continuous)).mul
+        (hbase.cpow continuous_const fun g ↦ Or.inl (hpos g)) }
+  have hσval (p : ℂ × PontryaginDual m.ker) (t : ℝ≥0ˣ) :
+      assemble p (σ t) = (valℝ t : ℂ) ^ p.1 := by
+    change (p.2 (r (σ t)) : ℂ) * (valℝ (m (σ t)) : ℂ) ^ p.1 = _
+    rw [hrσ, hσ, map_one, Circle.coe_one, one_mul]
+  have huval (p : ℂ × PontryaginDual m.ker) (u : m.ker) :
+      assemble p u = (p.2 u : ℂ) := by
+    change (p.2 (r u) : ℂ) * (valℝ (m u) : ℂ) ^ p.1 = _
+    rw [hru, u.prop]
+    simp
+  refine ⟨{
+    toFun := fun c ↦ (exponent c, unitary c)
+    invFun := assemble
+    left_inv := fun c ↦ by
+      ext1 g
+      change c (g / σ (m g)) * (valℝ (m g) : ℂ) ^ exponent c = c g
+      rw [← hrad, ← map_mul, div_mul_cancel]
+    right_inv := fun p ↦ Prod.ext
+      ((existsUnique_complexPower ((assemble p).comp σ)).choose_spec.2 _ (hσval p)).symm (by
+        ext1 u
+        exact Circle.ext (huval p u))
+    continuous_toFun := (continuous_complexPowerExponent.comp σ.continuous_comp_left).prodMk ?_
+    continuous_invFun := ContinuousMonoidHom.continuous_of_continuous_uncurry assemble ?_ },
+    fun c ↦ ⟨hrad c, fun _ ↦ rfl⟩⟩
+  · apply ContinuousMonoidHom.continuous_of_continuous_uncurry
+    exact (continuous_eval.comp
+      (continuous_fst.prodMk (continuous_subtype_val.comp continuous_snd))).subtype_mk
+        (fun p ↦ hcircle p.1 p.2)
+  · have : ContinuousEval (PontryaginDual m.ker) m.ker Circle :=
+      inferInstanceAs (ContinuousEval (m.ker →ₜ* Circle) m.ker Circle)
+    exact (continuous_subtype_val.comp (continuous_eval.comp
+      ((continuous_snd.comp continuous_fst).prodMk (r.continuous.comp continuous_snd)))).mul
+      ((hbase.comp continuous_snd).cpow (continuous_fst.comp continuous_fst) fun p ↦
+        Or.inl (hpos p.2))
+
+end SplitCharacters
 
 section Ideles
 
@@ -697,19 +896,31 @@ theorem sIdeleQuotientNorm_mk (g : (SAdeleRing F S)ˣ) :
     sIdeleQuotientNorm F S (QuotientGroup.mk g) = sIdeleNorm F S g := by
   rfl
 
--- TODO(paper-gap): Theorem A.1.5.2 gives compactness for the norm-one part of C_{F,S}.
--- Applying it to J_{F,S} requires projecting away the integer units outside S.
-
-/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
-one is compact. -/
-theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
-  sorry
-
 /-- Paper: §3.1.2.3, p. 121. The S-idelic norm admits a continuous homomorphic section,
 as used to parametrize the components in (3.1.2.5). -/
 theorem sIdeleQuotientNorm_exists_section :
     ∃ σ : ℝ≥0ˣ →ₜ* SIdeleQuotient F S, RightInverse σ (sIdeleQuotientNorm F S) := by
-  sorry
+  obtain ⟨w⟩ := (inferInstance : Nonempty (InfinitePlace F))
+  let s := singlePlaceIdeleNormSection F w
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := (continuous_fst.prodMk (continuous_pi fun v : S ↦
+    (RestrictedProduct.continuous_eval v.val).comp continuous_snd)).units_map _
+  let q := QuotientGroup.mk' projectedDiagonal
+  refine ⟨⟨q.comp (p.comp s), QuotientGroup.continuous_mk.comp
+    (hp.comp (singlePlaceIdeleNormSection_continuous F w))⟩, fun t ↦ ?_⟩
+  -- The chosen section has every finite coordinate equal to one.
+  let A := integralAdelesOutside F S
+  have hmem (u : ℝ≥0ˣ) : (s u).val ∈ A := by
+    simp only [A, integralAdelesOutside, Subring.mem_iInf]
+    intro v _
+    exact (v.adicCompletionIntegers F).one_mem
+  have ht : s t ∈ A.toSubmonoid.units :=
+    ⟨hmem t, by
+      change ((s t)⁻¹).val ∈ A
+      rw [← map_inv]
+      exact hmem t⁻¹⟩
+  let g := A.toSubmonoid.unitsEquivUnitsType ⟨s t, ht⟩
+  exact ((sIdeleNorm_spec F S).1 g).symm.trans (singlePlaceIdeleNormSection_rightInverse F w t)
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
@@ -727,10 +938,51 @@ theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
   refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
   exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
 
+/-- Forgetting the unit coordinates outside S induces an open quotient map on S-idele
+classes, and this projection preserves the norm. -/
+theorem sIdeleClassGroup_projection :
+    ∃ π : SIdeleClassGroup F S →* SIdeleQuotient F S, IsOpenQuotientMap π ∧
+      ∀ c, sIdeleQuotientNorm F S (π c) = sIdeleClassNorm F S c := by
+  let A := integralAdelesOutside F S
+  let p := Units.map ((adeleProjection F S).comp A.subtype).toMonoidHom
+  let d := (Units.map (integralAdeleDiagonal F S).toMonoidHom).range
+  let π := QuotientGroup.map d (d.map p) p (Subgroup.le_comap_map _ _)
+  have hp : IsOpenQuotientMap p := by
+    let B := (v : {v : Primes(F) // v ∉ S}) → v.val.adicCompletionIntegers F
+    obtain ⟨e, he, he', hcoords⟩ := integralAdelesOutside_factors F S
+    let E : A ≃ₜ* (SAdeleRing F S × B) :=
+      { e.toMulEquiv with continuous_toFun := he, continuous_invFun := he' }
+    let U := (Units.mapContinuousMulEquiv E).trans (ContinuousMulEquiv.prodUnits _ _)
+    have heq : (p : Aˣ → (SAdeleRing F S)ˣ) = Prod.fst ∘ U := by
+      funext g
+      exact Units.ext (hcoords g.val).1.symm
+    rw [heq]
+    exact isOpenQuotientMap_fst.comp U.toHomeomorph.isOpenQuotientMap
+  let q := QuotientGroup.mk' d
+  have hq : IsOpenQuotientMap q := QuotientGroup.isOpenQuotientMap_mk
+  refine ⟨π, hq.of_comp_iff.mp ?_, ?_⟩
+  · exact (QuotientGroup.isOpenQuotientMap_mk (N := d.map p)).comp hp
+  · intro c
+    induction c using QuotientGroup.induction_on with
+    | H g => rfl
+
+/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
+one is compact. -/
+theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
+  obtain ⟨π, hπ, hnorm⟩ := sIdeleClassGroup_projection F S
+  have hcomp : IsProperMap ((sIdeleQuotientNorm F S) ∘ π) := by
+    simpa only [Function.comp_def, hnorm] using
+      isProperMap_sIdeleClassNorm_of_global F S (isProperMap_ideleClassNorm F)
+  exact isProperMap_of_comp_of_surj hπ.continuous
+    (hπ.continuous_comp_iff.mp hcomp.continuous) hcomp hπ.surjective
+
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
 theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) := by
-  sorry
+  obtain ⟨_, _, _, _, _, hT, hLC, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+  obtain ⟨g, rfl⟩ := hsurj t
+  exact hasNormTwistCharts_of_proper _ (isProperMap_ideleClassNorm F) ⟨g, ht⟩
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting the multiplicative group of a finite completion and
 passing to idele classes is continuous. -/
@@ -758,6 +1010,25 @@ theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
   apply Continuous.units_map
   exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
 
+/-- Paper: §3.1.2, p. 120. The idele class norm on one finite completion is its normalized
+local norm. -/
+theorem ideleClassNorm_ofAdicCompletion (v : HeightOneSpectrum (𝓞 F)) (x : (v.adicCompletion F)ˣ) :
+    ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v x) =
+      Units.map nnNormHom.toMonoidHom x := by
+  classical
+  let g := IdeleGroup.ofAdicCompletion (𝓞 F) F v x
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F g : ℝ≥0) : ℝ) = ‖x.val‖
+  rw [((ideleNorm_spec F).1 g).2]
+  change (∏ w : InfinitePlace F, ‖(1 : w.Completion)‖ ^ w.mult) *
+    ∏ᶠ w, ‖RestrictedProduct.mulSingle (fun w : Primes(F) ↦ w.adicCompletionIntegers F) v x.val w‖ = _
+  simp only [norm_one, one_pow, Finset.prod_const_one, one_mul]
+  rw [finprod_eq_single _ v]
+  · rw [RestrictedProduct.mulSingle_eq_same]
+  · intro w hw
+    rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, norm_one]
+
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
 def finitePlaceRestriction (v : Primes(F)) (c : HeckeCharacter (𝓞 F) F) :
@@ -782,6 +1053,22 @@ theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
     b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
   sorry
 
+open Classical in
+/-- Paper: §3.1.2, p. 120. A quasi-character of J_{F,S} is the product of its local
+restrictions at the infinite places and the finite places in S. Each restriction
+evaluates the character on the S-idele with the given coordinate and ones elsewhere. -/
+theorem sIdeleQuotientCharacter_eq_prod_restrictions (c : QuasiCharacter (SIdeleQuotient F S)) :
+    let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+      ((v : S) → v.val.adicCompletion F)
+    let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+    let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+    ∃ (a : (w : InfinitePlace F) → QuasiCharacter w.Completionˣ)
+        (b : (v : S) → QuasiCharacter (v.val.adicCompletion F)ˣ),
+      (∀ w u, a w u = c (QuotientGroup.mk (e.symm (eArch.symm (Pi.mulSingle w u), 1)))) ∧
+      (∀ v u, b v u = c (QuotientGroup.mk (e.symm (1, eS.symm (Pi.mulSingle v u))))) ∧
+      ∀ g : (SAdeleRing F S)ˣ, c (QuotientGroup.mk g) =
+        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by sorry
+
 local notation "finiteNorm" => Units.map nnNormHom.toMonoidHom
 local notation "infiniteNorm(" w ")" => (Units.map nnNormHom.toMonoidHom) ^ InfinitePlace.mult w
 
@@ -800,13 +1087,49 @@ theorem finitePlace_quasiCharacterParametrization (v : Primes(F)) (π : (v.adicC
         ((ℂ ⧸ periods) × PontryaginDual (v.adicCompletionIntegers F)ˣ),
       ∀ c, (∀ s : ℂ, (e c).1 = QuotientAddGroup.mk s ↔ c π = (b : ℂ) * (q : ℂ) ^ (-s)) ∧
         ∀ u, ((e c).2 u : ℂ) = c (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom u) := by
-  sorry
+  let O := v.adicCompletionIntegers F
+  have : CompactSpace O := compactSpace_adicCompletionIntegers v
+  have : CompactSpace Oˣ := compactSpace_units_of_compactSpace O
+  obtain ⟨split, hπ', hO⟩ := finitePlace_unitDecomposition v π hπ
+  let f : (v.adicCompletion F)ˣ →ₜ* (Multiplicative ℤ × Oˣ) := ⟨split, split.continuous⟩
+  let g : (Multiplicative ℤ × Oˣ) →ₜ* (v.adicCompletion F)ˣ := ⟨split.symm, split.symm.continuous⟩
+  let transport : QuasiCharacter (v.adicCompletion F)ˣ ≃ₜ QuasiCharacter (Multiplicative ℤ × Oˣ) :=
+    { toFun := fun c ↦ c.comp g
+      invFun := fun c ↦ c.comp f
+      left_inv := fun c ↦ ContinuousMonoidHom.ext fun x ↦ congrArg c (split.symm_apply_apply x)
+      right_inv := fun c ↦ ContinuousMonoidHom.ext fun x ↦ congrArg c (split.apply_symm_apply x)
+      continuous_toFun := g.continuous_comp_left
+      continuous_invFun := f.continuous_comp_left }
+  obtain ⟨chars, hchars⟩ := exists_cyclicProductCharacterHomeomorph (U := Oˣ)
+  have hq : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  obtain ⟨cylinder, hcyl⟩ := exists_complexPowerCylinder _ hq b
+  let e := (transport.trans chars).trans (cylinder.symm.prodCongr (Homeomorph.refl _))
+  refine ⟨e, fun c ↦ ⟨fun s ↦ ?_, fun u ↦ ?_⟩⟩
+  · have hval := (hchars (transport c)).1
+    change _ = c (split.symm (Multiplicative.ofAdd 1, 1)) at hval
+    rw [← hπ', split.symm_apply_apply] at hval
+    change cylinder.symm (chars (transport c)).1 = _ ↔ _
+    rw [cylinder.symm_apply_eq, ← Units.val_inj, hval, hcyl]
+  · have hval := (hchars (transport c)).2 u
+    change _ = c (split.symm (1, u)) at hval
+    rw [← hO u, split.symm_apply_apply] at hval
+    exact hval
 
 /-- Paper: Equation (3.1.2.2), p. 120. At a finite place the locally defined complex
 exponent is a chart for the normalized absolute value. -/
 theorem finitePlace_hasNormTwistCharts (v : Primes(F)) :
     HasNormTwistCharts (finiteNorm : (v.adicCompletion F)ˣ →* ℝ≥0ˣ) := by
-  sorry
+  let : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  let n : (v.adicCompletion F)ˣ →* ℝ≥0ˣ := Units.map nnNormHom.toMonoidHom
+  have hp : IsProperMap (fun x ↦ (n x) ^ (1 : ℕ)) := isProperMap_units_nnNorm_pow 1 one_ne_zero
+  simp only [pow_one] at hp
+  apply hasNormTwistCharts_of_proper n hp
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let u := Units.mk0 (π : v.adicCompletion F) hπ.ne_zero
+  refine ⟨u, fun he ↦ hπ.val_lt_one.ne ?_⟩
+  apply Valued.toNormedField.norm_eq_one_iff.mp
+  exact congrArg (fun t : ℝ≥0ˣ ↦ ((t : ℝ≥0) : ℝ)) he
 
 /-- Paper: Equation (3.1.2.3), p. 121. A continuous splitting of the normalized absolute
 value identifies the surface with a complex plane for each character of the norm-one group.
@@ -818,13 +1141,47 @@ theorem infinitePlace_quasiCharacterParametrization (w : InfinitePlace F)
     ∃ e : QuasiCharacter w.Completionˣ ≃ₜ (ℂ × PontryaginDual n.ker), ∀ c,
       (∀ t : ℝ≥0ˣ, c (σ t) = (((t : ℝ≥0) : ℝ) : ℂ) ^ (e c).1) ∧
         ∀ u : n.ker, ((e c).2 u : ℂ) = c u.val := by
-  sorry
+  let n : w.Completionˣ →* ℝ≥0ˣ := infiniteNorm(w)
+  have hi := InfinitePlace.Completion.isometry_extensionEmbedding w
+  let : ProperSpace w.Completion :=
+    LipschitzWith.properSpace hi.isClosedEmbedding.isProperMap hi.lipschitzWith
+  have hker (u : w.Completionˣ) : u ∈ n.ker ↔ ‖(u : w.Completion)‖ = 1 := by
+    rw [MonoidHom.mem_ker, ← Units.val_inj, ← NNReal.coe_inj]
+    exact pow_eq_one_iff_of_nonneg (norm_nonneg _) w.mult_ne_zero
+  let : CompactSpace n.ker := by
+    apply isCompact_iff_compactSpace.mp
+    apply Units.isEmbedding_val₀.isInducing.isCompact_iff.mpr
+    have himage : Units.val '' (n.ker : Set w.Completionˣ) = Metric.sphere 0 1 := by
+      ext x
+      rw [mem_sphere_zero_iff_norm]
+      constructor
+      · rintro ⟨u, hu, rfl⟩
+        exact (hker u).mp hu
+      · intro hx
+        have hne : x ≠ 0 := norm_ne_zero_iff.mp (hx.trans_ne one_ne_zero)
+        exact ⟨Units.mk0 x hne, (hker _).mpr hx, rfl⟩
+    rw [himage]
+    exact isCompact_sphere _ _
+  exact quasiCharacterParametrization_of_split n
+    ((continuous_nnNorm.units_map nnNormHom.toMonoidHom).pow w.mult) σ hσ
 
 /-- Paper: Equation (3.1.2.3), p. 121. At an infinite place the normalized absolute value
 gives complex exponent charts. Its multiplicity is one at real places and two at complex places. -/
 theorem infinitePlace_hasNormTwistCharts (w : InfinitePlace F) :
     HasNormTwistCharts (infiniteNorm(w) : w.Completionˣ →* ℝ≥0ˣ) := by
-  sorry
+  have htwo : 1 < ‖(2 : w.Completion)‖ := by
+    rw [← (InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) (2 : w.Completion), map_ofNat]
+    norm_num
+  let : NontriviallyNormedField w.Completion := ⟨⟨2, htwo⟩⟩
+  let : ProperSpace w.Completion :=
+    .of_nontriviallyNormedField_of_weaklyLocallyCompactSpace w.Completion
+  apply hasNormTwistCharts_of_proper _ (isProperMap_units_nnNorm_pow w.mult w.mult_ne_zero)
+  let u := Units.mk0 (2 : w.Completion) (by rintro h; rw [h, norm_zero] at htwo; linarith)
+  refine ⟨u, fun he ↦ ?_⟩
+  have hv := congrArg (fun y : ℝ≥0ˣ ↦ ((y : ℝ≥0) : ℝ)) he
+  change ‖(2 : w.Completion)‖ ^ w.mult = 1 at hv
+  exact (one_lt_pow₀ htwo w.mult_ne_zero).ne' hv
 
 /-- Paper: §3.1.2, p. 120. Equip the Hecke characters with the norm-twist atlas. -/
 scoped instance heckeCharacterChartedSpace : ChartedSpace ℂ (HeckeCharacter (𝓞 F) F) :=
@@ -1162,7 +1519,22 @@ theorem sIdeleRestriction_isLocalDiffeomorph :
 outside S cover the entire space of Hecke characters. -/
 theorem iUnion_unramifiedOutside :
     (⋃ T : Finset (Primes(F)), (unramifiedOutside F T : Set (HeckeCharacter (𝓞 F) F))) = Set.univ := by
-  sorry
+  classical
+  apply Set.eq_univ_of_forall
+  intro c
+  have (v : Primes(F)) : CompactSpace (LocalUnits(v)) := by
+    have := compactSpace_adicCompletionIntegers (K := F) v
+    exact compactSpace_units_of_compactSpace _
+  obtain ⟨T, hT⟩ := exists_finset_complexCharacter_eq_one (c.comp (finiteIntegerUnitInsertion F))
+  refine Set.mem_iUnion.mpr ⟨T, (mem_unramifiedOutside_iff F T c).mpr ?_⟩
+  intro v hv u
+  change c (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v
+    (Units.map (LocalIntegers(v)).subtype.toMonoidHom u)) = 1
+  rw [← finiteIntegerUnitInsertion_mulSingle]
+  apply hT (Pi.mulSingle v u)
+  intro w hw
+  have hwv : w ≠ v := fun he ↦ hv (he ▸ hw)
+  exact Pi.mulSingle_eq_of_ne hwv _
 
 end Ideles
 

@@ -12,18 +12,21 @@ checkout, with `gh` signed in as a project member.
 
 Yours: every open pull request that proves or splits a declaration.
 
+You also maintain the scripts whose primary job is merging or triaging proof pull requests
+(`scripts/land.sh`, `scripts/triage_prs.sh` and `scripts/check_pr.sh`). Make changes on
+a branch in a scratch worktree and open a pull request for the integrator to merge.
+
 Not yours:
 
 - **The working tree of the main checkout.** The integrator is working in it. Do not edit, pull,
-  build or commit there. The scripts below work in scratch worktrees and through `gh`.
+  build or commit there. The scripts below work in scratch worktrees and through `gh`. (Its
+  `.agent/` directory is shared scratch space, ignored by git; the scripts write there.)
 - **`main`.** You change it only by merging pull requests. Never push to it.
 - **Statement pull requests**: branches `digester/…`, and anything that adds or changes a
   definition or statement taken from the paper. Also anything that touches files outside
   `RiemannMasullo/` or inside `RiemannMasullo/External/` (scripts, workflows, prompts, the
   lakefile, the toolchain, the target statements). Label these `integrator` and leave them.
-- **The issue tracker.** Do not run `scripts/issues.py --apply` or `scripts/pool.sh`. A merged
-  pull request closes its own issue, and the integrator's sync opens issues for the `sorry`s a
-  split adds.
+- **Seeding work.** Section issues, labels on them, and `scripts/pool.sh` are the integrator's.
 
 ## One pass
 
@@ -36,10 +39,44 @@ Not yours:
    itself broke; it is retried on the next run). Never build an outside pull request any other
    way: building Lean can run code.
 3. Deal with what the two scripts left, oldest first, as described below.
-4. Repeat. When a pass merges nothing and leaves nothing for you to read, wait ten minutes.
+4. After a pass that merged anything, and at least every half hour, sync the issues (next section).
+5. Repeat. When a pass merges nothing and leaves nothing for you to read, wait ten minutes.
 
 Merge with `gh pr merge <n> --squash`. About once an hour give the owner three lines: how many
 merged, what is waiting on its author, what you left for the integrator.
+
+## Issue sync after merging
+
+Sync the issues from a built copy of the current `main` in your own worktree. Set it up
+once from the main checkout.
+
+```sh
+main=$PWD
+git fetch -q origin
+git worktree add --detach ../riemann-masullo-wt/merger origin/main
+mkdir -p ../riemann-masullo-wt/merger/.lake
+ln -s "$main/.lake/packages" ../riemann-masullo-wt/merger/.lake/packages    # the built Mathlib
+```
+
+For each sync, run the following from the merger worktree.
+
+```sh
+git fetch -q origin && git checkout -q --detach origin/main &&
+  lake build && scripts/issues.py --apply
+```
+
+- **`lake build` must succeed.** Every pull request was checked against `main`, but two that
+  each pass can still clash, typically by adding a helper lemma of the same name. If `main` does
+  not build, repairing it comes before everything else: on a branch `fix/<what>` in this
+  worktree make the smallest repair (usually deleting the second copy of the helper), run
+  `lake build` and `scripts/lint.sh`, push, open a pull request, merge it, and tell the owner.
+- **`scripts/issues.py --apply`** opens a proof issue for each `sorry` that has none (a split
+  adds some), closes issues whose `sorry` is gone, and unblocks section issues whose
+  prerequisites are closed. It refuses to run from a checkout that is not at the tip of `main`;
+  if `main` moved while it ran, update and run it again. The integrator runs it too, after
+  merging statements; a lock keeps the two apart.
+
+The [progress tracker](progress-tracker.md) builds and publishes the progress map.
 
 ## What the scripts leave for you
 
@@ -49,8 +86,10 @@ used only by the proof, a general lemma in a new file under `RiemannMasullo/ForM
 path Mathlib would use. Do not merge, and say why on the pull request, if it contains anything
 `AGENTS.md` forbids (`axiom`, `native_decide`, `unsafe`, `implemented_by`, `extern`, `opaque`,
 `debug.*` options, or code that runs at build time: `#eval`, `run_cmd`, `initialize`, `macro`,
-`syntax`, `elab`, new tactics), or a new public definition or theorem that states something from
-the paper. The second is a statement change, however small: label it `integrator`.
+`syntax`, `elab`, new tactics). A new public **definition** taken from the paper, or a new public
+theorem from the paper whose proof is `sorry`, is a statement: label it `integrator`. A new public
+theorem that is **proved** in the pull request is not, even when its docstring cites the paper:
+Lean has checked it and nothing can be built on a wrong reading of it, so merge it.
 
 **A split** (it adds `sorry`). The statement check has confirmed that nothing already on `main`
 changed, so read the new `sorry` lemmas, each as a statement in its own right:

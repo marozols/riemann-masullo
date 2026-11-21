@@ -1,8 +1,14 @@
 module
 
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec1c
-public import Mathlib.Analysis.Distribution.TestFunction
+public import RiemannMasullo.ForMathlib.Analysis.Distribution.TestFunction
 public import Mathlib.LinearAlgebra.PiTensorProduct.Basic
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Data.List.FinRange
+import Mathlib.Data.List.OfFn
+import RiemannMasullo.ForMathlib.Analysis.Calculus.FDeriv.Symmetric
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
+import RiemannMasullo.ForMathlib.Analysis.InnerProductSpace.PiL2
 
 /-!
 # Schwartz–Bruhat functions
@@ -36,7 +42,8 @@ The ordinary distribution space in the example is the strong dual of this Mathli
 theorem realTestFunction_stage_isEmbedding (K : Compacts ℝ) :
     IsEmbedding (TestFunction.ofSupportedInCLM ℂ
       (show (K : Set ℝ) ⊆ (⊤ : Opens ℝ) from Set.subset_univ _) :
-        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by sorry
+        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by
+  exact isEmbedding_testFunction_ofSupportedIn (Set.subset_univ _)
 
 /-- Paper: (2.1.1.1)–(2.1.1.4), p. 60. The weighted magnitude is the norm
 of the mixed partial derivative times one plus the absolute coordinate monomial.
@@ -59,6 +66,101 @@ theorem euclideanSchwartzWeightedDeriv_zero {m : ℕ}
   rw [h]
   simp [one_add_one_eq_two]
 
+private abbrev coordinateWeightIndex {m : ℕ} (k : ℕ) (i : Option (Fin m)) : Fin m → ℕ :=
+  i.elim 0 (fun j ↦ Pi.single j k)
+
+private theorem exists_coordinate_weight {m : ℕ} (k : ℕ) (x : EuclideanSpace ℝ (Fin m)) :
+    ∃ i : Option (Fin m), ‖x‖ ^ k ≤ ((m : ℝ) + 1) ^ k * |∏ j, x j ^ coordinateWeightIndex k i j| := by
+  classical
+  let b : Option (Fin m) → ℝ := fun i ↦ i.elim 1 (fun j ↦ |x j|)
+  obtain ⟨i, -, hi⟩ := Finset.exists_max_image Finset.univ b Finset.univ_nonempty
+  have hbi : 1 ≤ b i := hi none (Finset.mem_univ _)
+  have hb := zero_le_one.trans hbi
+  have hx : ‖x‖ ≤ ((m : ℝ) + 1) * b i := by
+    have hrepr := (EuclideanSpace.basisFun (Fin m) ℝ).sum_repr x
+    calc
+      ‖x‖ ≤ ∑ j, |x j| := by
+        conv_lhs => rw [← hrepr]
+        refine (norm_sum_le _ _).trans_eq ?_
+        simp only [norm_smul, OrthonormalBasis.norm_eq_one, EuclideanSpace.basisFun_repr,
+          Real.norm_eq_abs, mul_one]
+      _ ≤ ∑ _j : Fin m, b i := Finset.sum_le_sum fun j _ ↦ hi (some j) (Finset.mem_univ _)
+      _ ≤ _ := by simp; linarith
+  use i
+  have hpow := pow_le_pow_left₀ (norm_nonneg _) hx k
+  rw [mul_pow] at hpow
+  convert hpow using 2
+  cases i with
+  | none => simp [coordinateWeightIndex, b]
+  | some j => simp [coordinateWeightIndex, b, Pi.single, Function.update, apply_ite, abs_pow]
+
+private abbrev coordinateMultiplicity {m n : ℕ} (t : Fin n → Fin m) (j : Fin m) := (List.ofFn t).count j
+
+private theorem perm_coordinate_directions {m n : ℕ} (t : Fin n → Fin m) :
+    (List.ofFn t).Perm ((List.finRange m).flatMap fun i ↦ List.replicate (coordinateMultiplicity t i) i) := by
+  apply List.perm_iff_count.mpr
+  intro j
+  rw [List.count_flatMap, ← Fin.sum_univ_def]
+  simp [List.count_replicate, coordinateMultiplicity]
+
+/-- Bounds on finitely many weighted mixed partials control each weighted Fréchet derivative. -/
+private theorem schwartz_norm_bound_of_coordinates {m : ℕ} (k n : ℕ)
+    {f : EuclideanSpace ℝ (Fin m) → ℂ} (hf : ContDiff ℝ (∞) f)
+    (x : EuclideanSpace ℝ (Fin m)) {C : ℝ}
+    (hC : ∀ (i : Option (Fin m)) (t : Fin n → Fin m),
+      euclideanSchwartzWeightedDeriv (coordinateWeightIndex k i) (coordinateMultiplicity t) f x ≤ C) :
+    ‖x‖ ^ k * ‖iteratedFDeriv ℝ n f x‖ ≤
+      (((m : ℝ) + 1) ^ k * Fintype.card (Fin n → Fin m)) * C := by
+  classical
+  let T := iteratedFDeriv ℝ n f x
+  let e (j : Fin m) := EuclideanSpace.single j (1 : ℝ)
+  obtain ⟨i, hi⟩ := exists_coordinate_weight k x
+  let w := |∏ j, x j ^ coordinateWeightIndex k i j|
+  have heval (t : Fin n → Fin m) : w * ‖T (fun j ↦ e (t j))‖ ≤ C := by
+    let dirs := (List.finRange m).flatMap fun j ↦ List.replicate (coordinateMultiplicity t j) j
+    have heq : T (fun j ↦ e (t j)) = iteratedFDeriv ℝ dirs.length f x (fun j ↦ e (dirs.get j)) := by
+      have H := iteratedFDeriv_apply_list_perm hf e (perm_coordinate_directions t) x
+      let eval (s : (Σ r, Fin r → Fin m)) := iteratedFDeriv ℝ s.1 f x (fun j ↦ e (s.2 j))
+      exact (congrArg eval (List.equivSigmaTuple.apply_symm_apply ⟨n, t⟩)).symm.trans H
+    rw [heq]
+    exact (mul_le_mul_of_nonneg_right (le_add_of_nonneg_left zero_le_one) (norm_nonneg _)).trans (hC i t)
+  calc
+    ‖x‖ ^ k * ‖T‖ ≤ (((m : ℝ) + 1) ^ k * w) * ∑ t : Fin n → Fin m, ‖T (fun j ↦ e (t j))‖ :=
+      mul_le_mul hi (norm_multilinear_le_sum_euclidean_basis T) (norm_nonneg _) (by positivity)
+    _ = ((m : ℝ) + 1) ^ k * ∑ t : Fin n → Fin m, w * ‖T (fun j ↦ e (t j))‖ := by
+      rw [mul_assoc, Finset.mul_sum]
+    _ ≤ ((m : ℝ) + 1) ^ k * ∑ _ : Fin n → Fin m, C := by
+      gcongr with t
+      exact heval t
+    _ = _ := by simp [mul_assoc]
+
+/-- Each weighted mixed partial is bounded by the sum of an unweighted and a weighted Schwartz
+seminorm of the same derivative order. -/
+private theorem weighted_partial_le_schwartz_seminorms {m : ℕ}
+    (f : SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) (α β : Fin m → ℕ)
+    (x : EuclideanSpace ℝ (Fin m)) :
+    let n := ((List.finRange m).flatMap fun i ↦ List.replicate (β i) i).length
+    euclideanSchwartzWeightedDeriv α β f x ≤ SchwartzMap.seminorm ℝ 0 n f + SchwartzMap.seminorm ℝ (∑ i, α i) n f := by
+  let dirs := (List.finRange m).flatMap fun i ↦ List.replicate (β i) i
+  let T := iteratedFDeriv ℝ dirs.length f x
+  let v (j : Fin dirs.length) := EuclideanSpace.single (dirs.get j) (1 : ℝ)
+  have hv (j : Fin dirs.length) : ‖v j‖ = 1 := by
+    simpa only [v, EuclideanSpace.basisFun_apply] using
+      (EuclideanSpace.basisFun (Fin m) ℝ).norm_eq_one (dirs.get j)
+  have heval : ‖T v‖ ≤ ‖T‖ := by simpa only [hv, Finset.prod_const_one, mul_one] using T.le_opNorm v
+  have hweight : |∏ i, x i ^ α i| ≤ ‖x‖ ^ (∑ i, α i) := by
+    rw [← Real.norm_eq_abs, norm_prod]
+    calc
+      (∏ i, ‖x i ^ α i‖) ≤ ∏ i, ‖x‖ ^ α i := by
+        refine Finset.prod_le_prod₀ (fun _ _ ↦ norm_nonneg _) (fun i _ ↦ ?_)
+        rw [norm_pow]
+        exact pow_le_pow_left₀ (norm_nonneg _) (PiLp.norm_apply_le x i) (α i)
+      _ = _ := Finset.prod_pow_eq_pow_sum _ _ _
+  change (1 + |∏ i, x i ^ α i|) * ‖T v‖ ≤ _
+  rw [one_add_mul]
+  exact add_le_add (heval.trans (f.norm_iteratedFDeriv_le_seminorm ℝ _ x))
+    ((mul_le_mul hweight heval (norm_nonneg _) (by positivity)).trans (f.le_seminorm ℝ _ _ x))
+
 /-- Paper: Definition 2.1.1.4, p. 60. A smooth function is Schwartz exactly when
 each coordinate-monomial-weighted mixed partial derivative is bounded.
 Deviation: The space uses Mathlib's equivalent norm and Fréchet-derivative
@@ -66,7 +168,24 @@ formulation. Finiteness of (2.1.1.4) is expressed by boundedness. -/
 theorem schwartzMap_euclidean_iff (m : ℕ) (f : EuclideanSpace ℝ (Fin m) → ℂ) :
     (∃ g : SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ, ∀ x, g x = f x) ↔
       ContDiff ℝ (∞) f ∧ ∀ α β : Fin m → ℕ,
-        BddAbove (Set.range (euclideanSchwartzWeightedDeriv α β f)) := by sorry
+        BddAbove (Set.range (euclideanSchwartzWeightedDeriv α β f)) := by
+  constructor
+  · rintro ⟨g, hg⟩
+    obtain rfl : (g : _ → ℂ) = f := funext hg
+    refine ⟨g.smooth', ?_⟩
+    intro α β
+    let n := ((List.finRange m).flatMap fun i ↦ List.replicate (β i) i).length
+    refine ⟨SchwartzMap.seminorm ℝ 0 n g + SchwartzMap.seminorm ℝ (∑ i, α i) n g, ?_⟩
+    rintro _ ⟨x, rfl⟩
+    exact weighted_partial_le_schwartz_seminorms g α β x
+  · rintro ⟨hf, h⟩
+    choose C hC using h
+    refine ⟨⟨f, hf, ?_⟩, fun _ ↦ rfl⟩
+    intro k n
+    let c (p : Option (Fin m) × (Fin n → Fin m)) := C (coordinateWeightIndex k p.1) (coordinateMultiplicity p.2)
+    obtain ⟨B, hB⟩ := Finite.bddAbove_range c
+    refine ⟨_, fun x ↦ schwartz_norm_bound_of_coordinates k n hf x (C := B) fun i t ↦ ?_⟩
+    exact (hC _ _ (mem_range_self x)).trans (hB (mem_range_self (i, t)))
 
 /-- Paper: Definition 2.1.1.4, p. 61. Mathlib's Schwartz topology agrees with
 the topology generated by the weighted mixed partial seminorms from (2.1.1.4).
@@ -83,7 +202,15 @@ theorem euclideanSchwartz_nuclear (m : ℕ) :
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The Euclidean Schwartz space is Fréchet. -/
 theorem euclideanSchwartz_frechet (m : ℕ) :
-    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by sorry
+    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by
+  let E := SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ
+  have : (uniformity E).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero E]
+    infer_instance
+  refine ⟨inferInstance, (schwartz_withSeminorms ℂ _ _).toPolynormableSpace,
+    UniformSpace.metrizableSpace, ?_⟩
+  rw [IsUniformAddGroup.rightUniformSpace_eq]
+  exact completeSpace_schwartzMap
 
 /-- Paper: Proposition 2.1.1.6, p. 61. Evaluation identifies the Euclidean Schwartz space
 with its strong bidual. -/
@@ -94,7 +221,8 @@ theorem euclideanSchwartz_reflexive (m : ℕ) :
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is complete. -/
 theorem euclideanSchwartz_strongDual_complete (m : ℕ) :
-    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by sorry
+    CompleteSpace (StrongDual ℂ (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)) := by
+  infer_instance
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The strong dual of the Euclidean Schwartz space
 is nuclear. -/
@@ -407,9 +535,24 @@ Archimedean and finite adelic Schwartz–Bruhat spaces is complete. -/
 theorem adeleSchwartz_inductiveTensor_complete :
     CompleteSpace (InductiveTensor ℬ(InfiniteAdeleRing F) ℬ(𝔸ᶠ[F])) := by sorry
 
--- TODO(paper-gap): Lemma 2.1.3.2(3) uses indicators of subgroups as generators.
--- These are even in each finite coordinate, whereas coset indicators can distinguish
--- a point from its negative. The statement needs a revised class of generators.
+-- ERRATA F11: Subgroup indicators are even in each finite coordinate.
+-- The compact open subsets used below allow the coset indicators needed in the proof.
+
+/-- Paper: Lemma 2.1.3.2(3), p. 68. Every adelic Schwartz–Bruhat function is a
+finite linear combination of Archimedean Schwartz functions times finite adelic
+rectangle indicators. The rectangle is integral at all but finitely many places.
+Deviation: The local sets are compact open subsets, as in the proof on p. 70. -/
+theorem adeleSchwartz_eq_sum_compactOpen_rectangles (f : ℬ(𝔸[F])) :
+    ∃ (r : ℕ) (c : Fin r → ℂ) (arch : Fin r → ℬ(InfiniteAdeleRing F))
+        (K : Fin r → (v : Places(F)) → Set (v.adicCompletion F)) (φ : Fin r → ℬ(𝔸[F])),
+      1 ≤ r ∧
+      (∀ i, (∀ v, IsCompact (K i v) ∧ IsOpen (K i v)) ∧
+        (∀ᶠ v in cofinite, K i v = (v.adicCompletionIntegers F : Set (v.adicCompletion F))) ∧
+        ∀ x : 𝔸[F], φ i (Multiplicative.ofAdd x) =
+          arch i (Multiplicative.ofAdd x.1) *
+            Set.indicator {y : 𝔸ᶠ[F] | ∀ v, y v ∈ K i v} (fun _ ↦ (1 : ℂ)) x.2) ∧
+      f = ∑ i, c i • φ i := by sorry
+
 -- TODO(paper-gap): The proof on p. 69 cites “Lemma ??” for second countability
 -- and Proposition 2.1.2.8(6), which has only three parts.
 
