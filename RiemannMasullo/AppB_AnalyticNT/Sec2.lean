@@ -7,6 +7,7 @@ public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
 import Mathlib.Analysis.MellinInversion
+import RiemannMasullo.ForMathlib.Analysis.Calculus.IteratedDeriv.ExponentialWeight
 import RiemannMasullo.ForMathlib.Analysis.MellinTransform
 
 /-!
@@ -113,11 +114,84 @@ theorem exists_gaussian_logProfile_exponentialDecay :
       ForwardSemiExponentialDecay f ∧ BackwardSemiExponentialDecay f ∧
       ExponentialDecay f := by sorry
 
+/-- An extra exponential factor absorbs any prescribed polynomial weight at positive infinity. -/
+private theorem forward_weighted_deriv_bound {f : 𝓢(ℝ, ℂ)} (hf : ForwardSemiExponentialDecay f)
+    {A : ℝ} (hA : 0 ≤ A) (k j : ℕ) : ∃ B : ℝ, ∀ x : ℝ,
+      |x| ^ k * Real.exp (A * x) * ‖iteratedDeriv j (f : ℝ → ℂ) x‖ ≤ B := by
+  obtain ⟨C, hC, hdec⟩ := (hf j (A + 1) (by linarith)).exists_pos
+  obtain ⟨R, hR⟩ := eventually_atTop.mp hdec.bound
+  let G (x : ℝ) := |x| ^ k * Real.exp (A * x) * ‖iteratedDeriv j (f : ℝ → ℂ) x‖
+  have hG : Continuous G := ((continuous_abs.pow _).mul (by fun_prop)).mul
+    (f.smooth ⊤ |>.continuous_iteratedDeriv j (by simp)).norm
+  obtain ⟨D, hD⟩ := (isCompact_Icc (a := (0 : ℝ)) (b := R)).bddAbove_image hG.continuousOn
+  let S := SchwartzMap.seminorm ℂ k j f
+  refine ⟨max (max D S) (C * k.factorial), fun x ↦ ?_⟩
+  by_cases hx : x ≤ 0
+  · have e : Real.exp (A * x) ≤ 1 := Real.exp_le_one_iff.mpr (mul_nonpos_of_nonneg_of_nonpos hA hx)
+    calc |x| ^ k * Real.exp (A * x) * ‖iteratedDeriv j (f : ℝ → ℂ) x‖
+      _ ≤ |x| ^ k * ‖iteratedDeriv j (f : ℝ → ℂ) x‖ := by
+        grw [e]; rw [mul_one]
+      _ ≤ S := f.le_seminorm' ℂ k j x
+      _ ≤ _ := (le_max_right _ _).trans (le_max_left _ _)
+  by_cases hr : x ≤ R
+  · exact (hD (mem_image_of_mem _ ⟨le_of_not_ge hx, hr⟩)).trans ((le_max_left _ _).trans (le_max_left _ _))
+  have hx0 : 0 ≤ x := le_of_not_ge hx
+  have hd := hR x (le_of_not_ge hr)
+  rw [Real.norm_of_nonneg (Real.exp_pos _).le] at hd
+  have hpow := (div_le_iff₀ (by positivity : (0 : ℝ) < k.factorial)).mp (Real.pow_div_factorial_le_exp x hx0 k)
+  rw [abs_of_nonneg hx0]
+  calc x ^ k * Real.exp (A * x) * ‖iteratedDeriv j (f : ℝ → ℂ) x‖
+    _ ≤ (Real.exp x * k.factorial) * Real.exp (A * x) * (C * Real.exp (-(A + 1) * x)) := by gcongr
+    _ = C * k.factorial := by
+      calc _ = (C * k.factorial) * (Real.exp x * Real.exp (A * x) * Real.exp (-(A + 1) * x)) := by ring
+        _ = _ := by rw [← Real.exp_add, ← Real.exp_add, show x + A * x + -(A + 1) * x = 0 by ring]; simp
+    _ ≤ _ := le_max_right _ _
+
 /-- Paper: Remark B.2.1.2, p. 593. Forward decay is equivalent to the
 Schwartz condition on every nonnegatively weighted logarithmic profile. -/
 theorem forwardSemiExponentialDecay_iff_weighted_schwartz (f : 𝓢(ℝ, ℂ)) :
     ForwardSemiExponentialDecay f ↔ ∀ A : ℝ, 0 ≤ A →
-      ∃ g : 𝓢(ℝ, ℂ), ∀ x : ℝ, g x = logWeight A x * f x := by sorry
+      ∃ g : 𝓢(ℝ, ℂ), ∀ x : ℝ, g x = logWeight A x * f x := by
+  constructor
+  · intro hf A hA
+    let G : ℝ → ℂ := (fun y ↦ Real.exp (A * y)) • ⇑f
+    have hG : ContDiff ℝ ∞ G := ContDiff.smul (by fun_prop) (f.smooth _)
+    have bound (k n : ℕ) : ∃ B, ∀ x, ‖x‖ ^ k * ‖iteratedFDeriv ℝ n G x‖ ≤ B := by
+      choose C hC using forward_weighted_deriv_bound hf hA k
+      refine ⟨∑ i ∈ Finset.range (n + 1), ((n.choose i : ℝ) * |A| ^ i) * C (n - i), fun x ↦ ?_⟩
+      rw [norm_iteratedFDeriv_eq_norm_iteratedDeriv, Real.norm_eq_abs]
+      apply (norm_iteratedDeriv_exp_smul_le A x k n f (f.smooth n)).trans
+      apply Finset.sum_le_sum
+      intro i _
+      exact mul_le_mul_of_nonneg_left (hC (n - i) x) (by positivity)
+    refine ⟨⟨G, hG, bound⟩, fun x ↦ ?_⟩
+    change Real.exp (A * x) • f x = _
+    rw [Complex.real_smul]
+  · intro hf j A hA
+    obtain ⟨g, hg⟩ := hf A hA.le
+    have hfg : (f : ℝ → ℂ) = (fun y ↦ Real.exp (-A * y)) • ⇑g := by
+      funext x
+      change f x = Real.exp (-A * x) • g x
+      simp only [Complex.real_smul, hg, ← mul_assoc, ← Complex.ofReal_mul,
+        ← Real.exp_add, neg_mul, neg_add_cancel, Real.exp_zero, Complex.ofReal_one, one_mul]
+    let B := ∑ i ∈ Finset.range (j + 1), ((j.choose i : ℝ) * |-A| ^ i) * SchwartzMap.seminorm ℂ 0 (j - i) g
+    apply Asymptotics.IsBigO.of_bound B
+    filter_upwards with x
+    rw [hfg, Real.norm_of_nonneg (Real.exp_pos _).le]
+    have upper := norm_iteratedDeriv_exp_smul_le (-A) x 0 j g (g.smooth j)
+    simp only [pow_zero, one_mul] at upper
+    apply upper.trans
+    rw [show B * Real.exp (-A * x) = ∑ i ∈ Finset.range (j + 1),
+      ((j.choose i : ℝ) * |-A| ^ i) * (Real.exp (-A * x) * SchwartzMap.seminorm ℂ 0 (j - i) g) from by
+        unfold B
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro i _
+        ring]
+    apply Finset.sum_le_sum
+    intro i _
+    gcongr
+    simpa using g.le_seminorm' ℂ 0 (j - i) x
 
 -- TODO(paper-gap): The single rate O(e⁻ˣ) in the last assertion of Remark B.2.1.2
 -- does not imply the family of bounds required by Definition B.2.1.1(1).
