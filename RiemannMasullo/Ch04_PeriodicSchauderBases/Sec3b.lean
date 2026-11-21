@@ -450,7 +450,25 @@ local notation "ρ₁" => MonoidHom.comp (regularL2Action ν) (Subgroup.subtype 
 /-- Paper: Corollary 4.3.3.4, p. 184. The unnormalized Hilbert operator
 is also the Pettis operator for the restricted regular action. -/
 theorem regularIsotypicIntegral_isPettisAverage (ω : PontryaginDual K) :
-    IsPettisIsotypicAverageOn ν₁ univ ρ₁ ω (regularIsotypicIntegral m hm ν ν₁ ω) := by sorry
+    IsPettisIsotypicAverageOn ν₁ univ ρ₁ ω (regularIsotypicIntegral m hm ν ν₁ ω) := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  intro f
+  let U (k : K) := star (ω k : ℂ) • ρ₁ k f
+  have hU : Continuous U :=
+    (show Continuous (fun k : K ↦ star (ω k : ℂ)) by fun_prop).smul
+      (((existsUnique_regularL2_action ν).exists.choose_spec.1 f).comp continuous_subtype_val)
+  have hi := hU.integrable_of_hasCompactSupport (μ := ν₁) (HasCompactSupport.of_compactSpace _)
+  have htrans (k : K) : U k = star (ω k : ℂ) • regularTranslate ν (k : G) f :=
+    congrArg (star (ω k : ℂ) • ·) (regularL2Action_apply ν (k : G) f)
+  have he : regularIsotypicIntegral m hm ν ν₁ ω f = ∫ k, U k ∂ν₁ := by
+    simp_rw [htrans]
+    exact regularIsotypicIntegral_eq_bochner m hm ν ν₁ ω f (by rwa [← funext htrans])
+  rw [Measure.restrict_univ, he]
+  refine ⟨fun φ ↦ (φ.integrable_comp hi), ?_⟩
+  apply LinearMap.ext
+  intro φ
+  exact (φ.integral_comp_comm hi).symm
 
 /-- Paper: Corollary 4.3.3.4, p. 184. The normalized average is the
 orthogonal projection onto the isotype. The projected vector lies in
