@@ -7,6 +7,7 @@ public import Mathlib.NumberTheory.NumberField.HeckeLFunction
 public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import all Mathlib.Geometry.Manifold.LocalDiffeomorph
 import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 import RiemannMasullo.AppA_AlgebraicNT.Sec2
@@ -504,6 +505,51 @@ theorem quasiCharacter_isManifold (h : HasNormTwistCharts m) :
       ← Complex.cpow_add _ _ hmod, show z + (y - z) = y by abel]
   change e' (e.symm y) = translate y
   rw [heq, e'.right_inv htranslate]
+
+/-- Pullback along a modulus-preserving homomorphism is a local analytic isomorphism
+in the norm-twist atlases. In coordinates at a character and its pullback it is the identity. -/
+theorem quasiCharacter_comp_isLocalDiffeomorph {H : Type*} [CommGroup H] [TopologicalSpace H]
+    (n : H →* ℝ≥0ˣ) (i : H →ₜ* G) (hi : ∀ x, m (i x) = n x)
+    (hG : HasNormTwistCharts m) (hH : HasNormTwistCharts n) :
+    letI := quasiCharacterChartedSpace m hG
+    letI := quasiCharacterChartedSpace n hH
+    IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (fun c : QuasiCharacter G ↦ c.comp i) := by
+  let := quasiCharacterChartedSpace m hG
+  let := quasiCharacterChartedSpace n hH
+  let := quasiCharacter_isManifold m hG
+  let := quasiCharacter_isManifold n hH
+  intro c
+  let d := c.comp i
+  let a := (hG c).choose
+  let b := (hH d).choose
+  let e := a.trans b.symm
+  have ha : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω a a.source := contMDiffOn_chart (x := c)
+  have ha' : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω a.symm a.target := contMDiffOn_chart_symm (x := c)
+  have hb : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω b b.source := contMDiffOn_chart (x := d)
+  have hb' : ContMDiffOn 𝓘(ℂ) 𝓘(ℂ) ω b.symm b.target := contMDiffOn_chart_symm (x := d)
+  let φ : PartialDiffeomorph 𝓘(ℂ) 𝓘(ℂ) (QuasiCharacter G) (QuasiCharacter H) ω :=
+    { toPartialEquiv := e.toPartialEquiv
+      open_source := e.open_source
+      open_target := e.open_target
+      contMDiffOn_toFun := hb'.comp (ha.mono Set.inter_subset_left) Set.inter_subset_right
+      contMDiffOn_invFun := ha'.comp (hb.mono Set.inter_subset_left) Set.inter_subset_right }
+  obtain ⟨hc, hc0, hct⟩ := (hG c).choose_spec
+  obtain ⟨hd, hd0, hdt⟩ := (hH d).choose_spec
+  rw [IsLocalDiffeomorphAt]
+  refine ⟨φ, ⟨hc, ?_⟩, ?_⟩
+  · change a c ∈ b.target
+    rw [show a c = b d from hc0.trans hd0.symm]
+    exact b.map_source hd
+  · intro y hy
+    change y ∈ a.source ∧ a y ∈ b.target at hy
+    ext1 x
+    change y (i x) = b.symm (a y) x
+    rw [hdt _ hy.2]
+    change y (i x) = c (i x) * (((n x : ℝ≥0) : ℝ) : ℂ) ^ (a y)
+    rw [← hi x]
+    exact (congrArg (fun q : QuasiCharacter G ↦ q (i x)) (a.left_inv hy.1)).symm.trans
+      (hct _ (a.map_source hy.1) (i x))
+
 
 /-- Paper: Definition 3.1.1.1, p. 119. The abscissa is the real exponent in the modulus of
 a quasi-character. We evaluate the ratio of logarithms at a point where the module differs from one.
@@ -1215,7 +1261,12 @@ complex analytic isomorphism in the norm-twist atlases. -/
 theorem finitePlaceRestriction_isLocalDiffeomorph (v : Primes(F)) :
     letI := quasiCharacterChartedSpace _ (finitePlace_hasNormTwistCharts F v)
     IsLocalDiffeomorph 𝓘(ℂ) 𝓘(ℂ) ω (finitePlaceRestriction F v) := by
-  sorry
+  let i : (v.adicCompletion F)ˣ →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨IdeleClassGroup.ofAdicCompletion (𝓞 F) F v, continuous_ideleClass_ofAdicCompletion F v⟩
+  exact quasiCharacter_comp_isLocalDiffeomorph (G := IdeleClassGroup (𝓞 F) F)
+    (H := (v.adicCompletion F)ˣ) (ideleClassNorm F) finiteNorm i
+    (fun x ↦ ideleClassNorm_ofAdicCompletion F v x) (ideleClass_hasNormTwistCharts F)
+    (finitePlace_hasNormTwistCharts F v)
 
 /-- Paper: Lemma 3.1.2.1, p. 121. Restriction to an infinite completion is a local
 complex analytic isomorphism in the norm-twist atlases. -/
