@@ -724,7 +724,18 @@ theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) :=
 passing to idele classes is continuous. -/
 theorem continuous_ideleClass_ofAdicCompletion (v : Primes(F)) :
     Continuous (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  apply continuous_const.prodMk
+  apply continuous_restrictedProduct_of_uniform
+  · intro w
+    exact (continuous_apply w).comp (continuous_mulSingle (A := fun u : Primes(F) ↦
+      u.adicCompletion F) v)
+  · filter_upwards [Filter.eventually_cofinite_ne v] with w hw x
+    change Pi.mulSingle v x w ∈ w.adicCompletionIntegers F
+    rw [Pi.mulSingle_eq_of_ne hw]
+    exact (w.adicCompletionIntegers F).one_mem
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting an infinite local multiplicative group
 into the idele class group is continuous. -/
