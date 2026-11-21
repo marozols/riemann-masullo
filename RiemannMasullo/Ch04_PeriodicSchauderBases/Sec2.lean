@@ -474,7 +474,24 @@ theorem cyclicQuotient_surjOn_of_contains (K : Compacts ℝ) (n : ℤ) (hn : 1 �
 compact set is a closed subspace of the exponential decay space. -/
 theorem compactLogProfileInclusion_closed (K : Compacts ℝ)
     (hK : (interior (K : Set ℝ)).Nonempty) :
-    IsClosed (range (compactLogProfileInclusion K)) := by sorry
+    IsClosed (range (compactLogProfileInclusion K)) := by
+  clear hK
+  have he : range (compactLogProfileInclusion K) = ⋂ x : ↥((K : Set ℝ)ᶜ), {f : E | f.val x = 0} := by
+    ext f
+    rw [compactLogProfileInclusion_range, mem_iInter]
+    constructor
+    · intro h x
+      exact support_subset_iff'.mp ((subset_tsupport _).trans h) x x.property
+    · intro h
+      exact closure_minimal (support_subset_iff'.mpr fun x hx ↦ h ⟨x, hx⟩) K.isCompact.isClosed
+  rw [he]
+  apply isClosed_iInter
+  intro x
+  have hc : Continuous (fun f : E ↦ f.val x) := by
+    simpa only [Function.comp_def, SchwartzMap.toBoundedContinuousFunctionCLM_apply, unweightedLogProfile_apply] using
+      ((continuous_eval_const (F := BoundedContinuousFunction ℝ ℂ) (x : ℝ)).comp
+        ((SchwartzMap.toBoundedContinuousFunctionCLM ℂ ℝ ℂ).continuous.comp unweightedLogProfile.continuous))
+  exact isClosed_eq hc continuous_const
 
 /-- Paper: Lemma 4.2.2.4, p. 171. The test space's uniform derivative topology
 agrees with the topology inherited from the exponential decay space. -/
