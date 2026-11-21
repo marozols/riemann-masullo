@@ -495,11 +495,40 @@ Deviation: Values at singularities use the meromorphic normal form. -/
 def finiteHeckeReflectionFactor (χ : U[F]) (ε : ℂ → ℂ) : ℂ → ℂ :=
   toMeromorphicNFOn (fun s ↦ (ε s)⁻¹ * (heckeGammaFactor χ⁻¹ (1 - s) / heckeGammaFactor χ s)) univ
 
+/-- The archimedean gamma factor is meromorphic on the plane. -/
+theorem meromorphic_heckeGammaFactor (χ : U[F]) : Meromorphic (heckeGammaFactor χ) := by
+  intro s
+  have h : MeromorphicAt (fun t ↦ ((heckeGammaFactor χ t)⁻¹)⁻¹) s :=
+    ((differentiable_inv_heckeGammaFactor χ).analyticAt s).meromorphicAt.inv
+  simpa only [inv_inv] using h
+
 /-- Paper: Equation (3.2.1.9), p. 124. At the midpoint for the trivial character
 the gamma factors cancel, leaving the reciprocal epsilon factor. -/
 theorem finiteHeckeReflectionFactor_one_half (ε : ℂ → ℂ) (hε : Differentiable ℂ ε)
     (hn : ∀ s, ε s ≠ 0) :
-    finiteHeckeReflectionFactor (1 : U[F]) ε (1 / 2) = (ε (1 / 2))⁻¹ := by sorry
+    finiteHeckeReflectionFactor (1 : U[F]) ε (1 / 2) = (ε (1 / 2))⁻¹ := by
+  let G := heckeGammaFactor (1 : U[F])
+  let p : ℂ := 1 / 2
+  let f (s : ℂ) := (ε s)⁻¹ * (G (1 - s) / G s)
+  have hG := meromorphic_heckeGammaFactor (1 : U[F])
+  have hf : Meromorphic f := fun z ↦ (hε.analyticAt z).meromorphicAt.inv.mul
+    (((hG (1 - z)).comp_analyticAt (analyticAt_const.sub analyticAt_id)).div (hG z))
+  have hp : 0 < p.re := by norm_num [p]
+  have hsym : 1 - p = p := by dsimp [p]; ring
+  have hG₀ : G p ≠ 0 := heckeGammaFactor_ne_zero_of_re_pos _ hp
+  have haG : AnalyticAt ℂ G p := by
+    apply DifferentiableOn.analyticAt (s := {z : ℂ | 0 < z.re})
+      (fun z hz ↦ (differentiableAt_heckeGammaFactor_of_re_pos (1 : U[F]) hz).differentiableWithinAt)
+    exact (isOpen_lt continuous_const Complex.continuous_re).mem_nhds hp
+  have hfa : AnalyticAt ℂ f p := (hε.analyticAt p).inv (hn p) |>.mul
+    (((hsym.symm ▸ haG : AnalyticAt ℂ G (1 - p)).comp (analyticAt_const.sub analyticAt_id)).div haG hG₀)
+  change toMeromorphicNFOn _ univ p = _
+  simp only [inv_one]
+  change toMeromorphicNFOn f univ p = _
+  rw [toMeromorphicNFOn_eq_toMeromorphicNFAt hf.meromorphicOn (Set.mem_univ p),
+    toMeromorphicNFAt_eq_self.mpr hfa.meromorphicNFAt]
+  change f p = (ε p)⁻¹
+  simp [f, hsym, hG₀]
 
 /-- Paper: Equation (3.2.1.8), p. 124. The finite continuations satisfy the
 reflection equation with the displayed gamma ratio and a nowhere-vanishing entire
