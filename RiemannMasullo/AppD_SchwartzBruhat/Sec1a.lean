@@ -799,7 +799,10 @@ real-valued weighted bound by the norm of the scalar. -/
 theorem elementarySchwartzSeminorm_smul (i : ElementarySchwartzIndex m n r)
     (c : ℂ) (f : elementarySchwartzSubmodule m n r F) :
     (elementarySchwartzBound (c • f).val i).toReal =
-      ‖c‖ * (elementarySchwartzBound f.val i).toReal := by sorry
+      ‖c‖ * (elementarySchwartzBound f.val i).toReal := by
+  change (elementarySchwartzBound (c • f.val) i).toReal = _
+  rw [elementarySchwartzBound_smul c f.property.1, ENNReal.toReal_mul]
+  rfl
 
 /-- Paper: Definition D.1.3.1, p. 750. Each real-valued weighted bound is invariant
 under negation on the Schwartz submodule. -/
