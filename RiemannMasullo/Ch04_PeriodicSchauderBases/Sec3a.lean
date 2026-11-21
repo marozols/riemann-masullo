@@ -284,6 +284,14 @@ the continuous linear map given almost everywhere by integration over the kernel
 def regularIsotypicIntegral (ω : PontryaginDual K) : RegularL2 ν →L[ℂ] RegularL2 ν :=
   Classical.choose (existsUnique_regularIsotypicIntegral m hm ν ν₁ ω).exists
 
+/-- The Bochner integral of the twisted orbit represents the isotypic average. -/
+theorem regularIsotypicIntegral_eq_bochner (ω : PontryaginDual K) (f : RegularL2 ν)
+    (hi : Integrable (fun k : K ↦ star (ω k : ℂ) • regularTranslate ν (k : G) f) ν₁) :
+    regularIsotypicIntegral m hm ν ν₁ ω f =
+      ∫ k : K, star (ω k : ℂ) • regularTranslate ν (k : G) f ∂ν₁ := by
+  exact Lp.ext (((existsUnique_regularIsotypicIntegral m hm ν ν₁ ω).exists.choose_spec f).trans
+    (regularIsotypic_integral_ae m hm ν ν₁ ω f hi).symm)
+
 /-- Paper: (4.3.2.1), p. 178. The L² average agrees almost everywhere with
 the integral using positive translation and the unconjugated character. -/
 theorem regularIsotypicIntegral_ae_eq (ω : PontryaginDual K) (f : RegularL2 ν) :
