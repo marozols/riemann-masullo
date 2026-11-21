@@ -151,11 +151,6 @@ theorem exists_schwartzLogReflection :
   have hinv (f : 𝓢(ℝ, ℂ)) : T (T f) = f := by ext x; simp only [hT, neg_neg]
   exact ⟨ContinuousLinearEquiv.equivOfInverse T T hinv hinv, hT, hinv⟩
 
-/-- Paper: Lemma B.2.1.4(2), p. 593. Exponential decay is invariant under
-reflection of the logarithmic profile. -/
-theorem exponentialDecay_iff_reflected (f g : 𝓢(ℝ, ℂ)) (hg : ∀ x : ℝ, g x = f (-x)) :
-    ExponentialDecay g ↔ ExponentialDecay f := by sorry
-
 /-- Paper: Lemma B.2.1.4(2), p. 593. Reflection interchanges forward
 and backward semi-exponential decay. -/
 theorem backwardSemiExponentialDecay_iff_forward_reflected
@@ -176,6 +171,15 @@ theorem backwardSemiExponentialDecay_iff_forward_reflected
     filter_upwards [tendsto_neg_atBot_atTop.eventually hC] with x hx
     rw [normEq]
     simpa only [neg_mul_neg] using hx
+
+/-- Paper: Lemma B.2.1.4(2), p. 593. Exponential decay is invariant under
+reflection of the logarithmic profile. -/
+theorem exponentialDecay_iff_reflected (f g : 𝓢(ℝ, ℂ)) (hg : ∀ x : ℝ, g x = f (-x)) :
+    ExponentialDecay g ↔ ExponentialDecay f := by
+  have hgf (x : ℝ) : f x = g (-x) := by simp [hg]
+  have h₁ := backwardSemiExponentialDecay_iff_forward_reflected f g hg
+  have h₂ := backwardSemiExponentialDecay_iff_forward_reflected g f hgf
+  exact ⟨fun h ↦ ⟨h₁.mp h.2, h₂.mpr h.1⟩, fun h ↦ ⟨h₂.mp h.2, h₁.mpr h.1⟩⟩
 
 /-- Paper: Lemma B.2.1.4(3), p. 593. The zero extension of a function with
 exponential decay is an ordinary Schwartz function on the real line. -/
