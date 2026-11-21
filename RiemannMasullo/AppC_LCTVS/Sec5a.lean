@@ -14,6 +14,9 @@ import RiemannMasullo.ForMathlib.Topology.Compactness.LocallyCompact
 import RiemannMasullo.ForMathlib.Topology.Compactness.Paracompact
 import RiemannMasullo.ForMathlib.Topology.ContinuousMap.LocallyConvex
 import RiemannMasullo.ForMathlib.Topology.ContinuousMap.Sigma
+import Mathlib.Analysis.Calculus.Deriv.Comp
+import Mathlib.Analysis.Calculus.MeanValue
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.HahnBanach
 
 /-!
 # Vector-valued continuous and differentiable functions
@@ -837,7 +840,52 @@ theorem tendsto_directional_of_weakDifferential {Ω : Set W} (hΩ : IsOpen Ω)
     {D : Ω × W → E} (hD : HasWeakDifferentialOn k f (toPettisWeakCompletion E ∘ D))
     (hc : Continuous D) (x : Ω) (v : W) :
     Tendsto (fun h : k ↦ algebraMap k ℂ h⁻¹ • (f ((x : W) + h • v) - f x))
-      (𝓝[{h : k | h ≠ 0 ∧ (x : W) + h • v ∈ Ω}] 0) (𝓝 (D (x, v))) := by sorry
+      (𝓝[{h : k | h ≠ 0 ∧ (x : W) + h • v ∈ Ω}] 0) (𝓝 (D (x, v))) := by
+  let line (t : k) := (x : W) + t • v
+  have hline (t : k) : HasDerivAt line v t := by
+    simpa [line] using ((hasDerivAt_id' t).smul_const v).const_add (x : W)
+  have hlim : Tendsto line (𝓝 0) (𝓝 (x : W)) := by
+    simpa [line] using (hline 0).continuousAt.tendsto
+  apply ((PolynormableSpace.withSeminorms ℂ E).tendsto_nhds _ _).2
+  intro p ε hε
+  -- Joint continuity bounds the variation of the differential in this seminorm.
+  have hc' : Continuous (fun y : Ω ↦ p.val (D (y, v) - D (x, v))) :=
+    p.property.comp ((hc.comp (continuous_id.prodMk continuous_const)).sub continuous_const)
+  have hnear : ∀ᶠ y : Ω in 𝓝 x, p.val (D (y, v) - D (x, v)) < ε / 2 :=
+    hc'.continuousAt.eventually_lt continuousAt_const (by simpa using half_pos hε)
+  obtain ⟨r, hr, hcontrol⟩ := Metric.eventually_nhds_iff.mp hnear
+  obtain ⟨δ, hδ, hball⟩ := Metric.eventually_nhds_iff_ball.mp
+    ((hlim.eventually (hΩ.mem_nhds x.property)).and
+      (hlim.eventually (Metric.ball_mem_nhds (x : W) hr)))
+  let B := Metric.ball (0 : k) δ
+  have hin (t : k) (ht : t ∈ B) : line t ∈ Ω := (hball t ht).1
+  filter_upwards [mem_nhdsWithin_of_mem_nhds (Metric.ball_mem_nhds (0 : k) hδ),
+    self_mem_nhdsWithin] with h hb hh
+  have hn : h ≠ 0 := hh.1
+  obtain ⟨φ, hφ, heq⟩ := exists_dual_norm_eq_seminorm p.val p.property
+    (algebraMap k ℂ h⁻¹ • (f (line h) - f x) - D (x, v))
+  -- Apply the scalar mean-value estimate after subtracting the tangent at zero.
+  let g (t : k) := φ (f (line t)) - t • φ (D (x, v))
+  have hderiv (t : k) (ht : t ∈ B) :
+      HasDerivAt g (φ (D (⟨line t, hin t ht⟩, v) - D (x, v))) t := by
+    obtain ⟨L, hL, heval⟩ := hD φ ⟨line t, hin t ht⟩
+    have hL' := (hL.hasFDerivAt (hΩ.mem_nhds (hin t ht))).comp_hasDerivAt t (hline t)
+    have he : φ (D (⟨line t, hin t ht⟩, v)) = L v := heval v
+    simpa [g, Function.comp_def, Pi.sub_def, map_sub, he] using
+      hL'.sub ((hasDerivAt_id' t).smul_const (φ (D (x, v))))
+  have hmean := (convex_ball (0 : k) δ).norm_image_sub_le_of_norm_deriv_le
+    (fun t ht ↦ (hderiv t ht).differentiableAt) (fun t ht ↦ by
+      rw [(hderiv t ht).deriv]
+      exact (hφ _).trans (hcontrol (y := ⟨line t, hin t ht⟩) (hball t ht).2).le)
+    (Metric.mem_ball_self hδ) hb
+  change p.val (algebraMap k ℂ h⁻¹ • (f (line h) - f x) - D (x, v)) < ε
+  rw [← heq]
+  have hscalar : φ (algebraMap k ℂ h⁻¹ • (f (line h) - f x) - D (x, v)) =
+      h⁻¹ • (g h - g 0) := by
+    simp [g, line, map_sub, Algebra.smul_def, mul_sub, hn, sub_right_comm]
+  rw [hscalar, norm_smul, norm_inv]
+  apply lt_of_le_of_lt _ (half_lt_self hε)
+  exact (inv_mul_le_iff₀ (norm_pos_iff.mpr hn)).2 (by simpa [mul_comm] using hmean)
 
 end Differentials
 
