@@ -358,7 +358,47 @@ theorem regularIsotypicTransform_ae_eq (ω : PontryaginDual K) (f : RegularL2 ν
 for the Hilbert direct sum topology. -/
 theorem regularIsotypicTransform_continuousLinear :
     ∃ T : RegularL2 ν →L[ℂ] lp (fun _ : PontryaginDual K ↦ RegularL2 positiveRealHaar) 2,
-      ∀ f : RegularL2 ν, T f = regularIsotypicTransform m hm ν ν₁ τ hτ f := by sorry
+      ∀ f : RegularL2 ν, T f = regularIsotypicTransform m hm ν ν₁ τ hτ f := by
+  let T := regularIsotypicTransform m hm ν ν₁ τ hτ
+  let C := regularIsotypicComponent m hm ν ν₁ τ hτ
+  have hC (ω : PontryaginDual K) (f : RegularL2 ν) : (C ω f : ℝ≥0ˣ → ℂ) =ᵐ[positiveRealHaar]
+      fun t ↦ ∫ a : K, star (ω a : ℂ) * f ((a : G)⁻¹ * τ t) ∂ν₁ :=
+    (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω f).2.coeFn_toLp
+  let L : RegularL2 ν →ₗ[ℂ] lp (fun _ : PontryaginDual K ↦ RegularL2 positiveRealHaar) 2 :=
+    { toFun := T
+      map_add' := by
+        intro f g
+        apply lp.ext
+        funext ω
+        change C ω (f + g) = C ω f + C ω g
+        apply Lp.ext
+        have ha := regularIsotypic_section_ae m hm ν ν₁ τ hτ (Lp.coeFn_add f g)
+        filter_upwards [hC ω (f + g), hC ω f, hC ω g, Lp.coeFn_add (C ω f) (C ω g),
+          (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω f).1,
+          (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω g).1, ha]
+          with t hfg hf hg hs hi hj ht
+        rw [hfg, hs, Pi.add_apply, hf, hg, ← integral_add hi hj]
+        apply integral_congr_ae
+        filter_upwards [ht] with a ha
+        simp only [ha, Pi.add_apply, mul_add]
+      map_smul' := by
+        intro z f
+        apply lp.ext
+        funext ω
+        change C ω (z • f) = z • C ω f
+        apply Lp.ext
+        have ha := regularIsotypic_section_ae m hm ν ν₁ τ hτ (Lp.coeFn_smul z f)
+        filter_upwards [hC ω (z • f), hC ω f, Lp.coeFn_smul z (C ω f), ha]
+          with t hzf hf hs ht
+        rw [hzf, hs, Pi.smul_apply, smul_eq_mul, hf, ← integral_const_mul]
+        apply integral_congr_ae
+        filter_upwards [ht] with a ha
+        simp only [ha, Pi.smul_apply, smul_eq_mul, mul_left_comm z] }
+  obtain ⟨B, hB, hbound⟩ := exists_regularIsotypicComponent_bound m hm ν ν₁ τ hτ
+  refine ⟨L.mkContinuous (Real.sqrt B) (fun f ↦ ?_), fun _ ↦ rfl⟩
+  apply lp.norm_le_of_forall_sum_le (by norm_num) (mul_nonneg (Real.sqrt_nonneg _) (norm_nonneg _))
+  intro s
+  simpa [L, T, regularIsotypicTransform, mul_pow, Real.sq_sqrt hB] using hbound f s
 
 /-- Paper: Lemma 4.3.2.2, p. 179. Every square-summable family of L²
 coordinates is in the range of the transform. -/
