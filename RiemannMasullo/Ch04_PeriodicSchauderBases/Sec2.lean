@@ -5,6 +5,7 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
+import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
 import Mathlib.Analysis.SpecialFunctions.SmoothTransition
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
@@ -477,8 +478,139 @@ theorem cyclicPeriodization_surjective : Surjective (cyclicPeriodization γ hγ)
   let F : E := ⟨cyclicLiftValue γ f, mem_logExponentialDecaySubmodule_of_hasCompactSupport univ hc hs⟩
   exact ⟨F, cyclicPeriodization_lift γ hγ f F (fun _ ↦ rfl)⟩
 
+private def circularLiftIndex (k : ℕ) : ElementarySchwartzIndex 0 1 0 :=
+  (0, 0, fun _ ↦ k, 0)
+
+local notation "CircleCoverSpace" => EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1)
+
+/-- The uniform norm of each lifted circle derivative is bounded by the corresponding
+elementary Schwartz seminorm. -/
+private theorem circularLift_deriv_bound (f : S) (k : ℕ) (y : ℝ) :
+    ‖iteratedFDeriv ℝ k (fun x : ℝ ↦ f (point (x : T))) y‖ ≤
+      elementarySchwartzSeminorm (circularLiftIndex k) f := by
+  let v : CircleCoverSpace := (0, EuclideanSpace.single (0 : Fin 1) (1 : ℝ))
+  let s : ℝ →L[ℝ] CircleCoverSpace := (ContinuousLinearMap.id ℝ ℝ).smulRight v
+  let g (xt : CircleCoverSpace) := f (elementaryCover xt (0 : Fin 0 → ℤ) PUnit.unit)
+  have he : (fun x : ℝ ↦ f (point (x : T))) = g ∘ s := by
+    funext x
+    apply congrArg f.val
+    refine Prod.ext (Subsingleton.elim _ _) (Prod.ext ?_ rfl)
+    funext j
+    have hj : j = 0 := Subsingleton.elim _ _
+    subst j
+    simp [elementaryCover, s, v, PiLp.smul_apply]
+  have hd : iteratedDeriv k (g ∘ s) y =
+      elementaryPartial f.val 0 (fun _ ↦ k) (s y) 0 PUnit.unit := by
+    rw [iteratedDeriv_eq_iteratedFDeriv, s.iteratedFDeriv_comp_right (f.property.1 0 PUnit.unit) y (by simp)]
+    let D : List CircleCoverSpace := (List.ofFn (fun i : Fin 0 ↦ List.replicate 0 (EuclideanSpace.single i 1, 0))).flatten ++
+      (List.ofFn (fun i : Fin 1 ↦ List.replicate k (0, EuclideanSpace.single i 1))).flatten
+    have hD : D = List.replicate k v := by
+      change [] ++ (List.replicate k v ++ []) = _
+      simp
+    change _ = (iteratedFDeriv ℝ D.length g (s y)) D.get
+    have haux (n : ℕ) (hn : n = k) (d : Fin n → CircleCoverSpace) (hd : ∀ j, d j = v) :
+        (iteratedFDeriv ℝ n g (s y)) d =
+          (iteratedFDeriv ℝ k g (s y)) (fun _ ↦ v) := by
+      subst n
+      rw [show d = fun _ ↦ v from funext hd]
+    rw [haux D.length (by simp [hD]) D.get (by intro j; simp [hD, List.get_eq_getElem])]
+    simp [s, g]
+  rw [he, norm_iteratedFDeriv_eq_norm_iteratedDeriv, hd]
+  let i := circularLiftIndex k
+  change (‖elementaryPartial f.val 0 (fun _ ↦ k) (s y) 0 PUnit.unit‖₊ : ENNReal).toReal ≤
+    (elementarySchwartzBound f.val i).toReal
+  apply ENNReal.toReal_mono (f.property.2 i).ne
+  unfold elementarySchwartzBound
+  refine le_iSup_of_le (s y) ?_
+  refine le_iSup_of_le (0 : Fin 0 → ℤ) ?_
+  refine le_iSup_of_le PUnit.unit ?_
+  simp [i, circularLiftIndex]
+
+private def cyclicLiftSupport (γ : ℝ) : Compacts ℝ :=
+  ⟨Icc (-Real.log γ) (Real.log γ), isCompact_Icc⟩
+
+/-- The windowed lift takes values continuously in a single fixed-support test space. -/
+private def cyclicCompactLift (γ : ℝ) (hγ : 1 < γ) :
+    S →L[ℂ] 𝓓_{cyclicLiftSupport γ}(ℝ, ℂ) := by
+  classical
+  let K := cyclicLiftSupport γ
+  let J : S →ₗ[ℂ] 𝓓_{K}(ℝ, ℂ) :=
+    { toFun f := ⟨cyclicLiftValue γ f, (cyclicLiftValue_spec γ hγ f).1, (cyclicLiftValue_spec γ hγ f).2⟩
+      map_add' f g := by
+        ext x
+        change _ * (f _ + g _) = _ * f _ + _ * g _
+        exact mul_add _ _ _
+      map_smul' c f := by
+        ext x
+        change _ * (c * f _) = c * (_ * f _)
+        ring }
+  refine ⟨J, (withGeneratingSeminorms_spec _ _).continuous_of_isBounded
+    (ContDiffMapSupportedIn.withSeminorms ℂ ℝ ℂ ⊤ K) J (Seminorm.IsBounded.of_real ?_)⟩
+  let L := Real.log γ
+  let w (x : ℝ) : ℂ := ↑(Real.smoothTransition (x / L + 1) - Real.smoothTransition (x / L))
+  have hw : ContDiff ℝ ∞ w := Complex.ofRealCLM.contDiff.comp
+    ((Real.smoothTransition.contDiff.comp ((contDiff_id.div_const L).add contDiff_const)).sub
+      (Real.smoothTransition.contDiff.comp (contDiff_id.div_const L)))
+  choose C hC using fun j : ℕ ↦ K.isCompact.exists_bound_of_continuousOn
+    (hw.continuous_iteratedFDeriv (m := j) (by simp)).continuousOn
+  let B (k j : ℕ) : ℝ := (k.choose j : ℝ) * max (C j) 0 * ‖L⁻¹‖ ^ (k - j)
+  have hB (k j : ℕ) : 0 ≤ B k j := by dsimp [B]; positivity
+  intro k
+  let t := (Finset.range (k + 1)).image circularLiftIndex
+  let M := t.sup (elementarySchwartzSeminorm : ElementarySchwartzIndex 0 1 0 → Seminorm ℂ S)
+  refine ⟨t, ∑ j ∈ Finset.range (k+1), B k j, fun f ↦ ?_⟩
+  apply (ContDiffMapSupportedIn.seminorm_top_le_iff ℂ
+    (mul_nonneg (Finset.sum_nonneg fun j _ ↦ hB k j) (apply_nonneg M f)) k (J f)).2
+  intro x hx
+  let u (x : ℝ) := circularLift f (L⁻¹ * x)
+  have hu : ContDiff ℝ ∞ u := (circularLift_smooth f).comp (contDiff_const.mul contDiff_id)
+  have huf (j : ℕ) (hj : j ≤ k) : ‖iteratedFDeriv ℝ j u x‖ ≤ ‖L⁻¹‖ ^ j * M f := by
+    have hh := circularLift_deriv_bound f j (L⁻¹ * x)
+    rw [norm_iteratedFDeriv_eq_norm_iteratedDeriv] at hh ⊢
+    rw [show u = (fun y ↦ circularLift f (L⁻¹ * y)) from rfl,
+      iteratedDeriv_comp_const_smul ((circularLift_smooth f).of_le (by simp)) L⁻¹, norm_smul, norm_pow]
+    gcongr
+    exact hh.trans (Seminorm.le_finset_sup_apply
+      (Finset.mem_image_of_mem circularLiftIndex (Finset.mem_range_succ_iff.mpr hj)))
+  have he : (J f : ℝ → ℂ) = fun y ↦ w y • u y := by
+    funext y
+    change w y * f (point (↑(y / L) : T)) = w y * f (point (↑(L⁻¹ * y) : T))
+    rw [div_eq_inv_mul]
+  rw [he]
+  refine (norm_iteratedFDeriv_smul_le hw hu x (n := k) (by simp)).trans ?_
+  rw [Finset.sum_mul]
+  apply Finset.sum_le_sum
+  intro j hj
+  have hwj := (hC j x hx).trans (le_max_left _ 0)
+  calc
+    _ ≤ (k.choose j : ℝ) * max (C j) 0 * (‖L⁻¹‖ ^ (k - j) * M f) := by
+      gcongr
+      exact huf (k - j) (Nat.sub_le _ _)
+    _ = B k j * M f := by dsimp [B]; ring
+
+private def cyclicExponentialLift (γ : ℝ) (hγ : 1 < γ) : S →L[ℂ] E :=
+  (supportedToLogDecayCLM univ univ_nonempty (cyclicLiftSupport γ)).comp (cyclicCompactLift γ hγ)
+
+private theorem cyclicExponentialLift_rightInverse (γ : ℝ) (hγ : 1 < γ) :
+    Function.RightInverse (cyclicExponentialLift γ hγ) (cyclicPeriodization γ hγ) :=
+  fun f ↦ cyclicPeriodization_lift γ hγ f _ (fun _ ↦ rfl)
+
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Periodization sends open sets to open sets. -/
-theorem cyclicPeriodization_isOpenMap : IsOpenMap (cyclicPeriodization γ hγ) := by sorry
+theorem cyclicPeriodization_isOpenMap : IsOpenMap (cyclicPeriodization γ hγ) := by
+  let P := cyclicPeriodization γ hγ
+  let s := cyclicExponentialLift γ hγ
+  have hs := cyclicExponentialLift_rightInverse γ hγ
+  intro U hU
+  rw [isOpen_iff_mem_nhds]
+  rintro _ ⟨x, hx, rfl⟩
+  let t (y : S) := x + s (y - P x)
+  have ht : Continuous t := continuous_const.add (s.continuous.comp (continuous_id.sub continuous_const))
+  have hh : t ⁻¹' U ∈ 𝓝 (P x) := ht.continuousAt.preimage_mem_nhds
+    (by simpa [t] using hU.mem_nhds hx)
+  refine Filter.mem_of_superset hh fun y hy ↦ ⟨t y, hy, ?_⟩
+  change P (x + s (y - P x)) = y
+  rw [map_add, show P (s (y - P x)) = y - P x from hs _]
+  abel
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Bundle the periodization and its continuity
 as a continuous linear map. -/
