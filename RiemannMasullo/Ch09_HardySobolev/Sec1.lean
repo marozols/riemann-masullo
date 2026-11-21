@@ -183,8 +183,10 @@ theorem modulatedSobolev_norm [BorelSpace G] (s : ℝ) (f : ModulatedSobolev m �
     ‖f‖ = Real.sqrt (∫ x, ‖f x‖ ^ 2 * (1 + |Real.log ((m x).val : ℝ)| ^ 2) ^ (s / 2) ∂μ) :=
   by sorry
 
-variable [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [BorelSpace G]
-  [μ.IsHaarMeasure] [μ.Regular]
+-- Definition D.2.1.1, p. 793, defines modulated groups for second-countable `G`, and the
+-- structure lemmas for `IsModulation` assume it; the recall on p. 399 omits the word.
+variable [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+  [BorelSpace G] [μ.IsHaarMeasure]
 
 variable (ν : Measure (PontryaginDual G))
 

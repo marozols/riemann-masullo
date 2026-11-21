@@ -5,7 +5,11 @@ public import RiemannMasullo.Ch02_AdelicTheta.Sec2b
 public import RiemannMasullo.Ch03_IdelicZeta.Sec1
 public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
-public import Mathlib.NumberTheory.NumberField.DedekindZeta
+public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
+
+import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
+
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
 /-!
 # Global idelic zeta functions
@@ -91,7 +95,19 @@ theorem finiteHeckeEulerFactor_inv_uniformizer (χ : U[F])
     (hπ : Valued.v.IsUniformizer (π : v.adicCompletion F)) (hχ : χ₀(χ).IsUnramifiedAt v)
     {s : ℂ} (hs : s ∈ halfPlane) :
     (finiteHeckeEulerFactor χ v s)⁻¹ =
-      1 - finitePlaceRestriction F v (ideleClassNormTwist χ s) π := by sorry
+      1 - finitePlaceRestriction F v (ideleClassNormTwist χ s) π := by
+  classical
+  rw [finiteHeckeEulerFactor, ite_eq_left hχ, inv_inv, hχ.localValue_eq _ hπ,
+    HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+  let g := IdeleClassGroup.ofAdicCompletion (𝓞 F) F v π
+  change 1 - ((χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)) * _ =
+    1 - (χ g : ℂ) * (classNormℝ g : ℂ) ^ s
+  have hn : classNormℝ g = (v.asIdeal.absNorm : ℝ)⁻¹ := by
+    change ((ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v π) : ℝ≥0) : ℝ) = _
+    rw [ideleClassNorm_ofAdicCompletion]
+    exact norm_uniformizer_adicCompletion v _ hπ
+  rw [Complex.cpow_zero, mul_one, hn, Complex.ofReal_inv, Complex.inv_cpow_ofReal_nonneg
+    (Nat.cast_nonneg _) s, Complex.cpow_neg, Complex.ofReal_natCast]
 
 /-- Paper: Equation (3.2.1.4), p. 123. A real local unitary character has a
 unique imaginary radial exponent and a unique sign parity. -/
@@ -133,11 +149,71 @@ theorem heckeGammaFactor_one (s : ℂ) :
       Complex.Gammaℝ s ^ InfinitePlace.nrRealPlaces F *
         (Complex.Gammaℂ s / 2) ^ InfinitePlace.nrComplexPlaces F := by sorry
 
+/-- The value of a unitary Hecke character on a local uniformizer has norm one. -/
+theorem norm_ideleClassNormTwist_zero_localValue (χ : U[F]) (v : HeightOneSpectrum (𝓞 F)) :
+    ‖χ₀(χ).localValue v‖ = 1 := by
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  let π := val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose
+  let u := Units.mk0 (π : v.adicCompletion F)
+    val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose_spec.ne_zero
+  change ‖χ₀(χ).restrict v (u : v.adicCompletion F)‖ = 1
+  rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+  change ‖(χ (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u) : ℂ) * _ ^ (0 : ℂ)‖ = 1
+  simp
+
+private theorem norm_finiteHeckeEulerFactor_sub_one_le (χ : U[F])
+    (v : HeightOneSpectrum (𝓞 F)) {r : ℝ} (hr : 1 < r) {s : ℂ} (hs : r ≤ s.re) :
+    ‖finiteHeckeEulerFactor χ v s - 1‖ ≤ 2 * (v.asIdeal.absNorm : ℝ) ^ (-r) := by
+  classical
+  let q : ℝ := v.asIdeal.absNorm
+  have hq : 2 ≤ q := by
+    dsimp [q]
+    exact_mod_cast NumberField.HeightOneSpectrum.two_le_absNorm_nnreal v
+  have hq' : 1 ≤ q := by linarith
+  have hqpos : 0 < q := by linarith
+  rw [finiteHeckeEulerFactor]
+  split_ifs with hχ
+  · let z := χ₀(χ).localValue v * (q : ℂ) ^ (-s)
+    change ‖(1 - z)⁻¹ - 1‖ ≤ 2 * q ^ (-r)
+    have hz : ‖z‖ = q ^ (-s.re) := by
+      simp [z, norm_ideleClassNormTwist_zero_localValue,
+        Complex.norm_cpow_eq_rpow_re_of_pos hqpos]
+    have hcomp : ‖z‖ ≤ q ^ (-r) :=
+      hz.le.trans (Real.rpow_le_rpow_of_exponent_le hq' (by linarith))
+    have hhalf : q ^ (-r) ≤ 1 / 2 := calc
+      q ^ (-r) ≤ q ^ (-1 : ℝ) := Real.rpow_le_rpow_of_exponent_le hq' (by linarith)
+      _ = 1 / q := by rw [Real.rpow_neg hqpos.le, Real.rpow_one, one_div]
+      _ ≤ 1 / 2 := one_div_le_one_div_of_le (by norm_num) hq
+    have hd : 1 / 2 ≤ ‖1 - z‖ := by
+      have ht := norm_sub_norm_le (1 : ℂ) z
+      rw [norm_one] at ht
+      linarith
+    have hn : 1 - z ≠ 0 := norm_ne_zero_iff.mp (by linarith)
+    rw [show (1 - z)⁻¹ - 1 = z / (1 - z) by field_simp; ring, norm_div]
+    apply (div_le_iff₀ (by linarith : 0 < ‖1 - z‖)).mpr
+    calc
+      ‖z‖ ≤ q ^ (-r) := hcomp
+      _ = (2 * q ^ (-r)) * (1 / 2) := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left hd (by positivity)
+  · simp only [sub_self, norm_zero]
+    positivity
+
 /-- Paper: Lemma 3.2.1.1, p. 123. On each compact subset of `Re(s) > 1`,
 the deviations of the Euler factors from one are absolutely and uniformly summable. -/
 theorem finiteHeckeEulerFactor_summableUniformlyOn (χ : U[F])
     (K : Set ℂ) (hK : IsCompact K) (h : K ⊆ halfPlane) :
-    SummableUniformlyOn (fun v s ↦ ‖finiteHeckeEulerFactor χ v s - 1‖) K := by sorry
+    SummableUniformlyOn (fun v s ↦ ‖finiteHeckeEulerFactor χ v s - 1‖) K := by
+  obtain ⟨r, hr, hmin⟩ : ∃ r : ℝ, 1 < r ∧ ∀ s ∈ K, r ≤ s.re := by
+    rcases K.eq_empty_or_nonempty with rfl | hne
+    · exact ⟨2, by norm_num, by simp⟩
+    · obtain ⟨s, hs, hmin⟩ := hK.exists_isMinOn hne Complex.continuous_re.continuousOn
+      exact ⟨s.re, h hs, fun x hx ↦ hmin hx⟩
+  have hu : Summable fun v : HeightOneSpectrum (𝓞 F) ↦ (v.asIdeal.absNorm : ℝ) ^ (-r) :=
+    (summable_absNorm_rpow F hr).comp_injective (fun _ _ he ↦ HeightOneSpectrum.ext he)
+  apply (HasSumUniformlyOn.of_norm_le_summable (hu.mul_left 2) _).summableUniformlyOn
+  intro v s hs
+  rw [Real.norm_of_nonneg (norm_nonneg _)]
+  exact norm_finiteHeckeEulerFactor_sub_one_le χ v hr (hmin s hs)
 
 /-- Paper: Lemma 3.2.1.1, p. 123. The Euler product multiplied by the archimedean
 gamma factor converges uniformly on compact subsets of the open half-plane. -/

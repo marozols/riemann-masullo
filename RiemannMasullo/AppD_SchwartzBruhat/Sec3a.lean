@@ -148,7 +148,8 @@ def weightedVerticalTrace (a : ℝ) (N : ℕ) (f : ℂ → ℂ) (x : ℝ) : ℂ 
 /-- Paper: (D.3.1.7), p. 799. At zero height, the trace evaluates the weighted
 function on the real axis. -/
 theorem weightedVerticalTrace_zero_height (a : ℝ) (N : ℕ) (f : ℂ → ℂ) :
-    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by sorry
+    weightedVerticalTrace a N f 0 = (a : ℂ) ^ N * f a := by
+  simp [weightedVerticalTrace]
 
 /-- Paper: Lemma D.3.1.2, p. 799. Each polynomially weighted trace belongs to
 the indicated Lᵖ space.
@@ -221,7 +222,7 @@ def realSchwartzCoe : 𝓢(ℝ, ℂ) →ₗ[ℂ] (ℝ → ℂ) where
 
 /-- Paper: Definition D.3.2.1, p. 801. Forgetting the Schwartz properties
 retains the values of the function. -/
-theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := by sorry
+theorem realSchwartzCoe_apply (f : 𝓢(ℝ, ℂ)) (x : ℝ) : realSchwartzCoe f x = f x := rfl
 
 /-- Paper: Definition D.3.2.1, p. 801. In logarithmic coordinates, weighting
 by tᵃ amounts to multiplying by exp(ax). -/
@@ -230,7 +231,9 @@ def logExponentialWeight (a : ℝ) : (ℝ → ℂ) →ₗ[ℂ] (ℝ → ℂ) :=
 
 /-- Paper: Definition D.3.2.1, p. 801. The weight at exponent zero does not
 change the function. -/
-theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by sorry
+theorem logExponentialWeight_zero (f : ℝ → ℂ) : logExponentialWeight 0 f = f := by
+  ext x
+  simp [logExponentialWeight, LinearMap.mulLeft]
 
 /-- Paper: Definition D.3.2.1, p. 801. A logarithmic profile belongs to the
 decay submodule if each weighted profile is a real-line Schwartz function.
@@ -256,7 +259,10 @@ def logExponentialDecayTwist (I : Set ℝ) (a : I) : logExponentialDecaySubmodul
 exp(ax) times the original logarithmic profile. -/
 theorem logExponentialDecayTwist_apply (I : Set ℝ) (a : I)
     (f : logExponentialDecaySubmodule I) (x : ℝ) :
-    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by sorry
+    logExponentialDecayTwist I a f x = (Real.exp ((a : ℝ) * x) : ℂ) * f.val x := by
+  exact congrFun (LinearEquiv.ofInjective_symm_apply realSchwartzCoe
+    (h := DFunLike.coe_injective)
+    ⟨logExponentialWeight a f.val, logExponentialDecay_weight_mem_range I a f⟩) x
 
 /-- Paper: Definition D.3.2.1, p. 801. The topology is induced by
 all weighted Schwartz profiles, using the usual seminorms on the real Schwartz space.
@@ -385,7 +391,9 @@ def modulationWeight (a : ℝ) : (G → ℂ) →ₗ[ℂ] (G → ℂ) :=
 
 /-- Paper: Definition D.3.3.1, p. 804. Weighting at exponent zero is
 the identity. -/
-theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by sorry
+theorem modulationWeight_zero (f : G → ℂ) : modulationWeight m 0 f = f := by
+  ext g
+  simp [modulationWeight]
 
 /-- Paper: Definition D.3.3.1, p. 804. All real twists with exponents in I
 must lie in the Schwartz–Bruhat submodule.

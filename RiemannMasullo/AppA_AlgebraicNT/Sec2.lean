@@ -286,11 +286,46 @@ def ratAdeleFundamentalDomain : Set 𝔸[ℚ] :=
   {a | extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace) ∈ Set.Ico 0 1 ∧
     a ∈ integralAdelesOutside ℚ ∅}
 
+/-- Paper: Example A.2.1.3, pp. 545–546. The interval description agrees with the
+general adelic domain for the integral basis consisting of one. -/
+private theorem ratAdeleFundamentalDomain_eq (b : Module.Basis Unit ℤ (𝓞 ℚ)) (hb : (b () : ℚ) = 1) :
+    ratAdeleFundamentalDomain = adeleFundamentalDomain ℚ b := by
+  ext a
+  change (_ ∈ Set.Ico (0 : ℝ) 1 ∧ _) ↔ (_ ∈ infiniteAdeleFundamentalDomain ℚ b ∧ _)
+  apply and_congr_left'
+  let t := extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace)
+  have h : InfiniteAdeleRing.ringEquiv_mixedSpace ℚ a.1 = t • mixedEmbedding ℚ (b () : ℚ) := by
+    rw [hb, map_one]
+    apply Prod.ext
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      change t = t * 1
+      exact (mul_one _).symm
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      exact (InfinitePlace.not_isReal_iff_isComplex.mpr hv Rat.isReal_infinitePlace).elim
+  have hm := infiniteAdeleFundamentalDomain_basis_line ℚ b () t
+  rwa [← h, RingEquiv.symm_apply_apply, Iff.comm] at hm
+
 /-- Paper: Example A.2.1.3, p. 545. Every rational adele belongs to exactly one
 rational translate of the displayed domain. -/
 theorem ratAdeleFundamentalDomain_unique_translate (a : 𝔸[ℚ]) :
     ∃! q : ℚ, a ∈ algebraMap ℚ 𝔸[ℚ] q +ᵥ ratAdeleFundamentalDomain := by
-  sorry
+  let b := (Module.Basis.singleton Unit ℤ).map Rat.ringOfIntegersEquiv.symm.toAddEquiv.toIntLinearEquiv
+  have hb : (b () : ℚ) = 1 := by simp [b, Module.Basis.singleton_apply]
+  rw [ratAdeleFundamentalDomain_eq b hb]
+  obtain ⟨q, hq⟩ := Set.mem_iUnion.mp ((adeleFundamentalDomain_cover ℚ b).symm ▸ Set.mem_univ a)
+  refine ⟨q, hq, ?_⟩
+  intro r hr
+  by_contra hne
+  have hd := adeleFundamentalDomain_disjoint ℚ b (r - q) (sub_ne_zero.mpr hne)
+  have hdis : Disjoint (algebraMap ℚ 𝔸[ℚ] r +ᵥ adeleFundamentalDomain ℚ b)
+      (algebraMap ℚ 𝔸[ℚ] q +ᵥ adeleFundamentalDomain ℚ b) := by
+    rw [Set.disjoint_vadd_set_right, ← add_vadd, add_comm, ← sub_eq_add_neg, ← map_sub]
+    exact hd
+  exact Set.disjoint_left.mp hdis hr hq
 
 /-- Paper: Example A.2.1.3, p. 546. Each member of the rationally indexed cover
 has compact closure. -/
@@ -550,6 +585,92 @@ theorem ratIdeleGroup_decomposition :
 
 end RationalDecomposition
 
+private abbrev ratClassProjection := QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 ℚ) ℚ)
+
+private def ratClassRepresentative : ℝ≥0ˣ × RatLocalUnits →* 𝕀[ℚ] :=
+  ratIdeleFactors.comp (((Units.map NNReal.toRealHom.toMonoidHom).comp (MonoidHom.fst _ _)).prod
+    ((1 : ℝ≥0ˣ × RatLocalUnits →* ℚ≥0ˣ).prod (MonoidHom.snd _ _)))
+
+private theorem ratClassMap_injective :
+    Injective (ratClassProjection.comp ratClassRepresentative) := by
+  apply (injective_iff_map_eq_one _).mpr
+  rintro ⟨t, h⟩ he
+  let u := Units.map NNReal.toRealHom.toMonoidHom t
+  change ratClassProjection (ratIdeleFactors (u, 1, h)) = 1 at he
+  have hprincipal := (QuotientGroup.eq_one_iff _).mp he
+  -- The product formula fixes the positive real coordinate of a principal representative.
+  have hn := (ideleNorm_spec ℚ).2 hprincipal
+  have hnorm := ratIdeleFactors_norm u 1 h
+  rw [hn] at hnorm
+  have ht : t = 1 := by
+    apply Units.ext
+    apply NNReal.coe_injective
+    change (t.val : ℝ) = 1
+    change 1 = |(t.val : ℝ)| at hnorm
+    exact (abs_of_nonneg (NNReal.coe_nonneg t.val)).symm.trans hnorm.symm
+  subst t
+  obtain ⟨r, hr⟩ := hprincipal
+  have hinf := ratIdeleFactors_infinite u 1 h
+  rw [← hr] at hinf
+  change extensionEmbeddingOfIsReal _ (algebraMap ℚ Rat.infinitePlace.Completion (r : ℚ)) = _ at hinf
+  have hrval : (r : ℚ) = 1 := by
+    have : ((r : ℚ) : ℝ) = 1 := by simpa [u] using hinf
+    exact_mod_cast this
+  have hr1 : r = 1 := Units.ext hrval
+  rw [hr1, map_one] at hr
+  have hf : (u, (1 : ℚ≥0ˣ), h) = 1 := ratIdeleFactors_injective (hr.symm.trans (map_one _).symm)
+  exact Prod.ext rfl (congrArg (fun x : ℝˣ × ℚ≥0ˣ × RatLocalUnits ↦ x.2.2) hf)
+
+private theorem ratIdeleFactors_neg_one :
+    ratIdeleFactors (-1, 1, fun _ ↦ -1) = IdeleGroup.unitEmbedding (𝓞 ℚ) ℚ (-1) := by
+  apply Units.ext
+  refine Prod.ext ?_ ?_
+  · funext w
+    obtain rfl := Subsingleton.elim w Rat.infinitePlace
+    apply (ringEquivRealOfIsReal Rat.isReal_infinitePlace).injective
+    change ratRealCoordinate (ratIdeleFactors _) =
+      extensionEmbeddingOfIsReal _ (algebraMap ℚ Rat.infinitePlace.Completion ((-1 : ℚˣ) : ℚ))
+    rw [ratIdeleFactors_infinite]
+    simp
+  · apply RestrictedProduct.ext
+    intro v
+    refine (ratIdeleFactors_finite _ _ _ v).trans ?_
+    change algebraMap ℚ _ ((1 : ℚ≥0ˣ).val : ℚ) * _ = algebraMap ℚ _ ((-1 : ℚˣ) : ℚ)
+    simp
+
+private theorem ratClassMap_surjective :
+    Surjective (ratClassProjection.comp ratClassRepresentative) := by
+  let M := ratClassProjection.comp ratIdeleFactors
+  -- Positive principal ideles disappear in the quotient.
+  have drop (t : ℝˣ) (q : ℚ≥0ˣ) (h : RatLocalUnits) : M (t, q, h) = M (t, 1, h) := by
+    have hq : ratClassProjection (ratPosPrincipal q) = ratClassProjection (ratPosPrincipal 1) := by
+      rw [map_one, map_one]
+      exact (QuotientGroup.eq_one_iff _).mpr ⟨_, rfl⟩
+    simp only [M, MonoidHom.comp_apply, ratIdeleFactors, MonoidHom.coprod_apply, map_mul, hq]
+  -- Changing both the real sign and all finite signs multiplies by the principal idele −1.
+  let ε : RatLocalUnits := fun _ ↦ -1
+  have hε : M (-1, 1, ε) = M 1 := by
+    rw [map_one]
+    exact (QuotientGroup.eq_one_iff _).mpr ⟨-1, ratIdeleFactors_neg_one.symm⟩
+  intro c
+  obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective c
+  obtain ⟨⟨t, q, h⟩, rfl⟩ := ratIdeleFactors_surjective g
+  let p := Units.map Real.nnabs.toMonoidHom t
+  let u := Units.map NNReal.toRealHom.toMonoidHom p
+  have hu : (u : ℝ) = |(t : ℝ)| := Real.coe_nnabs _
+  rcases le_total 0 (t : ℝ) with ht | ht
+  · refine ⟨(p, h), ?_⟩
+    change M (u, 1, h) = M (t, q, h)
+    rw [show u = t from Units.ext (hu.trans (abs_of_nonneg ht)), drop t q h]
+  · refine ⟨(p, ε * h), ?_⟩
+    change M (u, 1, ε * h) = M (t, q, h)
+    have ht' : u = -t := Units.ext (hu.trans (abs_of_nonpos ht))
+    calc
+      M (u, 1, ε * h) = M ((-1, 1, ε) * (t, 1, h)) := by simp [ht']
+      _ = M (1 * (t, 1, h)) := by simp only [map_mul, hε]
+      _ = M (t, 1, h) := by rw [one_mul]
+      _ = M (t, q, h) := (drop t q h).symm
+
 /-- Paper: Equation (A.2.2.3), p. 546. Rational idele classes identify with the product
 of the positive reals and the finite integral units, by sending the tuple to its class. -/
 theorem ratIdeleClassGroup_decomposition :
@@ -557,7 +678,30 @@ theorem ratIdeleClassGroup_decomposition :
     ∃ e : (ℝ≥0ˣ × U) ≃ₜ* IdeleClassGroup (𝓞 ℚ) ℚ, ∀ t h, ∃ g : 𝕀[ℚ],
       extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (g.val.1 Rat.infinitePlace) = t.val ∧
       (∀ v, g.val.2 v = (h v).val.val) ∧ e (t, h) = QuotientGroup.mk g := by
-  sorry
+  have hrep : Continuous ratClassRepresentative := by
+    let : TopologicalSpace ℚ≥0ˣ := ⊥
+    have hu : Continuous (Units.map NNReal.toRealHom.toMonoidHom) :=
+      NNReal.continuous_coe.units_map _
+    exact ratIdeleFactors_continuous.comp
+      ((hu.comp continuous_fst).prodMk (continuous_const.prodMk continuous_snd))
+  obtain ⟨_, _, _, _, hquot, hT2, hloc, _⟩ := ideleGroup_quotient.{0, 0} ℚ
+  have (v : HeightOneSpectrum (𝓞 ℚ)) : CompactSpace (v.adicCompletionIntegers ℚ) :=
+    compactSpace_adicCompletionIntegers v
+  have : CompactSpace RatLocalUnits := by infer_instance
+  have : SigmaCompactSpace ℝ≥0ᵐᵒᵖ := MulOpposite.opHomeomorph.symm.isClosedEmbedding.sigmaCompactSpace
+  have : SigmaCompactSpace ℝ≥0ˣ := Units.isClosedEmbedding_embedProduct.sigmaCompactSpace
+  let f := ratClassProjection.comp ratClassRepresentative
+  have hf : Continuous f := hquot.continuous.comp hrep
+  let e := MulEquiv.ofBijective f ⟨ratClassMap_injective, ratClassMap_surjective⟩
+  have hopen := f.isOpenMap_of_sigmaCompact ratClassMap_surjective hf
+  refine ⟨{ e with
+    continuous_toFun := hf
+    continuous_invFun := e.toEquiv.continuous_symm_iff.mpr hopen }, fun t h ↦
+      ⟨ratClassRepresentative (t, h), ?_, fun v ↦ ?_, rfl⟩⟩
+  · change ratRealCoordinate (ratIdeleFactors (_, 1, h)) = _
+    simpa using ratIdeleFactors_infinite (Units.map NNReal.toRealHom.toMonoidHom t) 1 h
+  · change (ratIdeleFactors (_, 1, h)).val.2 v = _
+    simpa using ratIdeleFactors_finite (Units.map NNReal.toRealHom.toMonoidHom t) 1 h v
 
 -- TODO(paper-gap): A.2.2.1 writes an idele-valued section and a class-group norm in
 -- the same identity. The introductory paragraph on p. 546 specifies the quotient map.

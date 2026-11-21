@@ -32,7 +32,8 @@ abbrev RegularL2 (ν : Measure G) := Lp ℂ 2 ν
 /-- Paper: Definition 4.3.1.1, p. 175. Swapping the arguments of Mathlib's inner
 product gives the integral of the first function times the conjugate of the second. -/
 theorem regularL2_inner (ν : Measure G) (f h : RegularL2 ν) :
-    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by sorry
+    ⟪h, f⟫_ℂ = ∫ x, f x * star (h x) ∂ν := by
+  rfl
 
 variable (ν : Measure G) [hν : ν.IsHaarMeasure]
 

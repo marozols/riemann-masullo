@@ -5,6 +5,8 @@ public import Mathlib.Analysis.Distribution.SchwartzSpace.Deriv
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
+import Mathlib.Analysis.MellinInversion
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 import Mathlib.MeasureTheory.Integral.Asymptotics
 
@@ -20,7 +22,7 @@ values outside the positive reals are immaterial.
 @[expose] public noncomputable section
 
 open Filter Function MeasureTheory Set
-open scoped Asymptotics ContDiff ENNReal NNReal SchwartzMap Topology
+open scoped Asymptotics ContDiff ENNReal FourierTransform NNReal SchwartzMap Topology
 
 namespace RiemannMasullo
 
@@ -62,7 +64,25 @@ Deviation: Sanity check for the extended-norm formulation. -/
 theorem memLeftHardy_one_iff (Φ : ℂ → ℂ) (b : ℝ) :
     MemLeftHardy Φ b 1 ↔ DifferentiableOn ℂ Φ (Complex.re ⁻¹' Iio b) ∧
       ∃ C : ℝ, ∀ σ < b, Complex.VerticalIntegrable Φ σ ∧
-        (∫ y : ℝ, ‖Φ (verticalPoint σ y)‖) ≤ C := by sorry
+        (∫ y : ℝ, ‖Φ (verticalPoint σ y)‖) ≤ C := by
+  simp only [MemLeftHardy, zero_lt_one, true_and, ENNReal.ofReal_one,
+    Complex.VerticalIntegrable]
+  constructor
+  · rintro ⟨hΦ, C, hC⟩
+    refine ⟨hΦ, C, fun σ hσ ↦ ?_⟩
+    have hLp := hC σ hσ
+    have hInt : Integrable (verticalTrace Φ σ) :=
+      memLp_one_iff_integrable.mp (memLp_iff.mpr (hLp.trans_lt ENNReal.coe_lt_top))
+    refine ⟨hInt, ?_⟩
+    rw [integral_norm_eq_lintegral_eNorm hInt.aestronglyMeasurable,
+      ← eLpNorm_one_eq_lintegral_eNorm hInt.aestronglyMeasurable]
+    exact ENNReal.toReal_mono ENNReal.coe_ne_top hLp
+  · rintro ⟨hΦ, C, hC⟩
+    refine ⟨hΦ, C.toNNReal, fun σ hσ ↦ ?_⟩
+    obtain ⟨hInt, hBound⟩ := hC σ hσ
+    rw [eLpNorm_one_eq_lintegral_eNorm hInt.aestronglyMeasurable,
+      ← ofReal_integral_norm_eq_lintegral_eNorm hInt, ENNReal.ofNNReal_toNNReal]
+    exact ENNReal.ofReal_le_ofReal hBound
 
 -- TODO(paper-gap): Footnotes 5 and 6 ask how the cited Hardy-space results
 -- apply on the left half-plane. Footnote 7 asks how far the decay is uniform.
@@ -394,6 +414,19 @@ theorem schwartzOnLeftHalfPlane_mellin_of_exponentialDecay
     (hSupport : tsupport (f : ℝ → ℂ) ⊆ Ioi 0) (b : ℝ) :
     SchwartzOnLeftHalfPlane (mellin (fromLog f)) b := by sorry
 
+/-- The Mellin integral of a logarithmic profile after the substitution `t = exp x`. -/
+private theorem mellin_logProfile_eq (g : ℝ → ℂ) (s : ℂ) :
+    mellin (fromLog g) s = ∫ x : ℝ, Complex.exp (s * x) * g x := by
+  rw [mellin, ← integral_comp_exp]
+  apply integral_congr_ae
+  filter_upwards with x
+  simp only [Real.log_exp, Complex.real_smul, smul_eq_mul]
+  rw [Complex.cpow_def_of_ne_zero (by exact_mod_cast (Real.exp_pos x).ne'),
+    ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp]
+  simp only [Complex.ofReal_exp, ← mul_assoc, ← Complex.exp_add]
+  congr 2
+  ring
+
 section UniformRiemannLebesgue
 
 variable (f : 𝓢(ℝ, ℂ)) (a b : ℝ) (hab : a < b)
@@ -406,20 +439,91 @@ absolutely throughout the closed strip of Schwartz weights. -/
 theorem mellinConvergent_on_strip_of_weighted_schwartz (s : ℂ) (hs : s ∈ closedStrip a b) :
     MellinConvergent (fromLog f) s := by sorry
 
+/-- Paper: Proposition B.2.2.3(1), p. 601. The two endpoint weights give one
+integrable majorant for every Mellin integrand in the closed strip. -/
+private theorem mellin_logProfile_dominated :
+    ∃ B : ℝ → ℝ, Integrable B ∧ ∀ s ∈ closedStrip a b, ∀ x : ℝ,
+      ‖Complex.exp (s * x) * f x‖ ≤ B x := by
+  obtain ⟨g, hg⟩ := hWeighted a (left_mem_Icc.mpr hab.le)
+  obtain ⟨h, hh⟩ := hWeighted b (right_mem_Icc.mpr hab.le)
+  refine ⟨fun x ↦ ‖g x‖ + ‖h x‖, (g.integrable (μ := volume)).norm.add
+    (h.integrable (μ := volume)).norm, ?_⟩
+  intro s hs x
+  have hnorm (r : ℝ) : ‖(Real.exp (r * x) : ℂ) * f x‖ = Real.exp (r * x) * ‖f x‖ := by
+    rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+  change ‖Complex.exp (s * x) * f x‖ ≤ _
+  simp only [norm_mul, Complex.norm_exp, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im,
+    mul_zero, sub_zero]
+  rcases le_total x 0 with hx | hx
+  · apply le_add_of_le_of_nonneg _ (norm_nonneg _)
+    rw [hg, hnorm]
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonpos_right hs.1 hx))
+      (norm_nonneg _)
+  · apply le_add_of_nonneg_of_le (norm_nonneg _) _
+    rw [hh, hnorm]
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_right hs.2 hx))
+      (norm_nonneg _)
+
+
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform is continuous
 on the closed strip of Schwartz weights. -/
 theorem continuousOn_mellin_of_weighted_schwartz :
-    ContinuousOn (mellin (fromLog f)) (closedStrip a b) := by sorry
+    ContinuousOn (mellin (fromLog f)) (closedStrip a b) := by
+  obtain ⟨B, hB, hbound⟩ := mellin_logProfile_dominated f a b hab hWeighted
+  change ContinuousOn (fun s ↦ mellin (fromLog f) s) (closedStrip a b)
+  simp_rw [mellin_logProfile_eq]
+  apply continuousOn_of_dominated (bound := B)
+  · intro s _
+    exact ((Complex.continuous_exp.comp (continuous_const.mul Complex.continuous_ofReal)).mul
+      f.continuous).aestronglyMeasurable
+  · exact fun s hs ↦ Eventually.of_forall (hbound s hs)
+  · exact hB
+  · filter_upwards with x
+    exact ((Complex.continuous_exp.comp (continuous_id.mul_const (x : ℂ))).mul_const
+      (f x)).continuousOn
 
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform restricts
 to a Schwartz function on each vertical line of the closed strip. -/
 theorem exists_schwartz_verticalTrace_mellin_of_weighted_schwartz (σ : ℝ) (hσ : σ ∈ Icc a b) :
-    ∃ g : 𝓢(ℝ, ℂ), (g : ℝ → ℂ) = verticalTrace (mellin (fromLog f)) σ := by sorry
+    ∃ g : 𝓢(ℝ, ℂ), (g : ℝ → ℂ) = verticalTrace (mellin (fromLog f)) σ := by
+  obtain ⟨g, hg⟩ := hWeighted σ hσ
+  let r := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ
+    (LinearIsometryEquiv.neg ℝ (E := ℝ)).toContinuousLinearEquiv g
+  let e := (LinearEquiv.smulOfNeZero ℝ ℝ (2 * Real.pi)⁻¹
+    (inv_ne_zero (mul_ne_zero two_ne_zero Real.pi_ne_zero))).toContinuousLinearEquiv
+  refine ⟨SchwartzMap.compCLMOfContinuousLinearEquiv ℂ e (𝓕 r), ?_⟩
+  funext y
+  change (𝓕 r) ((2 * Real.pi)⁻¹ * y) = mellin (fun t ↦ f (Real.log t)) (σ + y * Complex.I)
+  rw [SchwartzMap.fourier_coe, mellin_eq_fourier]
+  simp only [Complex.add_re, Complex.ofReal_re, Complex.mul_I_re, Complex.ofReal_im,
+    neg_zero, add_zero, Complex.add_im, Complex.mul_I_im, zero_add, Real.log_exp,
+    div_eq_inv_mul]
+  apply congrArg (fun v : ℝ → ℂ ↦ 𝓕 v ((2 * Real.pi)⁻¹ * y))
+  funext x
+  change g (-x) = _
+  simp only [hg, Complex.real_smul, mul_neg, neg_mul]
 
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform is holomorphic
 in the interior of the strip of Schwartz weights. -/
 theorem differentiableOn_mellin_of_weighted_schwartz :
-    DifferentiableOn ℂ (mellin (fromLog f)) (openStrip a b) := by sorry
+    DifferentiableOn ℂ (mellin (fromLog f)) (openStrip a b) := by
+  have hloc : LocallyIntegrableOn (fun t ↦ f (Real.log t)) (Ioi 0) volume :=
+    (f.continuous.comp_continuousOn (Real.continuousOn_log.mono
+      (fun x hx ↦ ne_of_gt hx))).locallyIntegrableOn measurableSet_Ioi
+  have bound {c : ℝ} (hc : c ∈ Icc a b) {l : Filter ℝ} (hl : ∀ᶠ t in l, 0 < t) :
+      (fun t ↦ f (Real.log t)) =O[l] (fun t : ℝ ↦ t ^ (-c)) := by
+    obtain ⟨g, hg⟩ := hWeighted c hc
+    apply Asymptotics.IsBigO.of_bound (SchwartzMap.seminorm ℂ 0 0 g)
+    filter_upwards [hl] with t ht
+    rw [Real.norm_of_nonneg (Real.rpow_nonneg ht.le _), Real.rpow_neg ht.le, ← div_eq_mul_inv,
+      le_div_iff₀ (Real.rpow_pos_of_pos ht _), Real.rpow_def_of_pos ht, mul_comm (Real.log t)]
+    simpa only [hg, norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le, mul_comm]
+      using g.norm_le_seminorm ℂ (Real.log t)
+  intro s hs
+  apply DifferentiableAt.differentiableWithinAt
+  exact mellin_differentiableAt_of_isBigO_rpow hloc
+    (bound (right_mem_Icc.mpr hab.le) (eventually_gt_atTop 0)) hs.2
+    (bound (left_mem_Icc.mpr hab.le) self_mem_nhdsWithin) hs.1
 
 /-- Paper: Proposition B.2.2.3(2), p. 601. The rapid decay bound holds
 uniformly across the full closed strip, including the two boundary lines. -/
