@@ -8,6 +8,7 @@ public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
 import Mathlib.Analysis.MellinInversion
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
+import Mathlib.Analysis.Complex.AbsMax
 import Mathlib.MeasureTheory.Integral.Asymptotics
 import RiemannMasullo.ForMathlib.Analysis.MellinTransform
 
@@ -688,6 +689,107 @@ theorem contDiff_zeroExtension_mellinInv_of_schwartzOnVerticalStrips {Φ : ℂ �
     ContDiff ℝ ∞ ((Ioi (0 : ℝ)).indicator fun t ↦
       verticalLineIntegral (fun s ↦ Φ s * (t : ℂ) ^ (-s)) 0) := by sorry
 
+/-- Apply the strip estimate to a compact interval of arbitrary placement. -/
+private theorem closedSubstrip_decay {Φ : ℂ → ℂ} {a b c d : ℝ} (h : UniformlySchwartzOnStrip Φ a b)
+    (ha : a < c) (hcd : c ≤ d) (hb : d < b) (n : ℕ) (hn : 1 ≤ n) :
+    ∃ C > (0 : ℝ), ∀ᶠ y : ℝ in atAbsInfty, ∀ x ∈ Icc c d, ‖Φ (verticalPoint x y)‖ ≤ C / |y| ^ n := by
+  let ε := min (c - a) (b - d) / 2
+  have hε : 0 < ε := half_pos (lt_min (sub_pos.mpr ha) (sub_pos.mpr hb))
+  have hl : a + ε < c := by dsimp [ε]; linarith [min_le_left (c - a) (b - d)]
+  have hr : d < b - ε := by dsimp [ε]; linarith [min_le_right (c - a) (b - d)]
+  obtain ⟨C, hC, h'⟩ := h.2.2 ε hε (hl.trans (hcd.trans_lt hr)) n hn
+  exact ⟨C, hC, h'.mono fun y hy x hx ↦ hy x ⟨hl.le.trans hx.1, hx.2.trans hr.le⟩⟩
+
+/-- A polynomial weight absorbs the inverse powers of the imaginary part at large heights. -/
+private theorem pow_mul_bound_of_heightBound {Φ : ℂ → ℂ} {c d C x y : ℝ} {n : ℕ}
+    (hx : x ∈ Icc c d) (hy : 1 ≤ |y|) (h : ‖Φ (verticalPoint x y)‖ ≤ C / |y| ^ n) :
+    ‖(verticalPoint x y) ^ n * Φ (verticalPoint x y)‖ ≤ (max |c| |d| + 1) ^ n * C := by
+  let M := max |c| |d|
+  have hM : 0 ≤ M := (abs_nonneg c).trans (le_max_left _ _)
+  have hxM : |x| ≤ M := abs_le.mpr ⟨by linarith [hx.1, neg_abs_le c, le_max_left |c| |d|],
+    by linarith [hx.2, le_abs_self d, le_max_right |c| |d|]⟩
+  have hb : ‖verticalPoint x y‖ ≤ (M + 1) * |y| := by
+    calc ‖verticalPoint x y‖ ≤ |x| + |y| := by simpa using norm_add_le (x : ℂ) ((y : ℂ) * Complex.I)
+      _ ≤ (M + 1) * |y| := by nlinarith [mul_nonneg hM (sub_nonneg.mpr hy)]
+  rw [norm_mul, norm_pow]
+  calc ‖verticalPoint x y‖ ^ n * ‖Φ (verticalPoint x y)‖ ≤ ((M + 1) * |y|) ^ n * (C / |y| ^ n) :=
+      mul_le_mul (pow_le_pow_left₀ (norm_nonneg _) hb _) h (norm_nonneg _) (by positivity)
+    _ = _ := by rw [mul_pow]; dsimp only [M]; field_simp [ne_of_gt (zero_lt_one.trans_le hy)]
+
+/-- A continuous function bounded outside a bounded interval is bounded everywhere. -/
+private theorem globally_bounded_of_height_bound {G : ℝ → ℂ} (hG : Continuous G) {C : ℝ}
+    (h : ∀ᶠ y : ℝ in atAbsInfty, ‖G y‖ ≤ C) : ∃ D, ∀ y, ‖G y‖ ≤ D := by
+  obtain ⟨R, hR⟩ := eventually_atTop.mp (eventually_comap.mp h)
+  obtain ⟨B, hB⟩ := (isCompact_Icc (a := -R) (b := R)).bddAbove_image hG.norm.continuousOn
+  refine ⟨max B C, fun y ↦ ?_⟩
+  by_cases hy : R ≤ |y|
+  · exact (hR |y| hy y rfl).trans (le_max_right _ _)
+  · exact (hB (mem_image_of_mem _ (abs_le.mp (le_of_not_ge hy)))).trans (le_max_left _ _)
+
+/-- Bounds along selected horizontal lines above and below each point propagate through the strip. -/
+private theorem norm_le_of_selected_rectangles {F : ℂ → ℂ} {c d B : ℝ} (hcd : c < d)
+    (hF : DifferentiableOn ℂ F (Complex.re ⁻¹' Icc c d))
+    (hedge : ∀ w : ℂ, w.re = c ∨ w.re = d → ‖F w‖ ≤ B)
+    (T : ℤ → ℝ) (hMono : Monotone T)
+    (hInf : Tendsto (fun k : ℤ ↦ |T k|) (comap abs atTop) atTop)
+    (hT : ∀ᶠ k : ℤ in comap abs atTop, ∀ x ∈ Icc c d, ‖F (verticalPoint x (T k))‖ ≤ B)
+    (z : ℂ) (hz : z.re ∈ Icc c d) : ‖F z‖ ≤ B := by
+  have top : Tendsto (fun k : ℤ ↦ k) atTop (comap abs atTop) :=
+    tendsto_comap_iff.mpr tendsto_abs_atTop_atTop
+  have bot : Tendsto (fun k : ℤ ↦ k) atBot (comap abs atTop) :=
+    tendsto_comap_iff.mpr tendsto_abs_atBot_atTop
+  obtain ⟨u, hu, hTu⟩ : ∃ k, z.im < T k ∧ ∀ x ∈ Icc c d, ‖F (verticalPoint x (T k))‖ ≤ B := by
+    have eventually := (hInf.comp top).eventually (eventually_gt_atTop (max z.im (-(T 0))))
+    obtain ⟨k, hpos, hlarge, hhorizontal⟩ :=
+      ((eventually_ge_atTop 0).and (eventually.and (top.eventually hT))).exists
+    have h0 := hMono hpos
+    refine ⟨k, ?_, hhorizontal⟩
+    change max z.im (-(T 0)) < |T k| at hlarge
+    rcases lt_abs.mp hlarge with h | h
+    · exact (le_max_left _ _).trans_lt h
+    · linarith [le_max_right z.im (-(T 0))]
+  obtain ⟨l, hl, hTl⟩ : ∃ k, T k < z.im ∧ ∀ x ∈ Icc c d, ‖F (verticalPoint x (T k))‖ ≤ B := by
+    have eventually := (hInf.comp bot).eventually (eventually_gt_atTop (max (-z.im) (T 0)))
+    obtain ⟨k, hneg, hlarge, hhorizontal⟩ :=
+      ((eventually_le_atBot 0).and (eventually.and (bot.eventually hT))).exists
+    have h0 := hMono hneg
+    refine ⟨k, ?_, hhorizontal⟩
+    change max (-z.im) (T 0) < |T k| at hlarge
+    rcases lt_abs.mp hlarge with h | h
+    · linarith [le_max_right (-z.im) (T 0)]
+    · linarith [le_max_left (-z.im) (T 0)]
+  have hlu := hl.trans hu
+  have cl := Complex.closure_reProdIm (Ioo c d) (Ioo (T l) (T u))
+  rw [closure_Ioo hcd.ne, closure_Ioo hlu.ne] at cl
+  apply Complex.norm_le_of_forall_mem_frontier_norm_le ((Metric.isBounded_Ioo c d).reProdIm (Metric.isBounded_Ioo (T l) (T u)))
+  · apply DifferentiableOn.diffContOnCl
+    rw [cl]
+    exact hF.mono fun w hw ↦ hw.1
+  · intro w hw
+    rw [Complex.frontier_reProdIm, frontier_Ioo hcd, frontier_Ioo hlu, closure_Ioo hcd.ne,
+      closure_Ioo hlu.ne] at hw
+    rcases hw with hw | hw
+    · have him : w.im = T l ∨ w.im = T u := hw.2
+      have hxy : verticalPoint w.re w.im = w := Complex.re_add_im w
+      rcases him with him | him
+      · rw [← hxy, him]
+        exact hTl _ hw.1
+      · rw [← hxy, him]
+        exact hTu _ hw.1
+    · exact hedge w hw.1
+  · rw [cl]
+    exact ⟨hz, hl.le, hu.le⟩
+
+/-- Multiplication by a polynomial gives a globally bounded vertical trace. -/
+private theorem weighted_trace_bound {Φ : ℂ → ℂ} {x C : ℝ} {n : ℕ}
+    (hc : Continuous (fun y : ℝ ↦ Φ (verticalPoint x y)))
+    (h : ∀ᶠ y : ℝ in atAbsInfty, ‖Φ (verticalPoint x y)‖ ≤ C / |y| ^ n) :
+    ∃ B, ∀ y : ℝ, ‖(verticalPoint x y) ^ n * Φ (verticalPoint x y)‖ ≤ B := by
+  apply globally_bounded_of_height_bound (Continuous.mul (by fun_prop) hc)
+  have hy : ∀ᶠ y : ℝ in atAbsInfty, 1 ≤ |y| := tendsto_comap.eventually (eventually_ge_atTop 1)
+  filter_upwards [h, hy] with y hyφ hy'
+  exact pow_mul_bound_of_heightBound (show x ∈ Icc x x from ⟨le_rfl, le_rfl⟩) hy' hyφ
+
 section CauchySelectedHeights
 
 variable {Φ : ℂ → ℂ} {a a' a'' b'' b' b : ℝ}
@@ -702,12 +804,66 @@ variable {Φ : ℂ → ℂ} {a a' a'' b'' b' b : ℝ}
 
 include ha₁ ha₂ hab hb₁ hb₂ hΦ hLeft hRight hMono hInf hHeight
 
+/-- Paper: Corollary B.2.2.6, p. 603. Rapid decay along the chosen horizontal
+lines and near both vertical edges implies uniform rapid decay on every closed substrip. -/
+theorem uniformlySchwartzOnStrip_of_selectedHeights : UniformlySchwartzOnStrip Φ a b := by
+  have hmid := ha₂.trans (hab.trans hb₁)
+  refine ⟨ha₁.trans (hmid.trans hb₂), hΦ, ?_⟩
+  intro ε hε _ n hn
+  let l := min (a + ε) a''
+  let r := max (b - ε) b''
+  obtain ⟨L, hL, left⟩ := closedSubstrip_decay hLeft
+    (show a < l from lt_min (by linarith) ha₁) (min_le_right _ _) ha₂ n hn
+  obtain ⟨R, hR, right⟩ := closedSubstrip_decay hRight hb₁ (le_max_right _ _)
+    (show r < b from max_lt (by linarith) hb₂) n hn
+  let F (z : ℂ) := z ^ n * Φ z
+  have hcont (x : ℝ) (hx : x ∈ Ioo a b) : Continuous (fun y : ℝ ↦ Φ (verticalPoint x y)) :=
+    hΦ.continuousOn.comp_continuous (by fun_prop) fun y ↦ by simpa using hx
+  obtain ⟨A, hA⟩ := weighted_trace_bound (hcont a'' ⟨ha₁, hmid.trans hb₂⟩)
+    (left.mono fun y hy ↦ hy a'' ⟨min_le_right _ _, le_rfl⟩)
+  obtain ⟨B, hB⟩ := weighted_trace_bound (hcont b'' ⟨ha₁.trans hmid, hb₂⟩)
+    (right.mono fun y hy ↦ hy b'' ⟨le_rfl, le_max_right _ _⟩)
+  obtain ⟨C, _, hC⟩ := hHeight n hn
+  let H := (max |a''| |b''| + 1) ^ n * C
+  let D := max (max A B) H
+  have hbound (z : ℂ) (hz : z.re ∈ Icc a'' b'') : ‖F z‖ ≤ D := by
+    apply norm_le_of_selected_rectangles hmid (F := F) _ _ T hMono.monotone hInf _ z hz
+    · exact ((differentiable_id.pow n).differentiableOn.mul hΦ).mono (preimage_mono (Icc_subset_Ioo ha₁ hb₂))
+    · intro w hw
+      rw [← Complex.re_add_im w]
+      rcases hw with hw | hw
+      · rw [hw]
+        exact (hA w.im).trans ((le_max_left A B).trans (le_max_left _ _))
+      · rw [hw]
+        exact (hB w.im).trans ((le_max_right A B).trans (le_max_left _ _))
+    · filter_upwards [hC, hInf.eventually (eventually_ge_atTop 1)] with k hk hy x hx
+      exact (pow_mul_bound_of_heightBound hx hy (hk x hx)).trans (le_max_right _ _)
+  let M := max (max L R) D
+  refine ⟨M, hL.trans_le ((le_max_left L R).trans (le_max_left _ _)), ?_⟩
+  have hy : ∀ᶠ y : ℝ in atAbsInfty, 0 < |y| := tendsto_comap.eventually (eventually_gt_atTop 0)
+  filter_upwards [left, right, hy] with y hly hry hy x hx
+  by_cases hl : x ≤ a''
+  · exact (hly x ⟨(min_le_left _ _).trans hx.1, hl⟩).trans
+      (div_le_div_of_nonneg_right ((le_max_left L R).trans (le_max_left _ _)) (by positivity))
+  by_cases hr : b'' ≤ x
+  · exact (hry x ⟨hr, hx.2.trans (le_max_left _ _)⟩).trans
+      (div_le_div_of_nonneg_right ((le_max_right L R).trans (le_max_left _ _)) (by positivity))
+  have hz : (verticalPoint x y).re ∈ Icc a'' b'' := by simpa using And.intro (le_of_not_ge hl) (le_of_not_ge hr)
+  have him : |y| ≤ ‖verticalPoint x y‖ := by simpa using Complex.abs_im_le_norm (verticalPoint x y)
+  rw [le_div_iff₀ (pow_pos hy _), mul_comm]
+  calc |y| ^ n * ‖Φ (verticalPoint x y)‖ ≤ ‖verticalPoint x y‖ ^ n * ‖Φ (verticalPoint x y)‖ := by gcongr
+    _ = ‖F (verticalPoint x y)‖ := by simp only [F, norm_mul, norm_pow]
+    _ ≤ M := (hbound _ hz).trans (le_max_right _ _)
+
 /-- Paper: Corollary B.2.2.6, p. 603. With the two edge bounds and the
 selected horizontal heights, the vertical Cauchy kernel is absolutely integrable
 on each interior line off the real part of the evaluation point. -/
 theorem cauchyKernel_verticalIntegrable_of_selectedHeights (σ : ℝ) (hσ : σ ∈ Ioo a b)
     (N : ℕ) (z : ℂ) (hz : z.re ≠ σ) :
-    Complex.VerticalIntegrable (cauchyKernel Φ N z) σ := by sorry
+    Complex.VerticalIntegrable (cauchyKernel Φ N z) σ := by
+  exact cauchyKernel_verticalIntegrable_on_strip
+    (uniformlySchwartzOnStrip_of_selectedHeights ha₁ ha₂ hab hb₁ hb₂ hΦ hLeft hRight T hMono hInf hHeight)
+    σ hσ N z hz
 
 variable (ε : ℝ) (hε : 0 < ε) (hWidth : a + ε < b - ε) (N : ℕ) (z : ℂ)
 
