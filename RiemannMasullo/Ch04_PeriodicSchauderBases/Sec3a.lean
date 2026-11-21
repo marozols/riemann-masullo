@@ -52,7 +52,8 @@ theorem regularL2_haar_sigmaFinite : SigmaFinite ν := by sorry
 /-- Paper: Remark 4.3.1.4, p. 175. A continuous compactly supported function
 is square-integrable. -/
 theorem regularL2_memLp_compactlySupported (f : G →C_c ℂ) :
-    MemLp (f : G → ℂ) 2 ν := by sorry
+    MemLp (f : G → ℂ) 2 ν := by
+  exact f.continuous.memLp_of_hasCompactSupport f.hasCompactSupport
 
 /-- Paper: Remark 4.3.1.4, p. 175. Classes of continuous compactly
 supported functions are dense in Haar L². -/
