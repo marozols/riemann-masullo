@@ -857,7 +857,21 @@ theorem elementarySchwartz_withSeminorms :
     WithSeminorms (E := ElementarySchwartz m n r F) elementarySchwartzSeminorm := by sorry
 
 /-- Paper: Remark D.1.3.2, p. 750. The Schwartz topology is Hausdorff. -/
-theorem elementarySchwartz_t2 : T2Space (ElementarySchwartz m n r F) := by sorry
+theorem elementarySchwartz_t2 : T2Space (ElementarySchwartz m n r F) := by
+  let hp := withGeneratingSeminorms_spec (elementarySchwartzSubmodule m n r F) elementarySchwartzSeminorm
+  have : T1Space (ElementarySchwartz m n r F) := hp.T1_of_separating fun f hf ↦ by
+    let i : ElementarySchwartzIndex m n r := (0, 0, 0, 0)
+    refine ⟨i, fun hzero ↦ hf ?_⟩
+    apply Subtype.ext
+    funext g
+    have h : ‖f g‖ ≤ elementarySchwartzSeminorm i f := by
+      change (‖f.val g‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val i).toReal
+      apply ENNReal.toReal_mono (f.property.2 i).ne
+      rw [show i = (0, 0, 0, 0) from rfl, elementarySchwartzBound_zero]
+      exact le_iSup (fun x ↦ (‖f.val x‖₊ : ENNReal)) g
+    change f.val g = 0
+    exact norm_eq_zero.mp (le_antisymm (h.trans_eq hzero) (norm_nonneg _))
+  infer_instance
 
 /-- Paper: Lemma D.1.3.3, p. 750. Pullback by a topological group automorphism
 gives a linear topological automorphism of the elementary Schwartz space. -/
