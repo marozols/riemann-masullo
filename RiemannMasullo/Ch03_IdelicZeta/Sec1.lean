@@ -705,14 +705,6 @@ theorem sIdeleQuotientNorm_mk (g : (SAdeleRing F S)ˣ) :
     sIdeleQuotientNorm F S (QuotientGroup.mk g) = sIdeleNorm F S g := by
   rfl
 
--- TODO(paper-gap): Theorem A.1.5.2 gives compactness for the norm-one part of C_{F,S}.
--- Applying it to J_{F,S} requires projecting away the integer units outside S.
-
-/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
-one is compact. -/
-theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
-  sorry
-
 /-- Paper: §3.1.2.3, p. 121. The S-idelic norm admits a continuous homomorphic section,
 as used to parametrize the components in (3.1.2.5). -/
 theorem sIdeleQuotientNorm_exists_section :
@@ -734,6 +726,44 @@ theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
   intro g
   refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
   exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
+
+/-- Forgetting the unit coordinates outside S induces an open quotient map on S-idele
+classes, and this projection preserves the norm. -/
+theorem sIdeleClassGroup_projection :
+    ∃ π : SIdeleClassGroup F S →* SIdeleQuotient F S, IsOpenQuotientMap π ∧
+      ∀ c, sIdeleQuotientNorm F S (π c) = sIdeleClassNorm F S c := by
+  let A := integralAdelesOutside F S
+  let p := Units.map ((adeleProjection F S).comp A.subtype).toMonoidHom
+  let d := (Units.map (integralAdeleDiagonal F S).toMonoidHom).range
+  let π := QuotientGroup.map d (d.map p) p (Subgroup.le_comap_map _ _)
+  have hp : IsOpenQuotientMap p := by
+    let B := (v : {v : Primes(F) // v ∉ S}) → v.val.adicCompletionIntegers F
+    obtain ⟨e, he, he', hcoords⟩ := integralAdelesOutside_factors F S
+    let E : A ≃ₜ* (SAdeleRing F S × B) :=
+      { e.toMulEquiv with continuous_toFun := he, continuous_invFun := he' }
+    let U := (Units.mapContinuousMulEquiv E).trans (ContinuousMulEquiv.prodUnits _ _)
+    have heq : (p : Aˣ → (SAdeleRing F S)ˣ) = Prod.fst ∘ U := by
+      funext g
+      exact Units.ext (hcoords g.val).1.symm
+    rw [heq]
+    exact isOpenQuotientMap_fst.comp U.toHomeomorph.isOpenQuotientMap
+  let q := QuotientGroup.mk' d
+  have hq : IsOpenQuotientMap q := QuotientGroup.isOpenQuotientMap_mk
+  refine ⟨π, hq.of_comp_iff.mp ?_, ?_⟩
+  · exact (QuotientGroup.isOpenQuotientMap_mk (N := d.map p)).comp hp
+  · intro c
+    induction c using QuotientGroup.induction_on with
+    | H g => rfl
+
+/-- Paper: §3.1.2, p. 120. The norm on J_{F,S} is proper. In particular its fiber over
+one is compact. -/
+theorem isProperMap_sIdeleQuotientNorm : IsProperMap (sIdeleQuotientNorm F S) := by
+  obtain ⟨π, hπ, hnorm⟩ := sIdeleClassGroup_projection F S
+  have hcomp : IsProperMap ((sIdeleQuotientNorm F S) ∘ π) := by
+    simpa only [Function.comp_def, hnorm] using
+      isProperMap_sIdeleClassNorm_of_global F S (isProperMap_ideleClassNorm F)
+  exact isProperMap_of_comp_of_surj hπ.continuous
+    (hπ.continuous_comp_iff.mp hcomp.continuous) hcomp hπ.surjective
 
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
