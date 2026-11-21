@@ -828,7 +828,9 @@ differential is a strong continuous differential. -/
 theorem hasStrongDifferentialOn_of_weak {Ω : Set W} (hΩ : IsOpen Ω)
     (hd : 1 ≤ d) {f : W → E}
     {D : Ω × W → E} (hD : HasWeakDifferentialOn k f (toPettisWeakCompletion E ∘ D))
-    (hc : Continuous D) : HasStrongDifferentialOn (k := k) f D := by sorry
+    (hc : Continuous D) : HasStrongDifferentialOn (k := k) f D := by
+  refine ⟨hc, (hasWeakCompletionDifferentialOn_iff hΩ f _).2 ⟨hD, ?_⟩⟩
+  exact (continuous_toPettisWeakCompletion (E := E)).comp hc
 
 /-- Paper: Lemma C.5.1.13(2), p. 726. Directional difference quotients converge in
 the given vector topology to the jointly continuous vector-valued weak differential. -/
