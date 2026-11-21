@@ -513,7 +513,59 @@ Deviation: In (C.5.1.14) the base point is the first argument and the direction 
 theorem hasWeakCompletionDifferentialOn_iff {Ω : Set W} (hΩ : IsOpen Ω) (f : W → E)
     (D : Ω × W → PettisWeakCompletion E) :
     HasWeakCompletionDifferentialOn (k := k) f D ↔
-      HasWeakDifferentialOn k f D ∧ Continuous D := by sorry
+      HasWeakDifferentialOn k f D ∧ Continuous D := by
+  let ev (φ : StrongDual ℂ E) : PettisWeakCompletion E →ₗ[k] ℂ :=
+    { toFun := fun z ↦ (show Module.Dual ℂ (StrongDual ℂ E) from z) φ
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun c z ↦ by
+        change algebraMap k ℂ c * _ = c • _
+        rw [Algebra.smul_def] }
+  let rem (x : Ω) (y : W) : PettisWeakCompletion E :=
+    ((‖y - (x : W)‖⁻¹ : ℝ) : ℂ) •
+      (toPettisWeakCompletion E (f y) - toPettisWeakCompletion E (f x) - D (x, y - (x : W)))
+  have scalar (x : Ω) (φ : StrongDual ℂ E) (L : W →L[k] ℂ)
+      (heval : ∀ v, ev φ (D (x, v)) = L v) :
+      HasFDerivWithinAt (φ ∘ f) L Ω x ↔
+        Tendsto (fun y ↦ ev φ (rem x y)) (𝓝[Ω \ {(x : W)}] (x : W)) (𝓝 0) := by
+    rw [← hasFDerivWithinAt_sdiff_singleton_self, hasFDerivWithinAt_iff_tendsto]
+    conv_rhs => rw [tendsto_zero_iff_norm_tendsto_zero]
+    change _ ↔ Tendsto (fun y ↦ ‖((‖y - (x : W)‖⁻¹ : ℝ) : ℂ) *
+      (φ (f y) - φ (f x) - ev φ (D (x, y - (x : W))))‖) _ _
+    simp only [heval, norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_inv,
+      abs_of_nonneg (norm_nonneg _), Function.comp_apply]
+  constructor
+  · rintro ⟨hc, h⟩
+    refine ⟨fun φ x ↦ ?_, hc⟩
+    obtain ⟨⟨A, hA⟩, hrem⟩ := h x
+    let L : W →L[k] ℂ := ((ev φ).comp A).toContinuousLinearMap
+    have heval (v : W) : ev φ (D (x, v)) = L v := by
+      rw [hA]
+      rfl
+    refine ⟨L, (scalar x φ L heval).2 ?_, heval⟩
+    exact ((WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).1 hrem) φ
+  · rintro ⟨h, hc⟩
+    refine ⟨hc, fun x ↦ ?_⟩
+    have eval_eq (φ : StrongDual ℂ E) (v : W) :
+        ev φ (D (x, v)) = fderivWithin k (φ ∘ f) Ω x v := by
+      obtain ⟨L, hL, heval⟩ := h φ x
+      rw [hL.fderivWithin (hΩ.uniqueDiffOn x x.property)]
+      exact heval v
+    constructor
+    · refine ⟨{ toFun := fun v ↦ D (x, v)
+                map_add' := fun v w ↦ ?_
+                map_smul' := fun c v ↦ ?_ }, fun _ ↦ rfl⟩
+      · apply LinearMap.ext
+        intro φ
+        change ev φ (D (x, v + w)) = ev φ (D (x, v) + D (x, w))
+        rw [map_add, eval_eq, eval_eq, eval_eq, map_add]
+      · apply LinearMap.ext
+        intro φ
+        change ev φ (D (x, c • v)) = algebraMap k ℂ c * ev φ (D (x, v))
+        rw [eval_eq, eval_eq, map_smul, Algebra.smul_def]
+    · apply (WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).2
+      intro φ
+      obtain ⟨L, hL, heval⟩ := h φ x
+      exact (scalar x φ L heval).1 hL
 
 /-- Paper: Lemma C.5.1.12, p. 725. A continuous differential in the weak completion
 gives the weak Gâteaux derivatives, with derivative zero in the zero direction. -/
