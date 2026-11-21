@@ -123,7 +123,13 @@ theorem compactSupport_sigma {I : Type*} (Y : I → Type*) [∀ i, TopologicalSp
 convex inductive limit topology on compactly supported maps. -/
 theorem compactSupportLCTopology_polynormable :
     letI := compactSupportLCTopology X E
-    PolynormableSpace ℂ C_c(X, E) := by sorry
+    PolynormableSpace ℂ C_c(X, E) := by
+  let := compactSupportLCTopology X E
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  let P : SeminormFamily ℂ C_c(X, E)
+      {p : Seminorm ℂ C_c(X, E) // ∀ K : Compacts X,
+        Continuous (p ∘ (compactSupportStage (E := E) K).subtype)} := Subtype.val
+  exact (show WithSeminorms P from ⟨rfl⟩).toPolynormableSpace
 
 /-- Paper: Lemma C.5.1.3(3), p. 721. For a paracompact domain and quasi-complete
 target, the inductive limit of compact support stages is quasi-complete. -/
