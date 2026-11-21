@@ -364,7 +364,16 @@ local notation "GoodCompact" => {k : Subgroup G // IsCompact (k : Set G) ∧
 /-- Paper: Definition D.3.3.3, p. 805. The modulation is trivial on each
 compact subgroup because the positive-real group has no nontrivial compact subgroup. -/
 theorem compactSubgroup_le_modulation_ker (k : Subgroup G) (hk : IsCompact (k : Set G)) :
-    k ≤ m.toMonoidHom.ker := by sorry
+    k ≤ m.toMonoidHom.ker := by
+  obtain ⟨y, hy, hmax⟩ := hk.exists_isMaxOn ⟨1, k.one_mem⟩
+    (Units.continuous_val.comp m.continuous).continuousOn
+  have bound (x : G) (hx : x ∈ k) : (m x).val ≤ 1 := by
+    apply (mul_le_iff_le_one_right (Units.zero_lt (m y))).mp
+    have h : (m (y * x)).val ≤ (m y).val := hmax (k.mul_mem hy hx)
+    simpa only [map_mul, Units.val_mul] using h
+  intro x hx
+  apply Units.ext
+  exact le_antisymm (bound x hx) (by simpa using bound x⁻¹ (k.inv_mem hx))
 
 /-- Paper: Definition D.3.3.3, p. 805. The homomorphism induced by the
 modulation on a compact-subgroup quotient is continuous. -/
