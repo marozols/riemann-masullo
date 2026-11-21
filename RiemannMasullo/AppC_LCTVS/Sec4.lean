@@ -175,7 +175,14 @@ function are complex homogeneous in the continuous functional. -/
 theorem pettisScalarIntegral_smul (μ : PettisMeasure X) (f : X → E)
     (hf : PettisWeaklyIntegrable μ f) (c : ℂ) (φ : StrongDual ℂ E) :
     μ.scalarIntegral (fun x ↦ (c • φ) (f x)) =
-      c • μ.scalarIntegral (fun x ↦ φ (f x)) := by sorry
+      c • μ.scalarIntegral (fun x ↦ φ (f x)) := by
+  cases μ with
+  | positive ν => exact integral_smul c (fun x ↦ φ (f x))
+  | complex ν =>
+    simp only [PettisMeasure.scalarIntegral, VectorMeasure.integral_eq_setToFun]
+    apply setToFun_smul _ _ c (fun x ↦ φ (f x))
+    intro a s z
+    simp [VectorMeasure.transpose, mul_left_comm]
 
 /-- Paper: (C.4.2.1), p. 710. The weak integral is the algebraic linear
 functional on the continuous dual obtained by scalar integration. -/
