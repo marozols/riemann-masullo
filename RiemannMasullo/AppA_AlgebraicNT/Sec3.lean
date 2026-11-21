@@ -437,7 +437,13 @@ def finiteLocalAdditiveTamagawaMeasure (v : Primes(F)) : Measure (v.adicCompleti
 the inverse square root of the local different norm. -/
 theorem finiteLocalAdditiveTamagawaMeasure_integers (v : Primes(F)) :
     finiteLocalAdditiveTamagawaMeasure F v (v.adicCompletionIntegers F : Set (v.adicCompletion F)) =
-      differentMass(F, v) := by sorry
+      differentMass(F, v) := by
+  let O := (v.adicCompletionIntegers F : Set (v.adicCompletion F))
+  have hO : IsOpen O := Valued.isOpen_valuationSubring _
+  have hK : IsCompact O := isCompact_iff_compactSpace.mpr (compactSpace_adicCompletionIntegers v)
+  let μ := Measure.addHaar (G := v.adicCompletion F)
+  have hpos := hO.measure_pos μ ⟨0, (v.adicCompletionIntegers F).zero_mem⟩
+  exact ENNReal.div_mul_cancel hpos.ne' (hK.measure_ne_top (μ := μ))
 
 /-- Paper: Definition A.3.1.2, p. 556. The local additive Tamagawa measures
 are additive Haar measures on their completions. -/
