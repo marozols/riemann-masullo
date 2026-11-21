@@ -39,8 +39,32 @@ theorem schwartzBergman_closure (I : Set ℝ) :
       EqOn f 0 (Complex.re ⁻¹' I)ᶜ ∧ DifferentiableOn ℂ f (Complex.re ⁻¹' I) ∧
       ∀ (a b : ℝ), a ≤ b → Icc a b ⊆ I → ∀ N : ℕ,
         BddAbove ((fun z : ℂ ↦ ‖z ^ N * f z‖) '' (Complex.re ⁻¹' Icc a b))
-    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) :=
-  by sorry
+    P 0 ∧ (∀ {f g}, P f → P g → P (f + g)) ∧ (∀ c : ℂ, ∀ {f}, P f → P (c • f)) := by
+  dsimp only
+  refine ⟨⟨eqOn_refl _ _, differentiableOn_const 0, ?_⟩, ?_, ?_⟩
+  · intro a b _ _ N
+    exact ⟨0, by rintro _ ⟨z, _, rfl⟩; simp⟩
+  · rintro f g ⟨hf, df, bf⟩ ⟨hg, dg, bg⟩
+    refine ⟨fun z hz ↦ ?_, df.add dg, ?_⟩
+    · simp [Pi.add_apply, hf hz, hg hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      obtain ⟨B, hB⟩ := bg a b hab hI N
+      refine ⟨A + B, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (f z + g z)‖ ≤ _
+      rw [mul_add]
+      exact (norm_add_le _ _).trans (add_le_add (hA ⟨z, hz, rfl⟩) (hB ⟨z, hz, rfl⟩))
+  · rintro c f ⟨hf, df, bf⟩
+    refine ⟨fun z hz ↦ ?_, df.const_mul c, ?_⟩
+    · simp [Pi.smul_apply, hf hz]
+    · intro a b hab hI N
+      obtain ⟨A, hA⟩ := bf a b hab hI N
+      refine ⟨‖c‖ * A, ?_⟩
+      rintro _ ⟨z, hz, rfl⟩
+      change ‖z ^ N * (c * f z)‖ ≤ _
+      rw [mul_left_comm, norm_mul]
+      exact mul_le_mul_of_nonneg_left (hA ⟨z, hz, rfl⟩) (norm_nonneg _)
 
 /-- Paper: Definition D.3.1.3, p. 800. These are the holomorphic functions
 with rapid decay on every bounded-width strip whose real closure is contained in the interval.
