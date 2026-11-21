@@ -158,10 +158,62 @@ theorem compactSupportLCTopology_of_compact [CompactSpace X] :
   rw [hContinuous]
   exact (PolynormableSpace.withSeminorms ℂ C_c(X, E)).withSeminorms_eq.symm
 
+section
+
+omit [T2Space X] [LocallyCompactSpace X] [T2Space E]
+
+omit [PolynormableSpace ℂ E] in
+private theorem continuous_of_continuous_comp_compactSupportStage
+    {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F] [PolynormableSpace ℂ F]
+    (f : C_c(X, E) →ₗ[ℂ] F)
+    (hf : ∀ K : Compacts X, Continuous[compactSupportStageTopology (E := E) K, _]
+      (f ∘ (compactSupportStage (E := E) K).subtype)) :
+    Continuous[compactSupportLCTopology X E, _] f := by
+  let := compactSupportLCTopology X E
+  let (K : Compacts X) := compactSupportStageTopology (E := E) K
+  let P : SeminormFamily ℂ C_c(X, E)
+      {p : Seminorm ℂ C_c(X, E) // ∀ K : Compacts X,
+        Continuous (p ∘ (compactSupportStage (E := E) K).subtype)} := Subtype.val
+  have hP : WithSeminorms P := ⟨rfl⟩
+  have := hP.isTopologicalAddGroup
+  apply (PolynormableSpace.withSeminorms ℂ F).continuous_of_continuous_comp
+  intro p
+  exact hP.continuous_seminorm ⟨p.val.comp f, fun K ↦ p.property.comp (hf K)⟩
+
+omit [PolynormableSpace ℂ E] in
+private theorem continuous_compactSupportStage_eval (K : Compacts X) (x : X) :
+    Continuous[compactSupportStageTopology (E := E) K, _]
+      (fun f : compactSupportStage (E := E) K ↦ f.val x) := by
+  let := compactSupportStageTopology (E := E) K
+  by_cases hx : x ∈ (K : Set X)
+  · let restrict (f : compactSupportStage (E := E) K) : C(↥(K : Set X), E) :=
+      f.val.toContinuousMap.comp ⟨Subtype.val, continuous_subtype_val⟩
+    have hr : Continuous restrict := continuous_induced_dom
+    exact (continuous_eval_const (⟨x, hx⟩ : ↥(K : Set X))).comp hr
+  · apply continuous_const.congr
+    intro f
+    have hf := f.property
+    simp only [compactSupportStage, Submodule.mem_iInf, LinearMap.mem_ker] at hf
+    exact (hf x hx).symm
+
+private theorem continuous_compactSupport_eval (x : X) :
+    Continuous[compactSupportLCTopology X E, _] (fun f : C_c(X, E) ↦ f x) := by
+  let ev : C_c(X, E) →ₗ[ℂ] E :=
+    { toFun := fun f ↦ f x
+      map_add' := fun f g ↦ CompactlySupportedContinuousMap.add_apply x f g
+      map_smul' := fun c f ↦ CompactlySupportedContinuousMap.smul_apply c f x }
+  exact continuous_of_continuous_comp_compactSupportStage ev
+    (fun K ↦ continuous_compactSupportStage_eval K x)
+
+end
+
 /-- Paper: Lemma C.5.1.3(1), p. 721. The inductive limit topology on compactly supported
 continuous maps is Hausdorff. -/
 theorem compactSupportLCTopology_t2 :
-    @T2Space C_c(X, E) (compactSupportLCTopology X E) := by sorry
+    @T2Space C_c(X, E) (compactSupportLCTopology X E) := by
+  let := compactSupportLCTopology X E
+  exact T2Space.of_injective_continuous (f := fun f : C_c(X, E) ↦ (f : X → E))
+    DFunLike.coe_injective (continuous_pi fun x ↦ continuous_compactSupport_eval x)
 
 /-- Paper: Lemma C.5.1.3(1), p. 721. The fixed-support stage embeds with its
 uniform-convergence topology into the inductive limit. -/
