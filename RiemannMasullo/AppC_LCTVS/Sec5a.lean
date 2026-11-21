@@ -695,7 +695,44 @@ vector-valued map is continuous for the given topology.
 Deviation: Only the continuity consequence holds on an arbitrary open domain. -/
 theorem WeaklyContDiffOn.continuousOn {Ω : Set W} (hΩ : IsOpen Ω)
     (hd : 1 ≤ d) {f : W → E}
-    (hf : WeaklyContDiffOn k f Ω) : ContinuousOn f Ω := by sorry
+    (hf : WeaklyContDiffOn k f Ω) : ContinuousOn f Ω := by
+  obtain ⟨D, hD, _⟩ := hf
+  intro x hx
+  apply Filter.tendsto_of_seq_tendsto
+  intro u hu
+  have hux : Tendsto u atTop (𝓝 x) := hu.mono_right nhdsWithin_le_nhds
+  let r (n : ℕ) : ℂ := ‖u n - x‖
+  let q (n : ℕ) := (r n)⁻¹ • (f (u n) - f x)
+  have hr (n : ℕ) : ‖r n‖ = ‖u n - x‖ := by
+    simp [r]
+  -- Each scalar derivative bounds the normalized increments along the sequence.
+  have hq : IsVonNBounded ℂ (range q) := by
+    apply (isVonNBounded_iff_dual_image _).2
+    intro φ
+    obtain ⟨L, hL, _⟩ := hD φ ⟨x, hx⟩
+    obtain ⟨C, hC, hbound⟩ := (hL.hasFDerivAt (hΩ.mem_nhds hx)).isBigO_sub.exists_pos
+    have hev : ∀ᶠ n in atTop, ‖φ (q n)‖ ≤ C := by
+      filter_upwards [hux.eventually hbound.bound] with n hn
+      simp only [q, map_smul, map_sub, norm_smul, norm_inv, hr]
+      by_cases hzero : u n = x
+      · simp [hzero, hC.le]
+      · have hpos : 0 < ‖u n - x‖ := norm_pos_iff.mpr (sub_ne_zero.mpr hzero)
+        exact (inv_mul_le_iff₀ hpos).mpr (by simpa [mul_comm, Function.comp_apply] using hn)
+    obtain ⟨M, hM⟩ := (isBoundedUnder_of_eventually_le hev).bddAbove_range
+    refine isBounded_iff_forall_norm_le.mpr ⟨M, ?_⟩
+    rintro _ ⟨_, ⟨n, rfl⟩, rfl⟩
+    exact hM (mem_range_self n)
+  have hrt : Tendsto r atTop (𝓝 0) := by
+    have hz : Tendsto (fun n ↦ ‖u n - x‖) atTop (𝓝 0) := by
+      simpa using (hux.sub (tendsto_const_nhds (x := x))).norm
+    simpa [r, Function.comp_def] using (Complex.continuous_ofReal.tendsto 0).comp hz
+  apply tendsto_sub_nhds_zero_iff.mp
+  apply (hq.smul_tendsto_zero (Eventually.of_forall fun n ↦ mem_range_self n) hrt).congr
+  intro n
+  change r n • ((r n)⁻¹ • (f (u n) - f x)) = f (u n) - f x
+  by_cases hn : u n = x
+  · simp [hn]
+  · exact smul_inv_smul₀ (Complex.ofReal_ne_zero.mpr (norm_ne_zero_iff.mpr (sub_ne_zero.mpr hn))) _
 
 /-- Paper: Lemma C.5.1.13(2), p. 726. A jointly continuous vector-valued weak
 differential is a strong continuous differential. -/
