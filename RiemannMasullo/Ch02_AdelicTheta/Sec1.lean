@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec1c
 public import Mathlib.Analysis.Distribution.TestFunction
 public import Mathlib.LinearAlgebra.PiTensorProduct.Basic
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 
 /-!
 # Schwartz–Bruhat functions
@@ -83,7 +84,15 @@ theorem euclideanSchwartz_nuclear (m : ℕ) :
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The Euclidean Schwartz space is Fréchet. -/
 theorem euclideanSchwartz_frechet (m : ℕ) :
-    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by sorry
+    IsFrechetTVS (SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) := by
+  let E := SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ
+  have : (uniformity E).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero E]
+    infer_instance
+  refine ⟨inferInstance, (schwartz_withSeminorms ℂ _ _).toPolynormableSpace,
+    UniformSpace.metrizableSpace, ?_⟩
+  rw [IsUniformAddGroup.rightUniformSpace_eq]
+  exact completeSpace_schwartzMap
 
 /-- Paper: Proposition 2.1.1.6, p. 61. Evaluation identifies the Euclidean Schwartz space
 with its strong bidual. -/
