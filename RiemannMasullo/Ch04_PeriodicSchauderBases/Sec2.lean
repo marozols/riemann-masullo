@@ -6,6 +6,7 @@ public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
 import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
+import Mathlib.Analysis.Fourier.PoissonSummation
 import Mathlib.Analysis.SpecialFunctions.SmoothTransition
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
@@ -927,11 +928,72 @@ Its pullback is the Mellin evaluation at the negative Fourier frequency. -/
 def cyclicQuotientMellinCoeff (m : ℤ) : StrongDual ℂ Q :=
   (Real.log γ : ℂ) • (cyclicFourierCoeff m).comp desc
 
+/-- In logarithmic coordinates the Mellin transform on the positive half-line is
+an exponential integral, with the factor from the differential absorbed in the exponent. -/
+private theorem mellin_logProfile (f : ℝ → ℂ) (s : ℂ) :
+    mellin (fun t ↦ f (Real.log t)) s = ∫ x : ℝ, Complex.exp (s * x) * f x := by
+  rw [mellin, ← integral_comp_exp]
+  apply integral_congr_ae
+  filter_upwards [] with x
+  rw [Real.log_exp, Complex.real_smul, smul_eq_mul,
+    Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr (Real.exp_pos x).ne'),
+    ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp, Complex.ofReal_exp]
+  rw [← mul_assoc, ← Complex.exp_add]
+  congr 2
+  ring
+
 /-- Paper: Lemma 4.2.1.5(3), p. 165. On representatives the quotient functional
 is the Mellin integral with exponent −2πim/log γ. -/
 theorem cyclicQuotientMellinCoeff_mk (m : ℤ) (f : E) :
     cyclicQuotientMellinCoeff γ hγ m (Submodule.mkQL Mγ f) =
-      mellin (fun t ↦ f.val (Real.log t)) (-phase[γ, m]) := by sorry
+      mellin (fun t ↦ f.val (Real.log t)) (-phase[γ, m]) := by
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  let f₀ := logExponentialDecayTwist univ a f
+  have hf₀ (y : ℝ) : f₀ y = f.val y := by
+    change logExponentialDecayTwist univ a (show logExponentialDecaySubmodule univ from f) y = _
+    rw [logExponentialDecayTwist_apply]
+    simp [a]
+  let e := ContinuousLinearEquiv.unitsEquivAut ℝ (Units.mk0 L hL.ne')
+  let F := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ e f₀
+  let g : C(ℝ, ℂ) := ⟨F, F.continuous⟩
+  have hg (y : ℝ) : g y = f.val (L*y) := by
+    change F y = _
+    simp [F, e, SchwartzMap.compCLMOfContinuousLinearEquiv_apply, hf₀, mul_comm]
+  have hnorm (K : Compacts ℝ) : Summable fun k : ℤ ↦ ‖(g.comp (ContinuousMap.addRight k)).restrict K‖ :=
+    summable_of_isBigO (Real.summable_abs_int_rpow one_lt_two)
+      ((isBigO_norm_restrict_cocompact g (by norm_num : 0 < (2:ℝ)) (F.isBigO_cocompact_rpow (-2)) K).comp_tendsto
+        Int.tendsto_coe_cofinite)
+  let U := cyclicPeriodizationCLM γ hγ f
+  have hfun : (fun z : T ↦ U (point z)) = Periodic.lift (g.periodic_tsum_comp_add_zsmul 1) := by
+    funext z
+    obtain ⟨y, rfl⟩ := QuotientAddGroup.mk_surjective z
+    have h := cyclicPeriodization_hasSum γ hγ f (y*L)
+    change HasSum (fun k : ℤ ↦ f.val (y*L+k*L)) (U (point (↑(y*L/L) : T))) at h
+    rw [mul_div_cancel_right₀ _ hL.ne'] at h
+    rw [Periodic.lift_coe, ← h.tsum_eq]
+    simp_rw [zsmul_one]
+    rw [← ContinuousMap.tsum_apply (ContinuousMap.summable_of_locally_summable_norm hnorm)]
+    apply tsum_congr
+    intro k
+    change f.val (y*L+k*L) = g (y+k)
+    rw [hg]
+    exact congrArg f.val (by ring)
+  change (L : ℂ) * fourierCoeff (fun z : T ↦ U (point z)) m = _
+  rw [hfun, Real.fourierCoeff_tsum_comp_add hnorm, Real.fourier_real_eq_integral_exp_smul, mellin_logProfile]
+  let u (x : ℝ) := Complex.exp (-phase[γ,m] * x) * f.val x
+  have hu (x : ℝ) : Complex.exp ((↑(-2 * Real.pi * x * (m : ℝ)) : ℂ) * Complex.I) • g x = u (L*x) := by
+    rw [smul_eq_mul, hg]
+    dsimp only [u]
+    congr 2
+    push_cast
+    change _ = -(2 * (Real.pi : ℂ) * Complex.I * (m : ℂ) / (L : ℂ)) * ((L : ℂ) * (x : ℂ))
+    field_simp [Complex.ofReal_ne_zero.mpr hL.ne']
+  change (L : ℂ) * (∫ x : ℝ, _) = ∫ x : ℝ, u x
+  simp_rw [hu]
+  rw [Measure.integral_comp_mul_left, abs_of_pos (inv_pos.mpr hL), Complex.real_smul, Complex.ofReal_inv,
+    ← mul_assoc, mul_inv_cancel₀ (Complex.ofReal_ne_zero.mpr hL.ne'), one_mul]
 
 -- TODO(paper-gap): In the continuity proof, (4.2.1.14) cannot hold for fixed T
 -- and arbitrary ε. At t = T γⁿ the term k = -n alone equals T⁻ᴺ.
