@@ -5,6 +5,8 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
+import Mathlib.Topology.Baire.CompleteMetrizable
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
 
 /-!
@@ -138,7 +140,44 @@ theorem cyclicPeriodizationValue_spec :
       cyclicPeriodizationValue γ hγ f + cyclicPeriodizationValue γ hγ g) ∧
     (∀ (c : ℂ) f, cyclicPeriodizationValue γ hγ (c • f) = c • cyclicPeriodizationValue γ hγ f) ∧
     Continuous (Y := S) (fun f ↦ (⟨cyclicPeriodizationValue γ hγ f,
-      cyclicPeriodizationValue_mem γ hγ f⟩ : S)) := by sorry
+      cyclicPeriodizationValue_mem γ hγ f⟩ : S)) := by
+  have : CompleteSpace 𝓢(ℝ, ℂ) := completeSpace_schwartzMap
+  have : (uniformity 𝓢(ℝ, ℂ)).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero 𝓢(ℝ, ℂ)]
+    infer_instance
+  have he (g : G) : ∃ L : 𝓢(ℝ, ℂ) →L[ℂ] ℂ, ∀ f, L f = cyclicPeriodizationValue γ hγ f g := by
+    let r := ((AddCircle.equivIco (1 : ℝ) 0) (g.2.1 0)).val
+    let t (k : ℤ) := Real.log γ * (r + k)
+    have ht (k : ℤ) : t k = Real.log γ * r + (k : ℝ) * Real.log γ := by dsimp [t]; ring
+    let ev (k : ℤ) := (BoundedContinuousFunction.evalCLM ℂ (t k)).comp
+      (SchwartzMap.toBoundedContinuousFunctionCLM ℂ ℝ ℂ)
+    let P (s : Finset ℤ) : 𝓢(ℝ, ℂ) →L[ℂ] ℂ := ∑ k ∈ s, ev k
+    have hlim : Filter.Tendsto (fun s f ↦ P s f) Filter.atTop
+        (𝓝 (fun f ↦ cyclicPeriodizationValue γ hγ f g)) := by
+      rw [tendsto_pi_nhds]
+      intro f
+      have hs : Summable fun k : ℤ ↦ f (t k) := by
+        simpa only [ht] using (cyclicPeriodizationValue_hasSum γ hγ f (Real.log γ * r)).summable
+      have hP (s : Finset ℤ) : P s f = ∑ k ∈ s, f (t k) := by
+        simp only [P, sum_apply]
+        rfl
+      simp_rw [hP]
+      exact hs.hasSum
+    exact ⟨continuousLinearMapOfTendsto P hlim, fun _ ↦ rfl⟩
+  choose L hL using he
+  have hadd (f g : 𝓢(ℝ, ℂ)) : cyclicPeriodizationValue γ hγ (f + g) =
+      cyclicPeriodizationValue γ hγ f + cyclicPeriodizationValue γ hγ g := by
+    funext x
+    simpa only [Pi.add_apply, ← hL] using (L x).map_add f g
+  have hsmul (c : ℂ) (f : 𝓢(ℝ, ℂ)) : cyclicPeriodizationValue γ hγ (c • f) =
+      c • cyclicPeriodizationValue γ hγ f := by
+    funext x
+    simpa only [Pi.smul_apply, ← hL] using (L x).map_smul c f
+  let A : 𝓢(ℝ, ℂ) →ₗ[ℂ] S :=
+    { toFun f := ⟨_, cyclicPeriodizationValue_mem γ hγ f⟩
+      map_add' f g := Subtype.ext (hadd f g)
+      map_smul' c f := Subtype.ext (hsmul c f) }
+  exact ⟨hadd, hsmul, continuous_toElementarySchwartz_of_eval A (fun g ↦ ⟨L g, hL g⟩)⟩
 
 /-- Paper: Remark 4.2.2.6, p. 173. The cyclic orbit sum is a continuous linear
 map from ordinary Schwartz profiles to smooth functions on the circle. -/
