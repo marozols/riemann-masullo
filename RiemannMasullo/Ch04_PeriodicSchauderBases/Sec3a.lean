@@ -151,7 +151,9 @@ theorem regularL2Action_apply (g : G) (f : RegularL2 ν) :
 /-- Paper: Lemma 4.3.1.5(2), p. 176. Left translations preserve the
 Hermitian inner product and their inverses are the opposite translations. -/
 theorem regularL2Action_inner (g : G) (f h : RegularL2 ν) :
-    ⟪regularL2Action ν g f, regularL2Action ν g h⟫_ℂ = ⟪f, h⟫_ℂ := by sorry
+    ⟪regularL2Action ν g f, regularL2Action ν g h⟫_ℂ = ⟪f, h⟫_ℂ := by
+  rw [regularL2Action_apply, regularL2Action_apply]
+  exact (Lp.compMeasurePreservingₗᵢ ℂ _ (measurePreserving_mul_left ν g⁻¹)).inner_map_map f h
 
 /-- Paper: Lemma 4.3.1.5(3), p. 176. Composing the regular representation
 with a continuous section of the module gives a strongly continuous
