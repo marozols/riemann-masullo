@@ -8,6 +8,7 @@ public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
 
 import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
 
 /-!
 # Global idelic zeta functions
@@ -275,7 +276,9 @@ def finiteHeckeL (χ : U[F]) (s : halfPlane) : ℂ :=
 /-- Paper: Definition 3.2.1.4, pp. 123–124. In the half-plane where the Euler
 product is defined, Mathlib's finite Hecke Dirichlet series is absolutely summable. -/
 theorem finiteHeckeL_seriesSummable (χ : U[F]) (s : halfPlane) :
-    LSeriesSummable χ₀(χ).LFunction s := by sorry
+    LSeriesSummable χ₀(χ).LFunction s := by
+  exact LSeriesSummable_heckeLFunction _ s.property fun v _ ↦
+    (norm_ideleClassNormTwist_zero_localValue χ v).le
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Hecke L-function
 is the value of the convergent Euler product with the ramified factors omitted. -/
