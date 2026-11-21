@@ -937,13 +937,66 @@ theorem cyclicQuotientMellinCoeff_mk (m : ℤ) (f : E) :
 -- and arbitrary ε. At t = T γⁿ the term k = -n alone equals T⁻ᴺ.
 -- The difference quotient in (4.2.1.17) has the opposite derivative sign.
 
+section BasisTransport
+
+variable {X Y : Type*} [AddCommGroup X] [Module ℂ X] [TopologicalSpace X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+
+private theorem circleBasis_map (e : X ≃L[ℂ] Y) {x : ℕ → X} {c : ℕ → StrongDual ℂ X}
+    (h : IsSchauderBasis x c) :
+    IsSchauderBasis (e ∘ x) (fun n ↦ (c n).comp e.symm.toContinuousLinearMap) := by
+  refine ⟨fun m n ↦ ?_, fun u ↦ ?_⟩
+  · change c m (e.symm (e (x n))) = _
+    rw [e.symm_apply_apply]
+    exact h.1 m n
+  · simpa only [Function.comp_def, map_smul, e.apply_symm_apply, ContinuousLinearMap.comp_apply,
+      ContinuousLinearEquiv.coe_coe, ContinuousLinearMap.coe_coe] using
+      (h.2 (e.symm u)).map e e.continuous
+
+private theorem circleUnconditional_map (e : X ≃L[ℂ] Y) {x : ℕ → X} {c : ℕ → StrongDual ℂ X}
+    (h : SchauderBasis.IsUnconditional x c) :
+    SchauderBasis.IsUnconditional (e ∘ x) (fun n ↦ (c n).comp e.symm.toContinuousLinearMap) := by
+  intro u
+  simpa only [Function.comp_def, map_smul, e.apply_symm_apply, ContinuousLinearMap.comp_apply,
+    ContinuousLinearEquiv.coe_coe] using (h (e.symm u)).map e e.continuous
+
+/-- Pull a functional back along a continuous linear equivalence, including the
+normalizing factor from lifting probability Haar measure to a fundamental interval. -/
+private def normalizedFourierPullback (e : X ≃L[ℂ] Y) (z : ℂ) (hz : z ≠ 0) :
+    StrongDual ℂ Y ≃L[ℂ] StrongDual ℂ X :=
+  e.symm.arrowCongr (ContinuousLinearEquiv.unitsEquivAut ℂ (Units.mk0 z hz))
+
+private theorem normalizedFourierPullback_apply (e : X ≃L[ℂ] Y) (z : ℂ) (hz : z ≠ 0)
+    (l : StrongDual ℂ Y) : normalizedFourierPullback e z hz l = z • l.comp e.toContinuousLinearMap := by
+  ext u
+  change l (e u) * z = z * l (e u)
+  exact mul_comm _ _
+
+end BasisTransport
+
 /-- Paper: Lemma 4.2.1.5(3), p. 165. The Mellin evaluations form an unconditional
 Schauder basis on the strong quotient dual. Lemma 4.2.1.3 identifies this dual
 with the annihilator with its inherited strong topology. -/
 theorem cyclicQuotientMellinCoeff_unconditionalBasis :
     let δ := cyclicQuotientMellinCoeff γ hγ ∘ freq
     ∃ c : ℕ → StrongDual ℂ (StrongDual ℂ Q),
-      IsSchauderBasis δ c ∧ SchauderBasis.IsUnconditional δ c := by sorry
+      IsSchauderBasis δ c ∧ SchauderBasis.IsUnconditional δ c := by
+  let P := cyclicPeriodizationCLM γ hγ
+  let hs : Surjective P := cyclicPeriodization_surjective γ hγ
+  let a := P.toLinearMap.quotKerEquivOfSurjective hs
+  have hq : IsQuotientMap P := (cyclicPeriodization_isOpenMap γ hγ).isQuotientMap P.continuous hs
+  let e : Q ≃L[ℂ] S := { a with
+    continuous_toFun := (desc).continuous
+    continuous_invFun := hq.continuous_iff.mpr (P.ker.mkQL.continuous.congr fun f ↦
+      (P.toLinearMap.quotKerEquivOfSurjective_symm_apply hs f).symm) }
+  have hz : (Real.log γ : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.log_pos hγ).ne'
+  let transfer := normalizedFourierPullback e (Real.log γ : ℂ) hz
+  have hm (n : ℕ) : transfer (cyclicFourierCoeff (freq n)) = cyclicQuotientMellinCoeff γ hγ (freq n) := by
+    rw [show transfer = normalizedFourierPullback e (Real.log γ : ℂ) hz from rfl, normalizedFourierPullback_apply]
+    rfl
+  have he : transfer ∘ (cyclicFourierCoeff ∘ freq) = cyclicQuotientMellinCoeff γ hγ ∘ freq := funext hm
+  obtain ⟨hb, hu⟩ := cyclicFourierCoeff_unconditionalBasis
+  exact ⟨_, he ▸ circleBasis_map transfer hb, he ▸ circleUnconditional_map transfer hu⟩
 
 /-- Paper: Remark 4.2.1.6, p. 165. Every bounded subset of a Hausdorff
 quotient of the exponential decay space has a bounded lift. -/
