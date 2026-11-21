@@ -675,7 +675,8 @@ transform on the strip gives the absolutely convergent Mellin integral. -/
 theorem positiveRealFourierMellin_apply (hOpen : IsOpen I) (hInt : OrdConnected I)
     (hne : I.Nonempty) (f : E) (s : ℂ) (hs : s.re ∈ I) :
     (positiveRealFourierMellin I hOpen hInt hne f).val s =
-      mellin (fun t ↦ f.val (Real.log t)) s := by sorry
+      mellin (fun t ↦ f.val (Real.log t)) s := by
+  exact Classical.choose_spec (existsUnique_positiveRealFourierMellin I hOpen hInt hne).exists f s hs
 
 /-- Paper: (D.3.2.3–4), p. 803. In logarithmic coordinates the weighted
 L² norm is the norm of this exponentially and polynomially weighted derivative. -/
