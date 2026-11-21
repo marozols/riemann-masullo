@@ -4,6 +4,7 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec2b
 import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
+import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 
 /-!
 # Schwartz–Bergman spaces and Schwartz–Bruhat functions with exponential decay
@@ -227,8 +228,25 @@ satisfies the seminorm laws. -/
 theorem schwartzBergman_l2_seminorm (I : Set ℝ) (i : I × ℕ) :
     let q (f : schwartzBergmanSubmodule I) :=
       (eLpNorm (weightedVerticalTrace i.1 i.2 f.val) 2 volume).toReal
-    (∀ f g, q (f + g) ≤ q f + q g) ∧ (∀ (c : ℂ) f, q (c • f) = ‖c‖ * q f) :=
-  by sorry
+    (∀ f g, q (f + g) ≤ q f + q g) ∧ (∀ (c : ℂ) f, q (c • f) = ‖c‖ * q f) := by
+  let T (f : schwartzBergmanSubmodule I) := weightedVerticalTrace i.1 i.2 f.val
+  have hT (f : schwartzBergmanSubmodule I) : MemLp (T f) 2 volume :=
+    schwartzBergman_trace_memLp I i.1 2 (by norm_num) (by norm_num) i.2 f
+  constructor
+  · intro f g
+    have hadd : T (f + g) = T f + T g := by
+      funext x
+      simp [T, weightedVerticalTrace, mul_add]
+    change lpNorm (T (f + g)) 2 volume ≤ lpNorm (T f) 2 volume + lpNorm (T g) 2 volume
+    rw [hadd]
+    exact lpNorm_add_le (hT f) (by norm_num)
+  · intro c f
+    have hsmul : T (c • f) = c • T f := by
+      funext x
+      simp [T, weightedVerticalTrace, smul_eq_mul, mul_left_comm]
+    change lpNorm (T (c • f)) 2 volume = ‖c‖ * lpNorm (T f) 2 volume
+    rw [hsmul]
+    exact lpNorm_const_smul c (T f) volume
 
 -- TODO(paper-gap): Definition D.3.1.3 specifies positive rational abscissae
 -- even for intervals contained in the negative half-line. Lemma D.3.1.2
