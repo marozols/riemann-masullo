@@ -1162,7 +1162,22 @@ theorem sIdeleRestriction_isLocalDiffeomorph :
 outside S cover the entire space of Hecke characters. -/
 theorem iUnion_unramifiedOutside :
     (⋃ T : Finset (Primes(F)), (unramifiedOutside F T : Set (HeckeCharacter (𝓞 F) F))) = Set.univ := by
-  sorry
+  classical
+  apply Set.eq_univ_of_forall
+  intro c
+  have (v : Primes(F)) : CompactSpace (LocalUnits(v)) := by
+    have := compactSpace_adicCompletionIntegers (K := F) v
+    exact compactSpace_units_of_compactSpace _
+  obtain ⟨T, hT⟩ := exists_finset_complexCharacter_eq_one (c.comp (finiteIntegerUnitInsertion F))
+  refine Set.mem_iUnion.mpr ⟨T, (mem_unramifiedOutside_iff F T c).mpr ?_⟩
+  intro v hv u
+  change c (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v
+    (Units.map (LocalIntegers(v)).subtype.toMonoidHom u)) = 1
+  rw [← finiteIntegerUnitInsertion_mulSingle]
+  apply hT (Pi.mulSingle v u)
+  intro w hw
+  have hwv : w ≠ v := fun he ↦ hv (he ▸ hw)
+  exact Pi.mulSingle_eq_of_ne hwv _
 
 end Ideles
 
