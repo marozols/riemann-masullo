@@ -1004,7 +1004,35 @@ theorem sIdeleInsertion_apply (g : (SAdeleRing F S)ˣ) :
 
 /-- Paper: Equation (3.1.2.7), p. 121. Extension by one is a closed topological embedding. -/
 theorem isClosedEmbedding_sIdeleInsertion : IsClosedEmbedding (sIdeleInsertion F S) := by
-  sorry
+  let : T2Space (IdeleGroup (𝓞 F) F) := (ideleGroup_topology F).1
+  let j := sIdeleInsertion F S
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := by
+    apply Continuous.units_map
+    exact continuous_fst.prodMk (continuous_pi fun v ↦
+      (RestrictedProduct.continuous_eval v.val).comp continuous_snd)
+  have hleft : LeftInverse p j := by
+    intro g
+    apply Units.ext
+    exact Prod.ext (sIdeleInsertion_apply F S g).1 (funext (sIdeleInsertion_apply F S g).2.1)
+  have hval : Continuous (fun g ↦ (j g).val) := by
+    apply Continuous.prodMk
+    · exact (continuous_fst.comp Units.continuous_val).congr fun g ↦
+        (sIdeleInsertion_apply F S g).1.symm
+    · apply continuous_restrictedProduct_of_uniform
+      · intro v
+        by_cases hv : v ∈ S
+        · exact ((continuous_apply (⟨v, hv⟩ : S)).comp
+            (continuous_snd.comp Units.continuous_val)).congr fun g ↦
+              ((sIdeleInsertion_apply F S g).2.1 ⟨v, hv⟩).symm
+        · exact continuous_const.congr fun g ↦ ((sIdeleInsertion_apply F S g).2.2 v hv).symm
+      · filter_upwards [S.eventually_cofinite_notMem] with v hv g
+        change (sIdeleInsertion F S g).val.2 v ∈ v.adicCompletionIntegers F
+        rw [(sIdeleInsertion_apply F S g).2.2 v hv]
+        exact (v.adicCompletionIntegers F).one_mem
+  apply hleft.isClosedEmbedding hp
+  refine Units.continuous_iff.mpr ⟨hval, (hval.comp continuous_inv).congr fun g ↦ ?_⟩
+  exact congrArg Units.val (map_inv j g)
 
 local notation "pullbackS(" c ")" => MonoidHom.comp (ContinuousMonoidHom.toMonoidHom c)
   (MonoidHom.comp (QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 F) F)) (sIdeleInsertion F S))
