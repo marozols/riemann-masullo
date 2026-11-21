@@ -392,6 +392,19 @@ theorem schwartzOnLeftHalfPlane_mellin_of_exponentialDecay
     (hSupport : tsupport (f : ℝ → ℂ) ⊆ Ioi 0) (b : ℝ) :
     SchwartzOnLeftHalfPlane (mellin (fromLog f)) b := by sorry
 
+/-- The Mellin integral of a logarithmic profile after the substitution `t = exp x`. -/
+private theorem mellin_logProfile_eq (g : ℝ → ℂ) (s : ℂ) :
+    mellin (fromLog g) s = ∫ x : ℝ, Complex.exp (s * x) * g x := by
+  rw [mellin, ← integral_comp_exp]
+  apply integral_congr_ae
+  filter_upwards with x
+  simp only [Real.log_exp, Complex.real_smul, smul_eq_mul]
+  rw [Complex.cpow_def_of_ne_zero (by exact_mod_cast (Real.exp_pos x).ne'),
+    ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp]
+  simp only [Complex.ofReal_exp, ← mul_assoc, ← Complex.exp_add]
+  congr 2
+  ring
+
 section UniformRiemannLebesgue
 
 variable (f : 𝓢(ℝ, ℂ)) (a b : ℝ) (hab : a < b)
@@ -404,10 +417,48 @@ absolutely throughout the closed strip of Schwartz weights. -/
 theorem mellinConvergent_on_strip_of_weighted_schwartz (s : ℂ) (hs : s ∈ closedStrip a b) :
     MellinConvergent (fromLog f) s := by sorry
 
+/-- Paper: Proposition B.2.2.3(1), p. 601. The two endpoint weights give one
+integrable majorant for every Mellin integrand in the closed strip. -/
+private theorem mellin_logProfile_dominated :
+    ∃ B : ℝ → ℝ, Integrable B ∧ ∀ s ∈ closedStrip a b, ∀ x : ℝ,
+      ‖Complex.exp (s * x) * f x‖ ≤ B x := by
+  obtain ⟨g, hg⟩ := hWeighted a (left_mem_Icc.mpr hab.le)
+  obtain ⟨h, hh⟩ := hWeighted b (right_mem_Icc.mpr hab.le)
+  refine ⟨fun x ↦ ‖g x‖ + ‖h x‖, (g.integrable (μ := volume)).norm.add
+    (h.integrable (μ := volume)).norm, ?_⟩
+  intro s hs x
+  have hnorm (r : ℝ) : ‖(Real.exp (r * x) : ℂ) * f x‖ = Real.exp (r * x) * ‖f x‖ := by
+    rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+  change ‖Complex.exp (s * x) * f x‖ ≤ _
+  simp only [norm_mul, Complex.norm_exp, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im,
+    mul_zero, sub_zero]
+  rcases le_total x 0 with hx | hx
+  · apply le_add_of_le_of_nonneg _ (norm_nonneg _)
+    rw [hg, hnorm]
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonpos_right hs.1 hx))
+      (norm_nonneg _)
+  · apply le_add_of_nonneg_of_le (norm_nonneg _) _
+    rw [hh, hnorm]
+    exact mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_right hs.2 hx))
+      (norm_nonneg _)
+
+
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform is continuous
 on the closed strip of Schwartz weights. -/
 theorem continuousOn_mellin_of_weighted_schwartz :
-    ContinuousOn (mellin (fromLog f)) (closedStrip a b) := by sorry
+    ContinuousOn (mellin (fromLog f)) (closedStrip a b) := by
+  obtain ⟨B, hB, hbound⟩ := mellin_logProfile_dominated f a b hab hWeighted
+  change ContinuousOn (fun s ↦ mellin (fromLog f) s) (closedStrip a b)
+  simp_rw [mellin_logProfile_eq]
+  apply continuousOn_of_dominated (bound := B)
+  · intro s _
+    exact ((Complex.continuous_exp.comp (continuous_const.mul Complex.continuous_ofReal)).mul
+      f.continuous).aestronglyMeasurable
+  · exact fun s hs ↦ Eventually.of_forall (hbound s hs)
+  · exact hB
+  · filter_upwards with x
+    exact ((Complex.continuous_exp.comp (continuous_id.mul_const (x : ℂ))).mul_const
+      (f x)).continuousOn
 
 /-- Paper: Proposition B.2.2.3(1), p. 601. The Mellin transform restricts
 to a Schwartz function on each vertical line of the closed strip. -/
