@@ -8,6 +8,7 @@ public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
 
 import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.NumberTheory.LSeries.Convergence
@@ -118,7 +119,16 @@ theorem realHeckeCharacter_parameters (χ : U[F]) (v : InfinitePlace F) (hv : v.
     ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ,
       infinitePlaceRestriction F v χ₀(χ)
           (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm.toMonoidHom x) =
-        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by sorry
+        (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
+  let e := (InfinitePlace.Completion.ringEquivRealOfIsReal hv).symm
+  let i : ℝˣ →ₜ* v.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal hv).symm.continuous.units_map _⟩
+  let c := (infinitePlaceRestriction F v χ₀(χ)).comp i
+  apply existsUnique_realUnits_character_parameters c
+  intro x
+  let g := IdeleClassGroup.ofCompletion (𝓞 F) F v (i x)
+  change ‖(χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)‖ = 1
+  simp
 
 /-- Paper: Equation (3.2.1.5), p. 123. A complex local unitary character has a
 unique imaginary radial exponent and integer angular weight.

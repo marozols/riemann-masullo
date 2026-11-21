@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Analysis.SpecialFunctions.Pow.Complex
 public import Mathlib.Topology.Algebra.ContinuousMonoidHom
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.Complex.CoveringMap
 import Mathlib.Analysis.Convex.Contractible
 import Mathlib.Topology.Algebra.Field
@@ -62,5 +63,63 @@ theorem existsUnique_complexPower (c : ℝ≥0ˣ →ₜ* ℂ) :
     apply exp_real_mul_injective
     intro x
     rw [← hpow, ← hz, ← hlinear, hLift]
+
+/-- A unitary character of the positive reals is a power with purely imaginary exponent. -/
+theorem existsUnique_unitaryComplexPower (c : ℝ≥0ˣ →ₜ* ℂ) (hc : ∀ t, ‖c t‖ = 1) :
+    ∃! z : ℂ, z.re = 0 ∧ ∀ t : ℝ≥0ˣ, c t = (valℝ t : ℂ) ^ z := by
+  obtain ⟨z, hz, huniq⟩ := existsUnique_complexPower c
+  refine ⟨z, ⟨?_, hz⟩, fun a ha ↦ huniq a ha.2⟩
+  let t := Units.mk0 (2 : ℝ≥0) (by norm_num)
+  have h := hc t
+  rw [hz t, Complex.norm_cpow_eq_rpow_re_of_pos (NNReal.coe_pos.mpr (Units.zero_lt t))] at h
+  apply (Real.rpow_right_inj (x := 2) (by norm_num) (by norm_num)).mp
+  change (2 : ℝ) ^ z.re = 1 at h
+  simpa using h
+
+/-- A unitary character of the real units is uniquely specified by an imaginary exponent
+of the absolute value and a parity on the sign. -/
+theorem existsUnique_realUnits_character_parameters (c : ℝˣ →ₜ* ℂ) (hc : ∀ x, ‖c x‖ = 1) :
+    ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ, c x =
+      (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
+  classical
+  let i : ℝ≥0ˣ →ₜ* ℝˣ := ⟨Units.map NNReal.toRealHom.toMonoidHom,
+    NNReal.continuous_coe.units_map _⟩
+  obtain ⟨z, ⟨hz₀, hz⟩, huniq⟩ := existsUnique_unitaryComplexPower (c.comp i) (fun t ↦ hc (i t))
+  let k : Fin 2 := if c (-1) = 1 then 0 else 1
+  have hk : c (-1) = (-1 : ℂ) ^ k.val := by
+    have hsq : c (-1) ^ 2 = 1 := by rw [← map_pow]; norm_num
+    rcases sq_eq_one_iff.mp hsq with h | h
+    · norm_num [k, h]
+    · norm_num [k, h]
+  refine ⟨(z, k), ⟨hz₀, ?_⟩, ?_⟩
+  · intro x
+    let t := Units.map nnNormHom.toMonoidHom x
+    have hp : c (i t) = (‖(x : ℝ)‖ : ℂ) ^ z := hz t
+    by_cases hx : 0 < (x : ℝ)
+    · have he : i t = x := Units.ext (abs_of_pos hx)
+      simpa [hx, he] using hp
+    · have he : x = i t * (-1) := by
+        apply Units.ext
+        change (x : ℝ) = |(x : ℝ)| * (-1)
+        rw [abs_of_nonpos (le_of_not_gt hx)]
+        ring
+      rw [ite_eq_right hx]
+      change c x = (‖(x : ℝ)‖ : ℂ) ^ z * (-1 : ℂ) ^ k.val
+      exact (congrArg c he).trans ((map_mul c _ _).trans (congrArg₂ (· * ·) hp hk))
+  · rintro ⟨a, b⟩ ⟨ha₀, hab⟩
+    apply Prod.ext
+    · apply huniq a
+      refine ⟨ha₀, fun t ↦ ?_⟩
+      have hpos : 0 < (i t : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt t)
+      change c (i t) = ((i t : ℝ) : ℂ) ^ a
+      simpa [ite_eq_left hpos, Real.norm_eq_abs, abs_of_pos hpos] using hab (i t)
+    · have hneg : c (-1) = (-1 : ℂ) ^ b.val := by
+        have h := hab (-1)
+        norm_num at h
+        exact h
+      have hinj : Function.Injective (fun j : Fin 2 ↦ (-1 : ℂ) ^ j.val) := by
+        intro j l h
+        fin_cases j <;> fin_cases l <;> norm_num at *
+      exact hinj (hneg.symm.trans hk)
 
 end RiemannMasullo
