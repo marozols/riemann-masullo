@@ -1041,18 +1041,6 @@ def infinitePlaceRestriction (w : InfinitePlace F) (c : HeckeCharacter (𝓞 F) 
     QuasiCharacter w.Completionˣ :=
   c.comp ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩
 
-/-- Paper: §3.1.2, p. 120. The value of a global character is the product of its local
-values on an idele. Only finitely many finite-place factors differ from one. -/
-theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
-    (g : IdeleGroup (𝓞 F) F) :
-    let a := fun w : InfinitePlace F => infinitePlaceRestriction F w c
-      (Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g)
-    let b := fun v : Primes(F) => finitePlaceRestriction F v c
-      (Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) => w.adicCompletion F) v).comp
-        (RingHom.snd _ _)).toMonoidHom g)
-    b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
-  sorry
-
 open Classical in
 /-- Paper: §3.1.2, p. 120. A quasi-character of J_{F,S} is the product of its local
 restrictions at the infinite places and the finite places in S. Each restriction
@@ -1573,6 +1561,94 @@ theorem iUnion_unramifiedOutside :
   intro w hw
   have hwv : w ≠ v := fun he ↦ hv (he ▸ hw)
   exact Pi.mulSingle_eq_of_ne hwv _
+
+open scoped RestrictedProduct in
+/-- Paper: §3.1.2, p. 120. The value of a global character is the product of its local
+values on an idele. Only finitely many finite-place factors differ from one. -/
+theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
+    (g : IdeleGroup (𝓞 F) F) :
+    let a := fun w : InfinitePlace F => infinitePlaceRestriction F w c
+      (Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g)
+    let b := fun v : Primes(F) => finitePlaceRestriction F v c
+      (Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) => w.adicCompletion F) v).comp
+        (RingHom.snd _ _)).toMonoidHom g)
+    b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
+  classical
+  let A (v : Primes(F)) := (v.adicCompletionIntegers F).units
+  let X := (w : InfinitePlace F) → w.Completionˣ
+  let Y := Πʳ v : Primes(F), [(v.adicCompletion F)ˣ, A v]
+  obtain ⟨e, he⟩ := (ideleGroup_topology F).2.2.2.1
+  let q : IdeleGroup (𝓞 F) F →ₜ* IdeleClassGroup (𝓞 F) F :=
+    ⟨QuotientGroup.mk' _, QuotientGroup.continuous_mk⟩
+  let d := (c.comp q).comp (e.symm : (X × Y) →ₜ* IdeleGroup (𝓞 F) F)
+  let d₁ := d.comp (ContinuousMonoidHom.inl X Y)
+  let d₂ := d.comp (ContinuousMonoidHom.inr X Y)
+  let a (w : InfinitePlace F) := infinitePlaceRestriction F w c ((e g).1 w)
+  let b (v : Primes(F)) := finitePlaceRestriction F v c ((e g).2 v)
+  have harch (w : InfinitePlace F) (u : w.Completionˣ) :
+      e (IdeleGroup.ofCompletion (𝓞 F) F w u) = (Pi.mulSingle w u, 1) := by
+    refine Prod.ext (funext fun j ↦ Units.ext ?_) ?_
+    · rw [(he _).1 j]
+      change Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completion) w u.val j =
+        (Pi.mulSingle (M := fun t : InfinitePlace F ↦ t.Completionˣ) w u j).val
+      by_cases hj : j = w
+      · subst j
+        simp
+      · simp [Pi.mulSingle_eq_of_ne hj]
+    · apply RestrictedProduct.ext
+      exact fun j ↦ Units.ext ((he _).2 j)
+  have hfin (v : Primes(F)) (u : (v.adicCompletion F)ˣ) :
+      e (IdeleGroup.ofAdicCompletion (𝓞 F) F v u) = (1, RestrictedProduct.mulSingle A v u) := by
+    refine Prod.ext (funext fun j ↦ Units.ext ((he _).1 j)) ?_
+    apply RestrictedProduct.ext
+    intro j
+    apply Units.ext
+    rw [(he _).2 j]
+    change Pi.mulSingle (M := fun t : Primes(F) ↦ t.adicCompletion F) v u.val j =
+      (Pi.mulSingle (M := fun t : Primes(F) ↦ (t.adicCompletion F)ˣ) v u j).val
+    by_cases hj : j = v
+    · subst j
+      simp
+    · simp [Pi.mulSingle_eq_of_ne hj]
+  have h₁ (w : InfinitePlace F) : d₁ (Pi.mulSingle w ((e g).1 w)) = a w := by
+    change c (q (e.symm (Pi.mulSingle w ((e g).1 w), 1))) = _
+    rw [← harch, e.symm_apply_apply]
+    rfl
+  have h₂ (v : Primes(F)) : d₂ (RestrictedProduct.mulSingle A v ((e g).2 v)) = b v := by
+    change c (q (e.symm (1, RestrictedProduct.mulSingle A v ((e g).2 v)))) = _
+    rw [← hfin, e.symm_apply_apply]
+    rfl
+  -- An idele is integral almost everywhere, and the character is unramified outside a finite set.
+  have hc : c ∈ ⋃ T : Finset (Primes(F)), (unramifiedOutside F T : Set _) := by
+    rw [iUnion_unramifiedOutside F]
+    trivial
+  obtain ⟨T, hT⟩ := Set.mem_iUnion.mp hc
+  have hsupport : b.HasFiniteMulSupport := by
+    apply Filter.eventually_cofinite.mp
+    filter_upwards [T.eventually_cofinite_notMem, (e g).2.property] with v hv hu
+    let u := (v.adicCompletionIntegers F).toSubmonoid.unitsEquivUnitsType ⟨(e g).2 v, hu⟩
+    exact (mem_unramifiedOutside_iff F T c).mp hT v hv u
+  have hp := (hasProd_restrictedProduct_mulSingle A (e g).2).map d₂ d₂.continuous
+  have hprod : HasProd b (d₂ (e g).2) := hp.congr_fun fun v ↦ (h₂ v).symm
+  have hA (w : InfinitePlace F) : (e g).1 w =
+      Units.map ((Pi.evalRingHom _ w).comp (RingHom.fst _ _)).toMonoidHom g := Units.ext ((he g).1 w)
+  have hB (v : Primes(F)) : (e g).2 v =
+      Units.map ((RestrictedProduct.evalRingHom (fun w : Primes(F) ↦ w.adicCompletion F) v).comp
+        (RingHom.snd _ _)).toMonoidHom g := Units.ext ((he g).2 v)
+  dsimp only
+  simp_rw [← hA, ← hB]
+  refine ⟨hsupport, ?_⟩
+  change c (q g) = (∏ w, a w) * ∏ᶠ v, b v
+  have ht : (∏' v, b v) = ∏ᶠ v, b v := tprod_eq_finprod hsupport
+  rw [← ht, hprod.tprod_eq]
+  have hinf : d₁ (e g).1 = ∏ w, a w := by
+    conv_lhs => rw [← Finset.univ_prod_mulSingle (e g).1, map_prod]
+    exact Finset.prod_congr rfl fun w _ ↦ h₁ w
+  rw [← hinf]
+  change c (q g) = d ((e g).1, 1) * d (1, (e g).2)
+  rw [← map_mul]
+  change c (q g) = c (q (e.symm ((e g).1 * 1, 1 * (e g).2)))
+  rw [mul_one, one_mul, Prod.mk.eta, e.symm_apply_apply]
 
 end Ideles
 
