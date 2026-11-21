@@ -12,6 +12,7 @@ import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Separation
 import Mathlib.Topology.Algebra.IsUniformGroup.Basic
 import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
+import Mathlib.Analysis.Calculus.ContDiff.Operations
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
@@ -623,6 +624,29 @@ theorem elementarySchwartzSubmodule_zero_mem :
       {f | (∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) ∧
         ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)} := by sorry
 
+/-- Each weighted mixed-derivative bound is subadditive on fibrewise smooth functions. -/
+theorem elementarySchwartzBound_add_le {f g : ElementaryLieGroup m n r F → ℂ}
+    (hf : ∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b)))
+    (hg : ∀ a b, ContDiff ℝ ∞ (fun xt ↦ g (elementaryCover xt a b)))
+    (i : ElementarySchwartzIndex m n r) :
+    elementarySchwartzBound (f + g) i ≤ elementarySchwartzBound f i + elementarySchwartzBound g i := by
+  refine iSup_le fun xt ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_
+  have hpartial : elementaryPartial (f + g) i.2.1 i.2.2.1 xt a b =
+      elementaryPartial f i.2.1 i.2.2.1 xt a b + elementaryPartial g i.2.1 i.2.2.1 xt a b := by
+    have hadd (n : ℕ) :
+        iteratedFDeriv ℝ n (fun v ↦ (f + g) (elementaryCover v a b)) xt =
+          iteratedFDeriv ℝ n (fun v ↦ f (elementaryCover v a b)) xt +
+          iteratedFDeriv ℝ n (fun v ↦ g (elementaryCover v a b)) xt :=
+      iteratedFDeriv_add_apply ((hf a b).of_le (by simp)).contDiffAt
+        ((hg a b).of_le (by simp)).contDiffAt
+    dsimp only [elementaryPartial]
+    rw [hadd]
+    rfl
+  rw [hpartial, mul_add]
+  refine le_trans (ENNReal.coe_le_coe.mpr (nnNorm_add_le _ _)) ?_
+  rw [ENNReal.coe_add]
+  apply add_le_add <;> exact le_iSup_of_le xt (le_iSup_of_le a (le_iSup_of_le b le_rfl))
+
 /-- Paper: Definition D.1.3.1, p. 750. The Schwartz condition is closed under addition. -/
 theorem elementarySchwartzSubmodule_add_mem {f g : ElementaryLieGroup m n r F → ℂ}
     (hf : (∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) ∧
@@ -630,7 +654,9 @@ theorem elementarySchwartzSubmodule_add_mem {f g : ElementaryLieGroup m n r F �
     (hg : (∀ a b, ContDiff ℝ ∞ (fun xt ↦ g (elementaryCover xt a b))) ∧
       ∀ i, elementarySchwartzBound g i < (⊤ : ℝ≥0∞)) :
     f + g ∈ {h | (∀ a b, ContDiff ℝ ∞ (fun xt ↦ h (elementaryCover xt a b))) ∧
-      ∀ i, elementarySchwartzBound h i < (⊤ : ℝ≥0∞)} := by sorry
+      ∀ i, elementarySchwartzBound h i < (⊤ : ℝ≥0∞)} := by
+  refine ⟨fun a b ↦ (hf.1 a b).add (hg.1 a b), fun i ↦ ?_⟩
+  exact (elementarySchwartzBound_add_le hf.1 hg.1 i).trans_lt (ENNReal.add_lt_top.2 ⟨hf.2 i, hg.2 i⟩)
 
 /-- Paper: Definition D.1.3.1, p. 750. The Schwartz condition is closed under
 complex scalar multiplication. -/
