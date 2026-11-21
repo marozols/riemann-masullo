@@ -832,7 +832,17 @@ theorem finitePlace_quasiCharacterParametrization (v : Primes(F)) (π : (v.adicC
 exponent is a chart for the normalized absolute value. -/
 theorem finitePlace_hasNormTwistCharts (v : Primes(F)) :
     HasNormTwistCharts (finiteNorm : (v.adicCompletion F)ˣ →* ℝ≥0ˣ) := by
-  sorry
+  let : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  let n : (v.adicCompletion F)ˣ →* ℝ≥0ˣ := Units.map nnNormHom.toMonoidHom
+  have hp : IsProperMap (fun x ↦ (n x) ^ (1 : ℕ)) := isProperMap_units_nnNorm_pow 1 one_ne_zero
+  simp only [pow_one] at hp
+  apply hasNormTwistCharts_of_proper n hp
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let u := Units.mk0 (π : v.adicCompletion F) hπ.ne_zero
+  refine ⟨u, fun he ↦ hπ.val_lt_one.ne ?_⟩
+  apply Valued.toNormedField.norm_eq_one_iff.mp
+  exact congrArg (fun t : ℝ≥0ˣ ↦ ((t : ℝ≥0) : ℝ)) he
 
 /-- Paper: Equation (3.1.2.3), p. 121. A continuous splitting of the normalized absolute
 value identifies the surface with a complex plane for each character of the norm-one group.
