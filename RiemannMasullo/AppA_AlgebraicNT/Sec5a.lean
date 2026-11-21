@@ -36,7 +36,15 @@ def realCenteredMaximal (f : ℝ → ℂ) (x : ℝ) : ℝ≥0∞ :=
 /-- Paper: (A.5.1.2), p. 566. The centered maximal function of a constant
 is its absolute value at every point. -/
 theorem realCenteredMaximal_const (c : ℂ) (x : ℝ) :
-    realCenteredMaximal (fun _ ↦ c) x = ‖c‖ₑ := by sorry
+    realCenteredMaximal (fun _ ↦ c) x = ‖c‖ₑ := by
+  -- Each average of the constant `‖c‖ₑ` over an interval of length `2r` is `‖c‖ₑ`.
+  have h : ∀ r : Ioi (0 : ℝ), (ENNReal.ofReal (2 * (r : ℝ)))⁻¹ *
+      ∫⁻ _ in Ioc (x - (r : ℝ)) (x + (r : ℝ)), ‖c‖ₑ = ‖c‖ₑ := by
+    rintro ⟨r, hr⟩
+    have hr' : (0 : ℝ) < r := hr
+    rw [setLIntegral_const, Real.volume_Ioc, show x + r - (x - r) = 2 * r by ring,
+      mul_comm, mul_assoc, ENNReal.mul_inv_cancel (by simp [hr']) ENNReal.ofReal_ne_top, mul_one]
+  simp only [realCenteredMaximal, h, ciSup_const]
 
 -- TODO(paper-gap): In Theorem A.5.1.1(1), the all-radii maximal function need not be finite
 -- anywhere. For f(x) = |x| both local hypotheses hold and the averages grow without bound.
@@ -197,11 +205,12 @@ theorem IsDPrimeSequence.prod (hU : IsDPrimeSequence μ₁ U) (hV : IsDPrimeSequ
 
 /-- Paper: Lemma A.5.2.5, p. 570. The product of two open members is open. -/
 theorem isOpen_prod_sequence (k : ℕ) (hU : IsOpen (U k)) (hV : IsOpen (V k)) :
-    IsOpen (U k ×ˢ V k) := by sorry
+    IsOpen (U k ×ˢ V k) := hU.prod hV
 
 /-- Paper: Lemma A.5.2.5, p. 570. The product of two symmetric members is symmetric. -/
 theorem inv_eq_prod_sequence (k : ℕ) (hU : (U k)⁻¹ = U k) (hV : (V k)⁻¹ = V k) :
-    (U k ×ˢ V k)⁻¹ = U k ×ˢ V k := by sorry
+    (U k ×ˢ V k)⁻¹ = U k ×ˢ V k := by
+  rw [Set.inv_prod, hU, hV]
 
 end Products
 

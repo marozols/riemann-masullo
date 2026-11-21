@@ -88,10 +88,22 @@ def fetch_issues():
     fields = "number,title,state,labels,body,assignees,createdAt,closedAt"
 
     def get(label, limit):
-        # While issues are being opened the pages of the listing shift, and gh can return
-        # one issue twice; keep one copy of each.
-        listing = gh_json(["issue", "list", "--label", label, "--state", "all",
-                           "--limit", str(limit), "--json", fields])
+        # The REST listing, page by page: `gh issue list` with a label goes through GitHub's
+        # search and stops at 1,000 results. While issues are being opened the pages shift and
+        # one issue can come back twice; keep one copy of each.
+        shape = ('.[] | select(.pull_request | not) | {number, title, state: (.state | ascii_upcase), '
+                 'labels: [.labels[] | {name}], body, assignees: [.assignees[] | {login}], '
+                 'createdAt: .created_at, closedAt: .closed_at} | tojson')
+        for attempt in range(3):
+            out = run(["gh", "api", "--paginate",
+                       f"repos/{{owner}}/{{repo}}/issues?state=all&labels={label}&per_page=100",
+                       "--jq", shape], check=False)
+            if out.returncode == 0:
+                break
+            time.sleep(3 * (attempt + 1))
+        else:
+            raise RuntimeError("gh failed: " + out.stderr[-500:])
+        listing = [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
         return sorted({i["number"]: i for i in listing}.values(), key=lambda i: i["number"])
 
     repo = gh_json(["repo", "view", "--json", "url,nameWithOwner"])

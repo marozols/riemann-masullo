@@ -3,6 +3,7 @@
 | Role | File | Works on | Output |
 |---|---|---|---|
 | Integrator | [`integrator.md`](integrator.md) | the whole repository; one long-running session | merges, issues |
+| Merger | [`merger.md`](merger.md) | the pull-request queue; one long-running session | merged proofs, reviews of splits |
 | Scout | [`scout.md`](scout.md) | one issue | a comment listing existing Lean and literature |
 | Digester | [`digester.md`](digester.md) | one `section` issue | a pull request of statements with `sorry` |
 | Prover | [`prover.md`](prover.md) | one `proof` issue | a pull request that proves or splits it |
@@ -33,5 +34,8 @@ which needs network access (`codex -c sandbox_workspace_write.network_access=tru
 
 Under Codex's `workspace-write` sandbox an agent in a worktree can build but cannot commit, and
 has no network; that is why the launcher does the git and GitHub steps.
+
+The integrator and the merger are started by hand in the main checkout ("You are the merger; read
+prompts/merger.md and start"). The merger never touches the working tree there.
 
 Every agent also reads [`AGENTS.md`](../AGENTS.md), which holds the rules common to all roles.

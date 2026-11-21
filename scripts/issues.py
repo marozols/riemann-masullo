@@ -21,6 +21,18 @@ def run(cmd, **kw):
     return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, **kw)
 
 
+def list_issues(state, label):
+    """All issues with a label, through the REST listing. `gh issue list` with a label goes
+    through GitHub's search, which stops at 1,000 results, and a truncated list of open proof
+    issues makes this script open duplicates."""
+    out = run(["gh", "api", "--paginate",
+               f"repos/{{owner}}/{{repo}}/issues?state={state}&labels={label}&per_page=100",
+               "--jq", ".[] | select(.pull_request | not) | {number, state, title, body} | tojson"])
+    if out.returncode:
+        sys.exit(out.stderr)
+    return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
+
+
 def sorries():
     out = run(["lake", "build", "RiemannMasullo"])
     if out.returncode:
@@ -62,15 +74,11 @@ def main():
     full_sha = run(["git", "rev-parse", "HEAD"]).stdout.strip()
     url = run(["gh", "repo", "view", "--json", "url", "--jq", ".url"]).stdout.strip()
     current = sorries()
-    listing = run(["gh", "issue", "list", "--label", "proof", "--state", "open", "--limit", "5000",
-                   "--json", "number,body"])
-    if listing.returncode:
-        sys.exit(listing.stderr)
     open_issues = {}
-    for issue in json.loads(listing.stdout):
+    for issue in sorted(list_issues("open", "proof"), key=lambda i: -i["number"]):
         m = MARK.search(issue["body"] or "")
         if m:
-            open_issues[m.group(1)] = issue["number"]
+            open_issues[m.group(1)] = issue["number"]      # the oldest issue wins
 
     new = [k for k in current if k not in open_issues]
     stale = [k for k in open_issues if k not in current]
@@ -107,14 +115,12 @@ def main():
 
 def unblock(apply):
     """Remove `blocked` from open issues whose `<!-- needs: ... -->` issues are all closed."""
-    states = {i["number"]: i["state"] for i in json.loads(run(
-        ["gh", "issue", "list", "--state", "all", "--limit", "5000", "--json", "number,state"]).stdout)}
-    blocked = json.loads(run(["gh", "issue", "list", "--label", "blocked", "--state", "open",
-                              "--limit", "5000", "--json", "number,title,body"]).stdout)
+    states = {i["number"]: i["state"] for i in list_issues("all", "section")}
+    blocked = list_issues("open", "blocked")
     ready = []
     for issue in sorted(blocked, key=lambda i: i["number"]):
         m = re.search(r"<!-- needs:([\d\s]*)-->", issue["body"] or "")
-        if m and all(states.get(int(n)) == "CLOSED" for n in m.group(1).split()):
+        if m and all(states.get(int(n)) == "closed" for n in m.group(1).split()):
             ready.append(issue["number"])
             print(f"  unblock #{issue['number']}  {issue['title']}")
             if apply:

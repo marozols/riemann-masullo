@@ -40,7 +40,18 @@ theorem ideleClassNorm_cpow_properties (s : ℂ) :
     (classNormℝ (1 : C[F]) : ℂ) ^ s = 1 ∧
     (∀ g h : C[F], (classNormℝ (g * h) : ℂ) ^ s =
       (classNormℝ g : ℂ) ^ s * (classNormℝ h : ℂ) ^ s) ∧
-    Continuous (fun g : C[F] ↦ (classNormℝ g : ℂ) ^ s) := by sorry
+    Continuous (fun g : C[F] ↦ (classNormℝ g : ℂ) ^ s) := by
+  have hcont : Continuous (ideleClassNorm F) :=
+    (QuotientGroup.isQuotientMap_mk _).continuous_iff.mpr (ideleGroup_topology F).2.2.2.2.1
+  refine ⟨by simp, ?_, ?_⟩
+  · intro g h
+    dsimp only
+    rw [map_mul, Units.val_mul, NNReal.coe_mul, Complex.ofReal_mul]
+    exact Complex.mul_cpow_ofReal_nonneg (by positivity) (by positivity) s
+  · have hr : Continuous classNormℝ := NNReal.continuous_coe.comp (Units.continuous_val.comp hcont)
+    apply (Complex.continuous_ofReal.comp hr).cpow continuous_const
+    intro g
+    exact Complex.ofReal_mem_slitPlane.mpr (NNReal.coe_pos.mpr (Units.zero_lt _))
 
 /-- Paper: §3.2.1, p. 122. The coordinate at a unitary character `χ`
 sends `s` to the quasi-character `χ |·|^s`. -/
