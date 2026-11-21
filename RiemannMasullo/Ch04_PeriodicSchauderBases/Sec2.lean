@@ -391,7 +391,8 @@ def cyclicPeriodizationCLM : E →L[ℂ] S :=
 with the same value at every logarithmic lift. -/
 theorem cyclicPeriodizationCLM_apply (f : E) (x : ℝ) :
     cyclicPeriodizationCLM γ hγ f (point ((x / Real.log γ : ℝ) : T)) =
-      ∑' k : ℤ, f.val (x + (k : ℝ) * Real.log γ) := by sorry
+      ∑' k : ℤ, f.val (x + (k : ℝ) * Real.log γ) := by
+  exact (cyclicPeriodization_hasSum γ hγ f x).tsum_eq.symm
 
 local notation "Φ" => cyclicPeriodizationCLM γ hγ
 local notation "Mγ" => LinearMap.ker (ContinuousLinearMap.toLinearMap Φ)
