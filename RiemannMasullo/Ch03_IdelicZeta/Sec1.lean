@@ -16,6 +16,7 @@ import RiemannMasullo.ForMathlib.Analysis.Complex.CoveringMap
 import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
+import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CharacterExtension
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual
@@ -1630,7 +1631,72 @@ theorem sIdeleRestriction_mk (c : unramifiedOutside F S) (g : (SAdeleRing F S)ˣ
 /-- Paper: Lemma 3.1.2.2, p. 121. Every quasi-character of J_{F,S} extends to an
 idele class character unramified outside S. -/
 theorem sIdeleRestriction_surjective : Surjective (sIdeleRestriction F S) := by
-  sorry
+  classical
+  intro χ
+  let A := integralAdelesOutside F S
+  let p := Units.map ((adeleProjection F S).comp A.subtype).toMonoidHom
+  let D := (Units.map (integralAdeleDiagonal F S).toMonoidHom).range
+  let π := QuotientGroup.map D (D.map p) p (Subgroup.le_comap_map _ _)
+  have hp : Continuous p := ((continuous_fst.prodMk (continuous_pi fun v : S ↦
+    (RestrictedProduct.continuous_eval v.val).comp continuous_snd)).comp continuous_subtype_val).units_map _
+  have hπ : Continuous π := (QuotientGroup.isQuotientMap_mk D).continuous_iff.mpr
+    (QuotientGroup.continuous_mk.comp hp)
+  obtain ⟨j, hj, _, hjmk⟩ := sIdeleClassGroup_openEmbedding F S
+  let πc : SIdeleClassGroup F S →ₜ* SIdeleQuotient F S := ⟨π, hπ⟩
+  let ψ : QuasiCharacter (SIdeleClassGroup F S) := χ.comp πc
+  obtain ⟨C, hC⟩ := exists_complexCharacter_extension_of_isOpenEmbedding
+    (G := SIdeleClassGroup F S) (H := IdeleClassGroup (𝓞 F) F) j hj ψ
+  have hvalue (u : Aˣ) :
+      C (QuotientGroup.mk (Units.map A.subtype.toMonoidHom u)) = χ (QuotientGroup.mk (p u)) := by
+    rw [← hjmk]
+    exact hC (QuotientGroup.mk u)
+  -- Lift any family of ideles whose coordinates are integral off S, including its inverses.
+  have hlift {B : Type _} [Group B] (f : B →* IdeleGroup (𝓞 F) F)
+      (hf : ∀ b v, v ∉ S → (f b).val.2 v ∈ v.adicCompletionIntegers F) (b : B) :
+      ∃ u : Aˣ, Units.map A.subtype.toMonoidHom u = f b := by
+    let φ : B →* A := ((Units.coeHom _).comp f).codRestrict A.toSubmonoid (by
+      intro b
+      change (f b).val ∈ integralAdelesOutside F S
+      simp only [integralAdelesOutside, Subring.mem_iInf]
+      intro v hv
+      exact hf b v hv)
+    exact ⟨φ.toHomUnits b, Units.ext rfl⟩
+  have hunram : C ∈ unramifiedOutside F S := by
+    apply (mem_unramifiedOutside_iff F S C).mpr
+    intro v hv x
+    let f := (IdeleGroup.ofAdicCompletion (𝓞 F) F v).comp
+      (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom)
+    have hfin (b) (w : Primes(F)) (hw : w ≠ v) : (f b).val.2 w = 1 :=
+      RestrictedProduct.mulSingle_eq_of_ne _ _ hw
+    obtain ⟨u, hu⟩ := hlift f (fun b w _ ↦ by
+      by_cases hw : w = v
+      · subst w
+        change RestrictedProduct.mulSingle _ v (b.val : v.adicCompletion F) v ∈ _
+        rw [RestrictedProduct.mulSingle_eq_same]
+        exact b.val.property
+      · rw [hfin _ w hw]
+        exact one_mem _) x
+    have hpu : p u = 1 := by
+      change Units.map (adeleProjection F S).toMonoidHom (Units.map A.subtype.toMonoidHom u) = 1
+      rw [hu]
+      apply Units.ext
+      exact Prod.ext rfl (funext fun w ↦ hfin x w.val (fun h ↦ hv (h ▸ w.property)))
+    change C (QuotientGroup.mk (f x)) = 1
+    rw [← hu, hvalue, hpu, QuotientGroup.mk_one, map_one]
+  refine ⟨⟨C, hunram⟩, ?_⟩
+  ext1 y
+  obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective y
+  rw [sIdeleRestriction_mk]
+  obtain ⟨u, hu⟩ := hlift (sIdeleInsertion F S) (fun b v hv ↦ by
+    rw [(sIdeleInsertion_apply F S b).2.2 v hv]
+    exact one_mem _) g
+  have hpu : p u = g := by
+    change Units.map (adeleProjection F S).toMonoidHom (Units.map A.subtype.toMonoidHom u) = g
+    rw [hu]
+    apply Units.ext
+    exact Prod.ext (sIdeleInsertion_apply F S g).1 (funext (sIdeleInsertion_apply F S g).2.1)
+  change C (QuotientGroup.mk (sIdeleInsertion F S g)) = _
+  rw [← hu, hvalue, hpu]
 
 /-- Paper: Lemma 3.1.2.2, p. 121. Restriction from the open unramified locus to the
 S-idelic character surface is a local complex analytic isomorphism. -/
