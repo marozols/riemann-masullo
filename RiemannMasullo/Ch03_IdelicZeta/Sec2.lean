@@ -364,8 +364,14 @@ theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
 theorem finiteHeckeL_hasProdUniformlyOn (χ : U[F]) (K : Set halfPlane) (hK : IsCompact K) :
-    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K :=
-  by sorry
+    HasProdUniformlyOn (fun v (s : halfPlane) ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ) K := by
+  apply hasProdUniformlyOn_iff_tendstoUniformlyOn.mpr
+  rcases K.eq_empty_or_nonempty with rfl | hne
+  · exact tendstoUniformlyOn_empty
+  · obtain ⟨s₀, _, hmin⟩ := hK.exists_isMinOn hne
+      (Complex.continuous_re.comp continuous_subtype_val).continuousOn
+    have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s₀.val.re) s₀.property
+    exact (h.comp (fun s : halfPlane ↦ s.val)).mono fun s hs ↦ hmin hs
 
 /-- Paper: Definition 3.2.1.4, p. 124. The finite Hecke L-function admits
 a meromorphic continuation to the complex plane. -/
