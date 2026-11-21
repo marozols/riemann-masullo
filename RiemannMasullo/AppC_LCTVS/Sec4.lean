@@ -10,6 +10,8 @@ public import Mathlib.MeasureTheory.Integral.Prod
 public import Mathlib.MeasureTheory.Measure.Complex
 public import Mathlib.MeasureTheory.VectorMeasure.Integral
 public import Mathlib.Topology.Algebra.Group.Quotient
+import Mathlib.Analysis.Normed.Operator.Banach
+import Mathlib.MeasureTheory.Function.ConvergenceInMeasure
 
 /-!
 # Integration in the sense of Pettis
@@ -330,7 +332,34 @@ theorem pettisIntegrable_of_reflexive
     (hB : Surjective (NormedSpace.inclusionInDoubleDual ℂ B))
     (μ : ComplexMeasure X) [IsFiniteMeasure μ.variation] [μ.variation.Regular]
     (f : X → B) (hf : PettisWeaklyIntegrable (.complex μ) f) :
-    PettisIntegrable (.complex μ) f := by sorry
+    PettisIntegrable (.complex μ) f := by
+  -- Test each functional against f as an element of L¹ of the variation measure.
+  let T : StrongDual ℂ B →ₗ[ℂ] Lp ℂ 1 μ.variation :=
+    { toFun := fun φ ↦ (hf φ).toL1 _
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hrep (φ : StrongDual ℂ B) : ⇑(T φ) =ᵐ[μ.variation] fun x ↦ φ (f x) :=
+    (hf φ).coeFn_toL1
+  have hT : Continuous T := by
+    apply T.continuous_of_seq_closed_graph
+    intro u φ y hu hy
+    apply Lp.ext
+    -- Pointwise convergence and L¹ convergence must yield the same limit in measure.
+    have hpoint : TendstoInMeasure μ.variation (fun n x ↦ u n (f x)) atTop (fun x ↦ φ (f x)) := by
+      apply tendstoInMeasure_of_tendsto_ae (μ := μ.variation)
+        (fun n ↦ (hf (u n)).aestronglyMeasurable)
+      exact Eventually.of_forall fun x ↦
+        ((NormedSpace.inclusionInDoubleDual ℂ B (f x)).continuous.tendsto φ).comp hu
+    have hlim := (tendstoInMeasure_of_tendsto_Lp hy).congr_left (fun n ↦ hrep (u n))
+    exact (tendstoInMeasure_ae_unique hlim hpoint).trans (hrep φ).symm
+  let L : Module.Dual ℂ (StrongDual ℂ B) := pettisWeakIntegral (.complex μ) f hf
+  have hL : Continuous L := by
+    apply ((VectorMeasure.continuous_integral (μ := μ)
+      (B := ContinuousLinearMap.mul ℝ ℂ)).comp hT).congr
+    intro φ
+    exact VectorMeasure.integral_congr_ae (hrep φ)
+  obtain ⟨b, hb⟩ := hB (⟨L, hL⟩ : StrongDual ℂ (StrongDual ℂ B))
+  exact ⟨b, hf, congrArg ContinuousLinearMap.toLinearMap hb⟩
 
 variable {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F]
   [IsTopologicalAddGroup F] [ContinuousSMul ℂ F] [PolynormableSpace ℂ F] [T2Space F]
