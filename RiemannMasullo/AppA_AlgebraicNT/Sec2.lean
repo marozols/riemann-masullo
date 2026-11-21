@@ -2,7 +2,10 @@ module
 
 public import RiemannMasullo.AppA_AlgebraicNT.Sec1
 public import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Topology.Algebra.Group.OpenMapping
 import Mathlib.Topology.Algebra.Group.Units
+import Mathlib.Topology.Baire.LocallyCompactRegular
+import Mathlib.Topology.Instances.Discrete
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
 /-!
@@ -283,11 +286,46 @@ def ratAdeleFundamentalDomain : Set 𝔸[ℚ] :=
   {a | extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace) ∈ Set.Ico 0 1 ∧
     a ∈ integralAdelesOutside ℚ ∅}
 
+/-- Paper: Example A.2.1.3, pp. 545–546. The interval description agrees with the
+general adelic domain for the integral basis consisting of one. -/
+private theorem ratAdeleFundamentalDomain_eq (b : Module.Basis Unit ℤ (𝓞 ℚ)) (hb : (b () : ℚ) = 1) :
+    ratAdeleFundamentalDomain = adeleFundamentalDomain ℚ b := by
+  ext a
+  change (_ ∈ Set.Ico (0 : ℝ) 1 ∧ _) ↔ (_ ∈ infiniteAdeleFundamentalDomain ℚ b ∧ _)
+  apply and_congr_left'
+  let t := extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (a.1 Rat.infinitePlace)
+  have h : InfiniteAdeleRing.ringEquiv_mixedSpace ℚ a.1 = t • mixedEmbedding ℚ (b () : ℚ) := by
+    rw [hb, map_one]
+    apply Prod.ext
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      change t = t * 1
+      exact (mul_one _).symm
+    · funext v
+      obtain ⟨v, hv⟩ := v
+      obtain rfl := Subsingleton.elim v Rat.infinitePlace
+      exact (InfinitePlace.not_isReal_iff_isComplex.mpr hv Rat.isReal_infinitePlace).elim
+  have hm := infiniteAdeleFundamentalDomain_basis_line ℚ b () t
+  rwa [← h, RingEquiv.symm_apply_apply, Iff.comm] at hm
+
 /-- Paper: Example A.2.1.3, p. 545. Every rational adele belongs to exactly one
 rational translate of the displayed domain. -/
 theorem ratAdeleFundamentalDomain_unique_translate (a : 𝔸[ℚ]) :
     ∃! q : ℚ, a ∈ algebraMap ℚ 𝔸[ℚ] q +ᵥ ratAdeleFundamentalDomain := by
-  sorry
+  let b := (Module.Basis.singleton Unit ℤ).map Rat.ringOfIntegersEquiv.symm.toAddEquiv.toIntLinearEquiv
+  have hb : (b () : ℚ) = 1 := by simp [b, Module.Basis.singleton_apply]
+  rw [ratAdeleFundamentalDomain_eq b hb]
+  obtain ⟨q, hq⟩ := Set.mem_iUnion.mp ((adeleFundamentalDomain_cover ℚ b).symm ▸ Set.mem_univ a)
+  refine ⟨q, hq, ?_⟩
+  intro r hr
+  by_contra hne
+  have hd := adeleFundamentalDomain_disjoint ℚ b (r - q) (sub_ne_zero.mpr hne)
+  have hdis : Disjoint (algebraMap ℚ 𝔸[ℚ] r +ᵥ adeleFundamentalDomain ℚ b)
+      (algebraMap ℚ 𝔸[ℚ] q +ᵥ adeleFundamentalDomain ℚ b) := by
+    rw [Set.disjoint_vadd_set_right, ← add_vadd, add_comm, ← sub_eq_add_neg, ← map_sub]
+    exact hd
+  exact Set.disjoint_left.mp hdis hr hq
 
 /-- Paper: Example A.2.1.3, p. 546. Each member of the rationally indexed cover
 has compact closure. -/
@@ -298,6 +336,219 @@ theorem ratAdeleFundamentalDomain_precompact_translate (q : ℚ) :
 end Additive
 
 section NormSections
+
+section RationalDecomposition
+
+open scoped WithZero
+
+local notation "RatFinitePlace" => HeightOneSpectrum (𝓞 ℚ)
+
+/-- A positive generator of a rational prime ideal has trivial valuation at every other prime. -/
+private theorem exists_pos_rat_uniformizer (v : RatFinitePlace) :
+    ∃ p : ℚ, 0 < p ∧ ∀ w : RatFinitePlace, w.valuation ℚ p =
+      if w = v then WithZero.exp (-1 : ℤ) else 1 := by
+  let : IsPrincipalIdealRing (𝓞 ℚ) :=
+    IsPrincipalIdealRing.of_surjective Rat.ringOfIntegersEquiv.symm
+      Rat.ringOfIntegersEquiv.symm.surjective
+  let r := Submodule.IsPrincipal.generator v.asIdeal
+  have hr : r ≠ 0 := fun h ↦ v.ne_bot ((Submodule.IsPrincipal.eq_bot_iff_generator_eq_zero _).mpr h)
+  have hspan : Ideal.span {r} = v.asIdeal := Ideal.span_singleton_generator _
+  refine ⟨|(r : ℚ)|, abs_pos.mpr (by exact_mod_cast hr), fun w ↦ ?_⟩
+  have habs : w.valuation ℚ |(r : ℚ)| = w.valuation ℚ (r : ℚ) := by
+    rcases abs_choice (r : ℚ) with h | h <;> simp [h]
+  rw [habs, HeightOneSpectrum.valuation_of_algebraMap]
+  split_ifs with h
+  · subst w
+    exact v.intValuation_singleton hr hspan.symm
+  · apply HeightOneSpectrum.intValuation_eq_one_iff.mpr
+    intro hm
+    have hle : v.asIdeal ≤ w.asIdeal := hspan ▸ Ideal.span_le.mpr (Set.singleton_subset_iff.mpr hm)
+    exact h (HeightOneSpectrum.ext (v.isMaximal.eq_of_le w.isMaximal.ne_top hle).symm)
+
+/-- Multiplying the positive prime generators to the prescribed powers matches all finite valuations. -/
+private theorem exists_pos_rat_matching_idele (g : 𝕀[ℚ]) :
+    ∃ q : ℚ≥0ˣ, ∀ w : RatFinitePlace, w.valuation ℚ (q.val : ℚ) = Valued.v (g.val.2 w) := by
+  classical
+  choose p hp hval using exists_pos_rat_uniformizer
+  let n (v : RatFinitePlace) := -WithZero.log (Valued.v (g.val.2 v))
+  have hfin : {v : RatFinitePlace | Valued.v (g.val.2 v) ≠ 1}.Finite :=
+    Filter.eventually_cofinite.mp (AdeleRing.isUnit_iff.mp g.isUnit).2.2
+  let S := hfin.toFinset
+  let r := ∏ v ∈ S, p v ^ n v
+  have hr : 0 < r := Finset.prod_pos (fun v _ ↦ zpow_pos (hp v) _)
+  let q : ℚ≥0ˣ := Units.mk0 ⟨r, hr.le⟩ (fun h ↦ hr.ne' (congrArg (fun x : ℚ≥0 ↦ (x : ℚ)) h))
+  refine ⟨q, fun w ↦ ?_⟩
+  change w.valuation ℚ r = _
+  rw [show r = ∏ v ∈ S, p v ^ n v from rfl, map_prod]
+  simp only [map_zpow₀, hval]
+  by_cases hw : w ∈ S
+  · rw [Finset.prod_eq_single w (fun v _ hv ↦ by simp [Ne.symm hv]) (by simp [hw])]
+    have hne : Valued.v (g.val.2 w) ≠ (0 : ℤᵐ⁰) :=
+      (Valuation.ne_zero_iff _).mpr ((AdeleRing.isUnit_iff.mp g.isUnit).2.1 w)
+    simp [n, ← WithZero.exp_zsmul, WithZero.exp_log hne]
+  · have hone : Valued.v (g.val.2 w) = (1 : ℤᵐ⁰) := by simpa [S] using hw
+    rw [hone]
+    exact Finset.prod_eq_one fun v hv ↦ by simp [show w ≠ v from fun he ↦ hw (he ▸ hv)]
+
+private abbrev RatLocalUnits := (v : RatFinitePlace) → (v.adicCompletionIntegers ℚ)ˣ
+
+private def ratRealIdele : ℝˣ →* 𝕀[ℚ] :=
+  (IdeleGroup.ofCompletion (𝓞 ℚ) ℚ Rat.infinitePlace).comp
+    (Units.map (ringEquivRealOfIsReal Rat.isReal_infinitePlace).symm.toMonoidHom)
+
+private def ratFiniteIntegralMap : ((v : RatFinitePlace) → v.adicCompletionIntegers ℚ) →* 𝔸[ℚ] where
+  toFun x := (1, ⟨fun v ↦ (x v).val, Filter.Eventually.of_forall fun v ↦ (x v).property⟩)
+  map_one' := rfl
+  map_mul' _ _ := Prod.ext (one_mul 1).symm rfl
+
+private def ratIntegralIdele : RatLocalUnits →* 𝕀[ℚ] :=
+  (Units.map ratFiniteIntegralMap).comp
+    (ContinuousMulEquiv.piUnits (M := fun v : RatFinitePlace ↦ v.adicCompletionIntegers ℚ)).symm
+
+private def ratPosPrincipal : ℚ≥0ˣ →* 𝕀[ℚ] :=
+  (IdeleGroup.unitEmbedding (𝓞 ℚ) ℚ).comp (Units.map (NNRat.castHom ℚ).toMonoidHom)
+
+private def ratIdeleFactors : ℝˣ × ℚ≥0ˣ × RatLocalUnits →* 𝕀[ℚ] :=
+  ratRealIdele.coprod (ratPosPrincipal.coprod ratIntegralIdele)
+
+private theorem ratIdeleFactors_continuous :
+    letI : TopologicalSpace ℚ≥0ˣ := ⊥
+    Continuous ratIdeleFactors := by
+  let : TopologicalSpace ℚ≥0ˣ := ⊥
+  let : DiscreteTopology ℚ≥0ˣ := ⟨rfl⟩
+  have hreal : Continuous ratRealIdele := by
+    unfold ratRealIdele IdeleGroup.ofCompletion
+    simp only [MonoidHom.coe_comp]
+    apply Continuous.comp <;> apply Continuous.units_map
+    · exact (continuous_mulSingle (A := InfinitePlace.Completion) Rat.infinitePlace).prodMk
+        continuous_const
+    · exact (isometryEquivRealOfIsReal Rat.isReal_infinitePlace).symm.continuous
+  have hInt : Continuous ratFiniteIntegralMap :=
+    continuous_const.prodMk (continuous_restrictedProduct_of_uniform
+      (fun v ↦ continuous_subtype_val.comp (continuous_apply v))
+      (Filter.Eventually.of_forall fun v x ↦ (x v).property))
+  have hUnits : Continuous ratIntegralIdele :=
+    (hInt.units_map _).comp
+      (ContinuousMulEquiv.piUnits (M := fun v : RatFinitePlace ↦ v.adicCompletionIntegers ℚ)).symm.continuous
+  have hprincipal : Continuous ratPosPrincipal := continuous_of_discreteTopology
+  change Continuous (fun x : ℝˣ × ℚ≥0ˣ × RatLocalUnits ↦
+    ratRealIdele x.1 * (ratPosPrincipal x.2.1 * ratIntegralIdele x.2.2))
+  exact (hreal.comp continuous_fst).mul
+    ((hprincipal.comp continuous_snd.fst).mul (hUnits.comp continuous_snd.snd))
+
+private abbrev ratRealCoordinate (g : 𝕀[ℚ]) : ℝ :=
+  extensionEmbeddingOfIsReal Rat.isReal_infinitePlace (g.val.1 Rat.infinitePlace)
+
+private theorem ratIdeleFactors_infinite (t : ℝˣ) (q : ℚ≥0ˣ) (h : RatLocalUnits) :
+    ratRealCoordinate (ratIdeleFactors (t, q, h)) = t.val * ((q.val : ℚ) : ℝ) := by
+  change extensionEmbeddingOfIsReal _ (_ * (_ * 1)) = _
+  rw [mul_one, map_mul]
+  congr 1
+  · change extensionEmbeddingOfIsReal _ (Pi.mulSingle Rat.infinitePlace
+      ((ringEquivRealOfIsReal Rat.isReal_infinitePlace).symm t.val) Rat.infinitePlace) = t.val
+    rw [Pi.mulSingle_eq_same]
+    exact (ringEquivRealOfIsReal Rat.isReal_infinitePlace).apply_symm_apply _
+  · change extensionEmbeddingOfIsReal _ (algebraMap ℚ Rat.infinitePlace.Completion (q.val : ℚ)) = _
+    simp
+
+private theorem ratIdeleFactors_finite (t : ℝˣ) (q : ℚ≥0ˣ) (h : RatLocalUnits)
+    (v : RatFinitePlace) : (ratIdeleFactors (t, q, h)).val.2 v =
+      algebraMap ℚ (v.adicCompletion ℚ) (q.val : ℚ) * (h v).val.val := by
+  change (ratRealIdele t).val.2 v * ((ratPosPrincipal q).val.2 v * (ratIntegralIdele h).val.2 v) = _
+  rw [show (ratRealIdele t).val.2 v = 1 from rfl, one_mul]
+  rfl
+
+private theorem ratIdeleFactors_norm (t : ℝˣ) (q : ℚ≥0ˣ) (h : RatLocalUnits) :
+    ((ideleNorm ℚ (ratIdeleFactors (t, q, h))).val : ℝ) = |t.val| := by
+  have hprincipal : ideleNorm ℚ (ratPosPrincipal q) = 1 :=
+    (ideleNorm_spec ℚ).2 (show ratPosPrincipal q ∈ IdeleGroup.principalSubgroup (𝓞 ℚ) ℚ from ⟨_, rfl⟩)
+  have hstrip : ideleNorm ℚ (ratIdeleFactors (t, q, h)) = ideleNorm ℚ (ratIdeleFactors (t, 1, h)) := by
+    simp only [ratIdeleFactors, MonoidHom.coprod_apply, map_mul, hprincipal, map_one, one_mul]
+  rw [hstrip, ((ideleNorm_spec ℚ).1 _).2, Fintype.prod_subsingleton _ Rat.infinitePlace]
+  have hfin (v : RatFinitePlace) : ‖(ratIdeleFactors (t, 1, h)).val.2 v‖ = 1 := by
+    rw [ratIdeleFactors_finite]
+    simp only [Units.val_one, NNRat.coe_one, map_one, one_mul]
+    apply Valued.toNormedField.norm_eq_one_iff.mpr
+    apply (HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one
+      (a := Units.map (v.adicCompletionIntegers ℚ).subtype.toMonoidHom (h v))).mp
+    exact ⟨(h v).val.property, (h v).inv.property⟩
+  rw [finprod_eq_one_of_forall_eq_one hfin, mul_one]
+  have hnorm := (isometry_extensionEmbeddingOfIsReal Rat.isReal_infinitePlace).norm_map_of_map_zero
+    (map_zero _) ((ratIdeleFactors (t, 1, h)).val.1 Rat.infinitePlace)
+  change ‖ratRealCoordinate (ratIdeleFactors (t, 1, h))‖ = _ at hnorm
+  rw [← hnorm, ratIdeleFactors_infinite]
+  simp [InfinitePlace.mult, Rat.isReal_infinitePlace]
+
+private theorem ratIdeleFactors_injective : Injective ratIdeleFactors := by
+  apply (injective_iff_map_eq_one _).mpr
+  rintro ⟨t, q, h⟩ he
+  have hnorm := ratIdeleFactors_norm t q h
+  rw [he, map_one] at hnorm
+  have hinf := ratIdeleFactors_infinite t q h
+  rw [he] at hinf
+  have hinf' : 1 = (t : ℝ) * ((q.val : ℚ) : ℝ) := by
+    change extensionEmbeddingOfIsReal _ (1 : Rat.infinitePlace.Completion) = _ at hinf
+    rwa [map_one] at hinf
+  have hqpos : 0 < ((q.val : ℚ) : ℝ) := by
+    exact_mod_cast (NNRat.coe_pos.mpr (pos_iff_ne_zero.mpr q.ne_zero))
+  have hq : q = 1 := by
+    apply Units.ext
+    have heq := congrArg abs hinf'
+    rw [abs_one, abs_mul, abs_of_pos hqpos, ← hnorm] at heq
+    change 1 = 1 * ((q.val : ℚ) : ℝ) at heq
+    rw [one_mul] at heq
+    apply Subtype.ext
+    change (q.val : ℚ) = 1
+    exact_mod_cast heq.symm
+  subst q
+  have ht : t = 1 := by
+    apply Units.ext
+    simpa using hinf'.symm
+  subst t
+  refine Prod.ext rfl (Prod.ext rfl (funext fun v ↦ Units.ext (Subtype.ext ?_)))
+  have hv := ratIdeleFactors_finite 1 1 h v
+  rw [he] at hv
+  change (h v).val.val = 1
+  change (1 : v.adicCompletion ℚ) = algebraMap ℚ _ (1 : ℚ) * (h v).val.val at hv
+  simpa using hv.symm
+
+private theorem ratIdeleFactors_surjective : Surjective ratIdeleFactors := by
+  intro g
+  obtain ⟨q, hq⟩ := exists_pos_rat_matching_idele g
+  let a : ℚˣ := Units.map (NNRat.castHom ℚ).toMonoidHom q
+  let ev (v : RatFinitePlace) :=
+    (RestrictedProduct.evalRingHom (fun w : RatFinitePlace ↦ w.adicCompletion ℚ) v).comp
+      (RingHom.snd (InfiniteAdeleRing ℚ) (FiniteAdeleRing (𝓞 ℚ) ℚ))
+  let localRatio (v : RatFinitePlace) :=
+    Units.map (ev v).toMonoidHom g / Units.map (algebraMap ℚ (v.adicCompletion ℚ)).toMonoidHom a
+  have hunit (v : RatFinitePlace) : localRatio v ∈ (v.adicCompletionIntegers ℚ).units := by
+    apply HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mpr
+    rw [show (localRatio v).val = _ from Units.val_div_eq_div_val _ _]
+    change Valued.v (g.val.2 v / algebraMap ℚ (v.adicCompletion ℚ) (q.val : ℚ)) = 1
+    have hval : Valued.v (algebraMap ℚ (v.adicCompletion ℚ) (q.val : ℚ)) = v.valuation ℚ (q.val : ℚ) :=
+      HeightOneSpectrum.valuedAdicCompletion_eq_valuation' (v := v) _
+    rw [map_div₀, hval, hq, div_self]
+    exact (Valuation.ne_zero_iff _).mpr ((AdeleRing.isUnit_iff.mp g.isUnit).2.1 v)
+  let h : RatLocalUnits := fun v ↦
+    (v.adicCompletionIntegers ℚ).toSubring.toSubmonoid.unitsEquivUnitsType ⟨localRatio v, hunit v⟩
+  let inf := (Pi.evalRingHom InfinitePlace.Completion Rat.infinitePlace).comp
+    (RingHom.fst (InfiniteAdeleRing ℚ) (FiniteAdeleRing (𝓞 ℚ) ℚ))
+  let real := (ringEquivRealOfIsReal Rat.isReal_infinitePlace).toRingHom.comp inf
+  let t := Units.map real.toMonoidHom g / Units.map (algebraMap ℚ ℝ).toMonoidHom a
+  refine ⟨(t, q, h), Units.ext (Prod.ext ?_ ?_)⟩
+  · funext w
+    obtain rfl := Subsingleton.elim w Rat.infinitePlace
+    apply (ringEquivRealOfIsReal Rat.isReal_infinitePlace).injective
+    change ratRealCoordinate (ratIdeleFactors (t, q, h)) = ratRealCoordinate g
+    rw [ratIdeleFactors_infinite]
+    rw [show t.val = _ from Units.val_div_eq_div_val _ _]
+    exact div_mul_cancel₀ _ (Units.map (algebraMap ℚ ℝ).toMonoidHom a).ne_zero
+  · apply RestrictedProduct.ext
+    intro v
+    refine (ratIdeleFactors_finite t q h v).trans ?_
+    change _ * (localRatio v).val = _
+    rw [show (localRatio v).val = _ from Units.val_div_eq_div_val _ _]
+    exact mul_div_cancel₀ _ (Units.map (algebraMap ℚ (v.adicCompletion ℚ)).toMonoidHom a).ne_zero
 
 /-- Paper: Equations (A.2.2.1)–(A.2.2.2), p. 546. Rational ideles split into a real
 unit, a discrete positive rational and a tuple of local integer units. The rational
@@ -312,7 +563,27 @@ theorem ratIdeleGroup_decomposition :
         t.val * (a : ℝ) ∧
       (∀ v, g.val.2 v = algebraMap ℚ (v.adicCompletion ℚ) a * (h v).val.val) ∧
       ((ideleNorm ℚ g).val : ℝ) = |t.val| := by
-  sorry
+  let : TopologicalSpace ℚ≥0ˣ := ⊥
+  let : DiscreteTopology ℚ≥0ˣ := ⟨rfl⟩
+  have (v : RatFinitePlace) : CompactSpace (v.adicCompletionIntegers ℚ) :=
+    compactSpace_adicCompletionIntegers v
+  have : LocallyCompactSpace 𝕀[ℚ] := (ideleGroup_topology ℚ).2.1
+  have : T2Space 𝕀[ℚ] := (ideleGroup_topology ℚ).1
+  let e := MulEquiv.ofBijective ratIdeleFactors ⟨ratIdeleFactors_injective, ratIdeleFactors_surjective⟩
+  have : CompactSpace RatLocalUnits := by infer_instance
+  have : SigmaCompactSpace ℝˣ := Units.isClosedEmbedding_embedProduct.sigmaCompactSpace
+  have : Countable ℚ≥0 := (Subtype.val_injective (p := fun x : ℚ ↦ 0 ≤ x)).countable
+  have : Countable ℚ≥0ˣ := Units.val_injective.countable
+  have : SigmaCompactSpace ℚ≥0ˣ := by infer_instance
+  have hop := ratIdeleFactors.isOpenMap_of_sigmaCompact
+    ratIdeleFactors_surjective ratIdeleFactors_continuous
+  refine ⟨{ e with
+    continuous_toFun := ratIdeleFactors_continuous
+    continuous_invFun := e.toEquiv.continuous_symm_iff.mpr hop }, ?_⟩
+  intro t q h
+  exact ⟨ratIdeleFactors_infinite t q h, ratIdeleFactors_finite t q h, ratIdeleFactors_norm t q h⟩
+
+end RationalDecomposition
 
 /-- Paper: Equation (A.2.2.3), p. 546. Rational idele classes identify with the product
 of the positive reals and the finite integral units, by sending the tuple to its class. -/
