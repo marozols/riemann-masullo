@@ -164,7 +164,8 @@ def logExponentialDecaySubmodule (I : Set ℝ) : Submodule ℂ (ℝ → ℂ) :=
 profile, bundled as a Schwartz map. -/
 theorem logExponentialDecay_weight_mem_range (I : Set ℝ)
     (a : I) (f : logExponentialDecaySubmodule I) :
-    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by sorry
+    logExponentialWeight a f.val ∈ realSchwartzCoe.range := by
+  exact (Submodule.mem_iInf _).mp f.property a
 
 /-- Paper: (D.3.2.1), p. 801. This is the linear multiplier to the space
 of Schwartz functions in logarithmic coordinates. -/
