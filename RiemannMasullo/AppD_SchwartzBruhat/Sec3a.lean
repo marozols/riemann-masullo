@@ -156,7 +156,41 @@ Deviation: The single-line bounds also give this for an endpoint when the
 carrier is used with a closed interval. -/
 theorem schwartzBergman_trace_memLp (I : Set ℝ) (a : I)
     (p : ℝ≥0∞) (hp : 1 < p) (hp' : p < ⊤) (N : ℕ) (f : schwartzBergmanSubmodule I) :
-    MemLp (weightedVerticalTrace a N f.val) p volume := by sorry
+    MemLp (weightedVerticalTrace a N f.val) p volume := by
+  let z (x : ℝ) : ℂ := (a.val : ℂ) + x * Complex.I
+  have hz (x : ℝ) : (z x).re = a := by simp [z]
+  have hc : Continuous z := by
+    dsimp [z]
+    fun_prop
+  have hf : Continuous (f.val ∘ z) :=
+    f.property.2.1.continuousOn.comp_continuous hc fun x ↦ by
+      simp [mem_preimage, hz]
+  have bound (k : ℕ) : ∃ C : ℝ, ∀ x, ‖z x ^ k * f.val (z x)‖ ≤ C := by
+    obtain ⟨C, hC⟩ := f.property.2.2 a a le_rfl (by simp) k
+    exact ⟨C, fun x ↦ hC ⟨z x, by simp [mem_preimage, hz], rfl⟩⟩
+  obtain ⟨A, hA⟩ := bound N
+  obtain ⟨B, hB⟩ := bound (N + 1)
+  have hmodel : MemLp (fun x : ℝ ↦ (1 + ‖x‖)⁻¹) p volume := by
+    apply (integrable_norm_rpow_iff (by fun_prop) (zero_lt_one.trans hp).ne' hp'.ne).mp
+    have hdim : 1 < p.toReal := by
+      simpa using (ENNReal.toReal_lt_toReal ENNReal.one_ne_top hp'.ne).2 hp
+    have hnorm (x : ℝ) : ‖(1 + ‖x‖)⁻¹‖ = (1 + ‖x‖)⁻¹ := Real.norm_of_nonneg (by positivity)
+    simpa only [hnorm, Real.rpow_neg_eq_inv_rpow] using
+      (integrable_one_add_norm (μ := (volume : Measure ℝ)) (r := p.toReal) (by simpa using hdim))
+  apply hmodel.of_le_mul (c := A + B) ((hc.pow N).mul hf).aestronglyMeasurable
+  apply Filter.Eventually.of_forall
+  intro x
+  change ‖z x ^ N * f.val (z x)‖ ≤ (A + B) * ‖(1 + ‖x‖)⁻¹‖
+  rw [Real.norm_of_nonneg (by positivity), ← div_eq_mul_inv, le_div_iff₀ (by positivity)]
+  rw [mul_add, mul_one]
+  apply add_le_add (hA x)
+  have hx : ‖x‖ ≤ ‖z x‖ := by simpa [Real.norm_eq_abs, z] using Complex.abs_im_le_norm (z x)
+  calc
+    ‖z x ^ N * f.val (z x)‖ * ‖x‖ ≤ ‖z x ^ N * f.val (z x)‖ * ‖z x‖ :=
+      mul_le_mul_of_nonneg_left hx (norm_nonneg _)
+    _ = ‖z x ^ (N + 1) * f.val (z x)‖ := by
+      rw [← norm_mul, pow_succ, mul_right_comm]
+    _ ≤ B := hB x
 
 /-- Paper: Definition D.3.1.3, p. 800. The weighted L² norm on one line
 satisfies the seminorm laws. -/
