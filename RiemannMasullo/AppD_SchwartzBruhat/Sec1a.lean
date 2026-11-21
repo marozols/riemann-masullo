@@ -849,7 +849,10 @@ instance : CoeFun (ElementarySchwartz m n r F) (fun _ ↦ ElementaryLieGroup m n
 /-- Paper: Definition D.1.3.1, p. 750. At zero multi-indices the seminorm is the
 uniform norm of the underlying function. -/
 theorem elementarySchwartzSeminorm_zero (f : ElementarySchwartz m n r F) :
-    elementarySchwartzSeminorm (0, 0, 0, 0) f = ⨆ g, ‖f g‖ := by sorry
+    elementarySchwartzSeminorm (0, 0, 0, 0) f = ⨆ g, ‖f g‖ := by
+  change (elementarySchwartzBound f.val (0, 0, 0, 0)).toReal = _
+  rw [elementarySchwartzBound_zero, ENNReal.toReal_iSup (fun _ ↦ ENNReal.coe_ne_top)]
+  rfl
 
 /-- Paper: Definition D.1.3.1, p. 750. The canonical seminorm family generates
 the topology of the space. -/
