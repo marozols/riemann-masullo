@@ -202,7 +202,8 @@ theorem continuous_infiniteLocalModule (w : InfinitePlace F) :
 
 /-- Paper: Equation (3.3.1.3), p. 129. The normalized finite-place module is continuous. -/
 theorem continuous_finiteLocalModule (v : Primes) :
-    Continuous (finiteNorm(v)) := by sorry
+    Continuous (finiteNorm(v)) := by
+  exact continuous_nnNorm.units_map _
 
 /-- Paper: Equation (3.3.1.3), p. 129. Tate's local equation characterizes
 a unique archimedean factor in normal form. -/
