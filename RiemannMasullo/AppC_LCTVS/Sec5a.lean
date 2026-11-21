@@ -922,7 +922,13 @@ theorem HasStrongDifferentialOn.comp_weak {Ω₁ Ω₂ : Set V}
     (hg : DifferentiableOn k g Ω₁) (hmap : MapsTo g Ω₁ Ω₂) :
     HasWeakDifferentialOn k (f ∘ g) (fun xv : Ω₁ × V ↦
       toPettisWeakCompletion E (D (⟨g xv.1, hmap xv.1.property⟩,
-        fderivWithin k g Ω₁ xv.1 xv.2))) := by sorry
+        fderivWithin k g Ω₁ xv.1 xv.2))) := by
+  intro φ x
+  have hf := ((hasWeakCompletionDifferentialOn_iff (k := k) hΩ₂ f _).1 hD.2).1
+  obtain ⟨L, hL, heval⟩ := hf φ ⟨g x, hmap x.property⟩
+  refine ⟨L.comp (fderivWithin k g Ω₁ x), hL.comp (x : V) (hg x x.property).hasFDerivWithinAt hmap, ?_⟩
+  intro v
+  exact heval (fderivWithin k g Ω₁ x v)
 
 -- TODO(paper-gap): For Lemma C.5.1.19, f(x) = x and γ(t) = t² sin(1/t²), extended by
 -- zero, give a differentiable curve with a discontinuous, non-Lebesgue-integrable derivative.
