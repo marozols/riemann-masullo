@@ -669,7 +669,15 @@ Deviation: The two identities fail with the printed half-plane hypothesis. -/
 theorem cauchyKernel_verticalIntegrable_on_leftHalfPlane
     {Φ : ℂ → ℂ} {b : ℝ} (hΦ : SchwartzOnLeftHalfPlane Φ b)
     (ε : ℝ) (hε : 0 < ε) (N : ℕ) (z : ℂ) (hz : z.re ≠ b - ε) :
-    Complex.VerticalIntegrable (cauchyKernel Φ N z) (b - ε) := by sorry
+    Complex.VerticalIntegrable (cauchyKernel Φ N z) (b - ε) := by
+  apply kernel_integrable_from_trace _ N z hz
+  obtain ⟨C, hC, h⟩ := hΦ.2 ε hε 2 (by norm_num)
+  apply integrable_of_eventual_sq_decay _ hC
+  · exact h.mono fun y hy ↦ hy (b - ε) le_rfl
+  · apply hΦ.1.continuousOn.comp_continuous
+    · fun_prop
+    · intro y
+      simpa using (sub_lt_self b hε)
 
 -- TODO(paper-gap): Remark B.2.2.5 drops the inverse Mellin normalization
 -- and does not justify extension by zero from the real-axis Fourier argument.
