@@ -1404,7 +1404,89 @@ theorem dual_of_injectiveLCLimit (h : IsInjectiveLCLimit j i) :
     IsEmbedding (fun (L : WeakDual ℂ E) k ↦ StrongDual.toWeakDual (L.toStrongDual.comp (i k))) ∧
     ((∀ B : Set E, IsVonNBounded ℂ B →
       ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ B = i k '' A) →
-      IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k))) := by sorry
+      IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k))) := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro l hl
+    -- The union of the stage graphs is the graph of a linear functional on E.
+    let graph (k : ℕ) := LinearMap.range ((i k).toLinearMap.prod (l k).toLinearMap)
+    have hm : Monotone graph := monotone_nat_of_le_succ fun k _ ⟨a, ha⟩ ↦ by
+      refine ⟨j k a, ?_⟩
+      exact (Prod.ext (DFunLike.congr_fun (h.compatible k) a) (DFunLike.congr_fun (hl k) a)).trans ha
+    let G := ⨆ k, graph k
+    let proj : G →ₗ[ℂ] E := (LinearMap.fst ℂ E ℂ).comp G.subtype
+    have hmem (k : ℕ) (x : X k) : (i k x, l k x) ∈ G := le_iSup graph k ⟨x, rfl⟩
+    have hinj : Function.Injective proj := by
+      apply (injective_iff_map_eq_zero _).mpr
+      rintro ⟨p, hp⟩ hp0
+      obtain ⟨k, a, ha⟩ := (Submodule.mem_iSup_of_directed graph hm.directed_le).mp hp
+      have ha0 : a = 0 := h.injective k ((congrArg Prod.fst ha).trans (hp0.trans (map_zero _).symm))
+      subst a
+      exact Subtype.ext (ha.symm.trans (map_zero _))
+    have hsurj : Function.Surjective proj := by
+      intro x
+      obtain ⟨k, y, rfl⟩ := h.exhaustive x
+      exact ⟨⟨_, hmem k y⟩, rfl⟩
+    let e := LinearEquiv.ofBijective proj ⟨hinj, hsurj⟩
+    let L := ((LinearMap.snd ℂ E ℂ).comp G.subtype).comp e.symm.toLinearMap
+    have hLi (k : ℕ) (x : X k) : L (i k x) = l k x := by
+      have he : e.symm (i k x) = ⟨_, hmem k x⟩ := e.symm_apply_eq.mpr rfl
+      change (e.symm (i k x)).val.2 = _
+      rw [he]
+    -- Its norm is one of the seminorms defining the final locally convex topology.
+    let p := (normSeminorm ℂ ℂ).comp L
+    have hp (k : ℕ) : Continuous (p ∘ (i k).toLinearMap) := by
+      simpa only [p, Function.comp_def, Seminorm.comp_apply, coe_normSeminorm,
+        ContinuousLinearMap.coe_coe, hLi] using (l k).continuous.norm
+    let P : SeminormFamily ℂ E {s : Seminorm ℂ E // ∀ k, Continuous (s ∘ (i k).toLinearMap)} :=
+      Subtype.val
+    have hP : WithSeminorms P := ⟨h.topology_eq⟩
+    have hL : Continuous L := by
+      apply continuous_of_continuousAt_zero L
+      have hn := (hP.continuous_seminorm ⟨p, hp⟩).continuousAt (x := 0)
+      rw [ContinuousAt, map_zero, tendsto_zero_iff_norm_tendsto_zero]
+      change Tendsto (fun x ↦ ‖L x‖) (𝓝 0) (𝓝 ‖L 0‖) at hn
+      simpa only [map_zero, norm_zero] using hn
+    refine ⟨⟨L, hL⟩, fun k ↦ ContinuousLinearMap.ext (hLi k), ?_⟩
+    intro L' hL'
+    ext x
+    obtain ⟨k, y, rfl⟩ := h.exhaustive x
+    exact (DFunLike.congr_fun (hL' k) y).trans (hLi k y).symm
+  · -- Every evaluation on E comes from an evaluation on one stage.
+    choose k x hx using h.exhaustive
+    let eval (l : (k : ℕ) → WeakDual ℂ (X k)) (a : E) := l (k a) (x a)
+    have heval : Continuous eval := continuous_pi fun a ↦
+      (WeakDual.eval_continuous (x a)).comp (continuous_apply (k a))
+    let res (L : WeakDual ℂ E) (n : ℕ) := StrongDual.toWeakDual (L.toStrongDual.comp (i n))
+    have hc : Continuous res := continuous_pi fun n ↦
+      WeakDual.continuous_of_continuous_eval fun y ↦ WeakDual.eval_continuous (𝕜 := ℂ) (i n y)
+    refine IsEmbedding.of_comp hc heval ?_
+    have heq : eval ∘ res = fun L a ↦ L a := by
+      funext L a
+      exact congrArg L (hx a)
+    rw [heq]
+    exact WeakBilin.isEmbedding ContinuousLinearMap.coe_injective
+  · intro hb
+    let res : StrongDual ℂ E →L[ℂ] ((k : ℕ) → StrongDual ℂ (X k)) :=
+      ContinuousLinearMap.pi fun k ↦ ContinuousLinearMap.precomp ℂ (i k)
+    change IsEmbedding res
+    constructor
+    · apply IsTopologicalAddGroup.isInducing_iff_nhds_zero.mpr
+      refine le_antisymm (map_le_iff_le_comap.mp ?_) ?_
+      · simpa only [Tendsto, map_zero] using res.continuous.tendsto 0
+      · apply ContinuousLinearMap.hasBasis_nhds_zero.ge_iff.mpr
+        rintro ⟨B, V⟩ ⟨hB, hV⟩
+        obtain ⟨k, A, hA, rfl⟩ := hb B hB
+        have hA' : ∀ᶠ L : StrongDual ℂ (X k) in 𝓝 0, MapsTo L A V :=
+          ContinuousLinearMap.eventually_nhds_zero_mapsTo hA hV
+        have hpr := (continuous_apply k : Continuous
+          (fun l : (k : ℕ) → StrongDual ℂ (X k) ↦ l k)).tendsto 0
+        refine Filter.mem_comap.mpr ⟨{l | MapsTo (l k) A V}, hpr hA', ?_⟩
+        rintro L hL _ ⟨x, hx, rfl⟩
+        exact hL hx
+    · intro L M he
+      ext a
+      obtain ⟨k, x, rfl⟩ := h.exhaustive a
+      exact DFunLike.congr_fun (congrFun he k) x
 
 /-- Paper: Remark C.1.6.2, p. 670. The strong dual has the projective limit topology
 exactly when every bounded set is in the closure, in the limit, of the image of a
