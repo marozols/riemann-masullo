@@ -206,7 +206,16 @@ def cyclicPeriodization : E →ₗ[ℂ] S :=
 of any logarithmic lift. The statement records convergence of the series. -/
 theorem cyclicPeriodization_hasSum (f : E) (x : ℝ) :
     HasSum (fun k : ℤ ↦ f.val (x + (k : ℝ) * Real.log γ))
-      (cyclicPeriodization γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by sorry
+      (cyclicPeriodization γ hγ f (point ((x / Real.log γ : ℝ) : T))) := by
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  let F := logExponentialDecayTwist univ a f
+  have he (y : ℝ) : F y = f.val y := by
+    change logExponentialDecayTwist univ a (show logExponentialDecaySubmodule univ from f) y = _
+    rw [logExponentialDecayTwist_apply]
+    simp [a]
+  change HasSum (fun k : ℤ ↦ f.val (x + k * Real.log γ))
+    (cyclicSchwartzPeriodization γ hγ F (point ((x / Real.log γ : ℝ) : T)))
+  simpa only [he] using cyclicSchwartzPeriodization_hasSum γ hγ F x
 
 end Periodization
 
