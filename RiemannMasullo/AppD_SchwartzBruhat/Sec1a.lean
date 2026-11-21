@@ -647,7 +647,9 @@ discrete fibre and has finite weighted bounds. -/
 theorem elementarySchwartzSubmodule_zero_mem :
     (0 : ElementaryLieGroup m n r F → ℂ) ∈
       {f | (∀ a b, ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) ∧
-        ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)} := by sorry
+        ∀ i, elementarySchwartzBound f i < (⊤ : ℝ≥0∞)} := by
+  refine ⟨fun _ _ ↦ contDiff_const, fun i ↦ ?_⟩
+  simp [elementarySchwartzBound, elementaryPartial]
 
 /-- Paper: Definition D.1.3.1, p. 750. The Schwartz condition is closed under addition. -/
 theorem elementarySchwartzSubmodule_add_mem {f g : ElementaryLieGroup m n r F → ℂ}
