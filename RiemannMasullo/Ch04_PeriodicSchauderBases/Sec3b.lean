@@ -220,7 +220,14 @@ theorem existsUnique_compactActionIsotypicAverage [CompactSpace G]
     (hseq : ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
       TendstoUniformly (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop)
     (ω : PontryaginDual G) :
-    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ ω P := by sorry
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ ω P := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  let A (g : G) := star (ω g : ℂ) • ρ g
+  have hA : Continuous (fun p : G × E ↦ A p.1 p.2) :=
+    (show Continuous (fun p : G × E ↦ star (ω p.1 : ℂ)) from by fun_prop).smul hρ
+  simpa [IsPettisIsotypicAverageOn, A] using
+    existsUnique_pettisIntegral_continuousFamily μ (K := univ) isCompact_univ
+      (ae_of_all _ fun _ ↦ mem_univ _) A hA
 
 /-- Paper: Lemma 4.3.3.7(1), p. 186. On a relatively compact locally
 closed subset with nonempty interior, averaging the action gives a unique
