@@ -75,7 +75,13 @@ theorem compactSupportStageTopology_univ [CompactSpace X] :
     let K : Compacts X := ⟨univ, isCompact_univ⟩
     compactSupportStageTopology (E := E) K =
       TopologicalSpace.induced
-        (fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) inferInstance := by sorry
+        (fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) inferInstance := by
+  intro K
+  let restrictUniv : C(X, E) ≃ₜ C(↥(univ : Set X), E) :=
+    (Homeomorph.Set.univ X).symm.arrowCongr (Homeomorph.refl E)
+  change TopologicalSpace.induced
+    (restrictUniv ∘ fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) _ = _
+  rw [← induced_compose, ← restrictUniv.isInducing.eq_induced]
 
 /-- Paper: Definition C.5.1.1, p. 721. For compact X, the inductive limit topology
 agrees with the topology induced by the inclusion into continuous maps. -/
@@ -499,12 +505,50 @@ theorem vectorContDiffOrderOn_zero (Ω : Set V) (m : ℕ) :
 /-- Paper: Definition C.5.1.23, p. 734. The order condition is preserved by addition. -/
 theorem VectorContDiffOrderOn.add {Ω : Set V} {m : ℕ} {f g : V → E}
     (hf : VectorContDiffOrderOn f Ω m) (hg : VectorContDiffOrderOn g Ω m) :
-    VectorContDiffOrderOn (f + g) Ω m := by sorry
+    VectorContDiffOrderOn (f + g) Ω m := by
+  induction m generalizing f g with
+  | zero =>
+    unfold VectorContDiffOrderOn at hf hg ⊢
+    refine (hf.add hg).subset ?_
+    rintro z ⟨x, hx, y, hy, hxy, hd, rfl⟩
+    refine ⟨_, ⟨x, hx, y, hy, hxy, hd, rfl⟩, _, ⟨x, hx, y, hy, hxy, hd, rfl⟩, ?_⟩
+    simp only [Pi.add_apply, ← smul_add]
+    congr 1
+    abel
+  | succ m ih =>
+    intro i
+    obtain ⟨gf, hgf, cf, of⟩ := hf i
+    obtain ⟨gg, hgg, cg, og⟩ := hg i
+    refine ⟨gf + gg, ?_, cf.add cg, ih of og⟩
+    intro φ x
+    simp only [Pi.add_apply, map_add]
+    convert ((hgf φ x).hasFDerivWithinAt.add (hgg φ x).hasFDerivWithinAt).hasDerivWithinAt
+      using 1
+    simp
+    rfl
 
 /-- Paper: Definition C.5.1.23, p. 734. The order condition is preserved by complex
 scalar multiplication. -/
 theorem VectorContDiffOrderOn.smul {Ω : Set V} {m : ℕ} {f : V → E}
-    (c : ℂ) (hf : VectorContDiffOrderOn f Ω m) : VectorContDiffOrderOn (c • f) Ω m := by sorry
+    (c : ℂ) (hf : VectorContDiffOrderOn f Ω m) : VectorContDiffOrderOn (c • f) Ω m := by
+  induction m generalizing f with
+  | zero =>
+    unfold VectorContDiffOrderOn at hf ⊢
+    refine (hf.image (c • ContinuousLinearMap.id ℂ E)).subset ?_
+    rintro z ⟨x, hx, y, hy, hxy, hd, rfl⟩
+    refine ⟨_, ⟨x, hx, y, hy, hxy, hd, rfl⟩, ?_⟩
+    simp only [ContinuousLinearMap.smul_apply, ContinuousLinearMap.id_apply, Pi.smul_apply,
+      ← smul_sub]
+    exact smul_comm _ _ _
+  | succ m ih =>
+    intro i
+    obtain ⟨gf, hgf, cf, of⟩ := hf i
+    refine ⟨c • gf, ?_, cf.const_smul c, ih of⟩
+    intro φ x
+    simp only [Pi.smul_apply, map_smul]
+    convert ((hgf φ x).hasFDerivWithinAt.const_smul c).hasDerivWithinAt using 1
+    simp
+    rfl
 
 /-- Paper: Definition C.5.1.23, p. 734. The order condition defines a submodule of
 ambient functions. Restriction of this submodule gives the space on the open set. -/
@@ -526,7 +570,23 @@ def vectorSmoothSpace (Ω : Set V) : Submodule ℂ (Ω → E) :=
 
 /-- Paper: Definition C.5.1.23, p. 734. Constant vector-valued functions are smooth. -/
 theorem vectorSmoothOn_const (Ω : Set V) (z : E) :
-    VectorSmoothOn (fun _ : V ↦ z) Ω := by sorry
+    VectorSmoothOn (fun _ : V ↦ z) Ω := by
+  have key : ∀ (m : ℕ) (z : E), VectorContDiffOrderOn (fun _ : V ↦ z) Ω m := by
+    intro m
+    induction m with
+    | zero =>
+      intro z
+      show IsVonNBounded ℂ _
+      refine (Bornology.isVonNBounded_singleton (0 : E)).subset ?_
+      rintro w ⟨x, -, y, -, -, -, rfl⟩
+      simp
+    | succ m ih =>
+      intro z i
+      refine ⟨fun _ ↦ 0, ?_, continuousOn_const, ih 0⟩
+      intro φ x
+      simp only [map_zero]
+      exact hasDerivWithinAt_const _ _ _
+  exact fun m ↦ key m z
 
 /-- Paper: Definition C.5.1.23, p. 734. Restricting a constant map gives a member of
 the smooth submodule and of every finite-order submodule. -/

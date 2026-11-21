@@ -10,6 +10,7 @@ public import Mathlib.MeasureTheory.Integral.Prod
 public import Mathlib.MeasureTheory.Measure.Complex
 public import Mathlib.MeasureTheory.VectorMeasure.Integral
 public import Mathlib.Topology.Algebra.Group.Quotient
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
 
 /-!
 # Integration in the sense of Pettis
@@ -54,8 +55,9 @@ variable [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ
 /-- Paper: Lemma C.4.1.1, p. 709. The canonical weak-completion map embeds
 the weak topology on the source into the topology of pointwise convergence. -/
 theorem isEmbedding_toPettisWeakCompletion :
-    IsEmbedding (fun x : WeakSpace ℂ E ↦ toPettisWeakCompletion E ((toWeakSpace ℂ E).symm x)) :=
-  by sorry
+    IsEmbedding (fun x : WeakSpace ℂ E ↦ toPettisWeakCompletion E ((toWeakSpace ℂ E).symm x)) := by
+  letI := polynormableSpace_separatingDual ℂ E
+  exact IsInducing.isEmbedding ⟨induced_compose.symm⟩
 
 /-- Paper: Lemma C.4.1.1(1), p. 709. The canonical map into the weak
 completion is also continuous for the given topology on the source. -/
@@ -68,7 +70,10 @@ variable [IsTopologicalAddGroup F] [ContinuousSMul ℂ F] [PolynormableSpace ℂ
 is continuous between the continuous duals with their weak-star topologies. -/
 theorem continuous_weakDual_precomp (T : E →L[ℂ] F) :
     Continuous (fun φ : WeakDual ℂ F ↦
-      StrongDual.toWeakDual ((WeakDual.toStrongDual φ).comp T)) := by sorry
+      StrongDual.toWeakDual ((WeakDual.toStrongDual φ).comp T)) := by
+  apply WeakDual.continuous_of_continuous_eval
+  intro x
+  exact WeakDual.eval_continuous (T x)
 
 -- TODO(paper-gap): The pointwise topology on the target tests against E₂′.
 
@@ -175,7 +180,14 @@ function are complex homogeneous in the continuous functional. -/
 theorem pettisScalarIntegral_smul (μ : PettisMeasure X) (f : X → E)
     (hf : PettisWeaklyIntegrable μ f) (c : ℂ) (φ : StrongDual ℂ E) :
     μ.scalarIntegral (fun x ↦ (c • φ) (f x)) =
-      c • μ.scalarIntegral (fun x ↦ φ (f x)) := by sorry
+      c • μ.scalarIntegral (fun x ↦ φ (f x)) := by
+  cases μ with
+  | positive ν => exact integral_smul c (fun x ↦ φ (f x))
+  | complex ν =>
+    simp only [PettisMeasure.scalarIntegral, VectorMeasure.integral_eq_setToFun]
+    apply setToFun_smul _ _ c (fun x ↦ φ (f x))
+    intro a s z
+    simp [VectorMeasure.transpose, mul_left_comm]
 
 /-- Paper: (C.4.2.1), p. 710. The weak integral is the algebraic linear
 functional on the continuous dual obtained by scalar integration. -/

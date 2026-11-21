@@ -80,13 +80,16 @@ if [ "$target" = next ]; then
   [ -n "$label" ] || { echo "'next' needs the prover or digester role" >&2; exit 2; }
   # The oldest free issue; for proofs, from the file with the fewest proofs already in flight,
   # so that agents running side by side do not collide in one file.
-  target=$(gh issue list --label "$label" --state open --limit 3000 --json number,labels,body --jq '
-    map({n: .number, labels: [.labels[].name],
-         file: ((.body // "") | (try (capture("<!-- sorry: (?<f>[^:]+)::").f) catch "-"))})
-    | (map(select(.labels | index("claimed"))) | group_by(.file)
+  # (The REST listing, page by page: `gh issue list` with a label stops at 1,000 results.)
+  target=$(gh api --paginate "$api/issues?state=open&labels=$label&per_page=100" --jq '
+      .[] | select(.pull_request | not)
+      | {n: .number, labels: [.labels[].name],
+         file: ((.body // "") | (try (capture("<!-- sorry: (?<f>[^:]+)::").f) catch "-"))} | tojson' |
+    jq -rs '
+      (map(select(.labels | index("claimed"))) | group_by(.file)
        | map({key: .[0].file, value: length}) | from_entries) as $busy
-    | map(select(.labels | (index("claimed") or index("blocked") or index("stuck")) | not))
-    | sort_by([($busy[.file] // 0), .n]) | .[0].n // empty')
+      | map(select(.labels | (index("claimed") or index("blocked") or index("stuck")) | not))
+      | sort_by([($busy[.file] // 0), .n]) | .[0].n // empty')
   [ -n "$target" ] || { echo "no unclaimed $label issue" >&2; exit 1; }
 fi
 n=$target

@@ -285,7 +285,7 @@ def ratAdeleFundamentalDomain : Set 𝔸[ℚ] :=
 
 /-- Paper: Example A.2.1.3, pp. 545–546. The interval description agrees with the
 general adelic domain for the integral basis consisting of one. -/
-theorem ratAdeleFundamentalDomain_eq (b : Module.Basis Unit ℤ (𝓞 ℚ)) (hb : (b () : ℚ) = 1) :
+private theorem ratAdeleFundamentalDomain_eq (b : Module.Basis Unit ℤ (𝓞 ℚ)) (hb : (b () : ℚ) = 1) :
     ratAdeleFundamentalDomain = adeleFundamentalDomain ℚ b := by
   ext a
   change (_ ∈ Set.Ico (0 : ℝ) 1 ∧ _) ↔ (_ ∈ infiniteAdeleFundamentalDomain ℚ b ∧ _)

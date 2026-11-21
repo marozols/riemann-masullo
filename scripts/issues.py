@@ -21,6 +21,18 @@ def run(cmd, **kw):
     return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, **kw)
 
 
+def list_issues(state, label):
+    """All issues with a label, through the REST listing. `gh issue list` with a label goes
+    through GitHub's search, which stops at 1,000 results, and a truncated list of open proof
+    issues makes this script open duplicates."""
+    out = run(["gh", "api", "--paginate",
+               f"repos/{{owner}}/{{repo}}/issues?state={state}&labels={label}&per_page=100",
+               "--jq", ".[] | select(.pull_request | not) | {number, state, title, body} | tojson"])
+    if out.returncode:
+        sys.exit(out.stderr)
+    return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
+
+
 def sorries():
     out = run(["lake", "build", "RiemannMasullo"])
     if out.returncode:
@@ -53,8 +65,30 @@ def chapter_label(path):
     return m.group(1)[0].lower() + m.group(1)[1:] if m else None
 
 
+def at_main():
+    """Whether this checkout is at the tip of origin/main. Applying from an older commit would
+    close the issues of every `sorry` added since, and reopen those proved since."""
+    run(["git", "fetch", "-q", "origin", "main"])
+    head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+    tip = run(["git", "rev-parse", "origin/main"]).stdout.strip()
+    return head == tip, head[:7], tip[:7]
+
+
 def main():
     apply = "--apply" in sys.argv
+    if apply:
+        # The integrator and the merger may both run this, from different checkouts. One at a
+        # time, so that neither opens an issue the other has just opened.
+        import fcntl
+        common = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]).stdout.strip()
+        lockdir = pathlib.Path(common).parent / ".agent"
+        lockdir.mkdir(exist_ok=True)
+        global _lock
+        _lock = open(lockdir / "issues.lock", "w")
+        fcntl.flock(_lock, fcntl.LOCK_EX)
+        ok, head, tip = at_main()
+        if not ok:
+            sys.exit(f"this checkout is at {head} and origin/main is at {tip}: update it, then rerun")
     branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
     if branch != "main":
         print(f"note: on branch {branch}, not main", file=sys.stderr)
@@ -62,18 +96,18 @@ def main():
     full_sha = run(["git", "rev-parse", "HEAD"]).stdout.strip()
     url = run(["gh", "repo", "view", "--json", "url", "--jq", ".url"]).stdout.strip()
     current = sorries()
-    listing = run(["gh", "issue", "list", "--label", "proof", "--state", "open", "--limit", "5000",
-                   "--json", "number,body"])
-    if listing.returncode:
-        sys.exit(listing.stderr)
     open_issues = {}
-    for issue in json.loads(listing.stdout):
+    for issue in sorted(list_issues("open", "proof"), key=lambda i: -i["number"]):
         m = MARK.search(issue["body"] or "")
         if m:
-            open_issues[m.group(1)] = issue["number"]
+            open_issues[m.group(1)] = issue["number"]      # the oldest issue wins
 
     new = [k for k in current if k not in open_issues]
     stale = [k for k in open_issues if k not in current]
+    if apply and (new or stale):
+        ok, head, tip = at_main()
+        if not ok:
+            sys.exit(f"main moved to {tip} while this ran (checkout at {head}): update, then rerun")
     print(f"{len(current)} sorries at {sha}; {len(open_issues)} open proof issues; "
           f"{len(new)} to open, {len(stale)} to close")
     for key in new:
@@ -107,14 +141,12 @@ def main():
 
 def unblock(apply):
     """Remove `blocked` from open issues whose `<!-- needs: ... -->` issues are all closed."""
-    states = {i["number"]: i["state"] for i in json.loads(run(
-        ["gh", "issue", "list", "--state", "all", "--limit", "5000", "--json", "number,state"]).stdout)}
-    blocked = json.loads(run(["gh", "issue", "list", "--label", "blocked", "--state", "open",
-                              "--limit", "5000", "--json", "number,title,body"]).stdout)
+    states = {i["number"]: i["state"] for i in list_issues("all", "section")}
+    blocked = list_issues("open", "blocked")
     ready = []
     for issue in sorted(blocked, key=lambda i: i["number"]):
         m = re.search(r"<!-- needs:([\d\s]*)-->", issue["body"] or "")
-        if m and all(states.get(int(n)) == "CLOSED" for n in m.group(1).split()):
+        if m and all(states.get(int(n)) == "closed" for n in m.group(1).split()):
             ready.append(issue["number"])
             print(f"  unblock #{issue['number']}  {issue['title']}")
             if apply:
