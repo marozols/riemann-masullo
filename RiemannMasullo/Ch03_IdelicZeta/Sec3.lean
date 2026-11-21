@@ -198,7 +198,10 @@ local notation "finiteFourier(" v ")" => tamagawaFourier (finiteLocalAdditiveTam
 
 /-- Paper: Equation (3.3.1.3), p. 129. The normalized archimedean module is continuous. -/
 theorem continuous_infiniteLocalModule (w : InfinitePlace F) :
-    Continuous (infiniteNorm(w)) := by sorry
+    Continuous (infiniteNorm(w)) := by
+  change Continuous (fun x : w.Completionˣ ↦
+    Units.map nnNormHom.toMonoidHom x ^ InfinitePlace.mult w)
+  exact (continuous_nnNorm.units_map _).pow _
 
 /-- Paper: Equation (3.3.1.3), p. 129. The normalized finite-place module is continuous. -/
 theorem continuous_finiteLocalModule (v : Primes) :
