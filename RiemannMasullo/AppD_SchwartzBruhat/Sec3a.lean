@@ -275,8 +275,35 @@ theorem schwartzBergman_lp_generates (I : Set ℝ) (hI : IsOpen I) (hInt : OrdCo
     (ha : ∀ x : I, (∃ n, (a n : ℝ) < x) ∧ ∃ n, (x : ℝ) < a n)
     (p : ℝ≥0∞) (hp : 1 < p) (hp' : p < ⊤) :
     GeneratesLpSeminorms volume p
-      (fun (i : ℕ × ℕ) (f : SchwartzBergman I) ↦ weightedVerticalTrace (a i.1) i.2 f.val) :=
-  by sorry
+      (fun (i : ℕ × ℕ) (f : SchwartzBergman I) ↦ weightedVerticalTrace (a i.1) i.2 f.val) := by
+  let : Fact (1 ≤ p) := ⟨hp.le⟩
+  let q := ENNReal.conjExponent p
+  have hq : 1 < q := (ENNReal.HolderConjugate.lt_top_iff_one_lt p q).mp hp'
+  have hq' : q < ⊤ := (ENNReal.HolderConjugate.lt_top_iff_one_lt q p).mpr hp
+  let P : SeminormFamily ℂ (SchwartzBergman I) (ℕ × ℕ) := fun i ↦ bergmanLpSeminorm hI hInt p (a i.1) i.2
+  have hmem (i : ℕ × ℕ) (f : SchwartzBergman I) := schwartzBergman_trace_memLp I (a i.1) p hp hp' i.2 f
+  refine ⟨hmem, P, ?_, ?_⟩
+  · have hc (i : ℕ × ℕ) : Continuous (P i) :=
+      ((weightedSchwartzLp (a i.1) i.2 p).continuous.comp (continuous_bergmanLine hI hInt (a i.1))).norm
+    let t : TopologicalSpace (SchwartzBergman I) := inferInstance
+    let u := P.moduleFilterBasis.topology
+    have hP : WithSeminorms (topology := u) P := ⟨rfl⟩
+    refine WithSeminorms.mk (topology := t) ?_
+    change t = u
+    apply le_antisymm
+    · exact le_topology_withSeminorms (t := t) hP hc
+    · have h2 := bergman_with_l2 hI hInt
+      let : TopologicalSpace (SchwartzBergman I) := u
+      let : IsTopologicalAddGroup (SchwartzBergman I) := hP.isTopologicalAddGroup
+      apply le_topology_withSeminorms (t := u) h2
+      rintro ⟨s,k⟩
+      obtain ⟨⟨j,hj⟩, m, hm⟩ := ha s
+      have hs := continuous_bergmanLine_of_bracketing (t := u) hI hInt s (a j) (a m) hj hm p q
+        hp hp' hq hq' (fun k ↦ hP.continuous_seminorm (j,k)) (fun k ↦ hP.continuous_seminorm (m,k))
+      exact ((weightedSchwartzLp s k 2).continuous.comp hs).norm
+  · intro i f
+    dsimp only [P]
+    rw [bergmanLpSeminorm_apply, ← toReal_eLpNorm, ENNReal.ofReal_toReal (hmem i f).eLpNorm_ne_top]
 
 /-- Paper: Lemma D.3.1.2, p. 799. The topology also comes from taking the
 Schwartz restriction to each vertical line. -/
