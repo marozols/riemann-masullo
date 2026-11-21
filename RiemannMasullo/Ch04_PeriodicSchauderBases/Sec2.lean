@@ -1005,11 +1005,112 @@ theorem positiveRealExponentialDecay_liftsBoundedSets (M : Submodule ℂ E)
 
 end Kernel
 
+private abbrev CircleBoundedSet := {B : Set S // IsVonNBounded ℂ B}
+
+private def circleTestSeminorm (B : CircleBoundedSet) : Seminorm ℂ (StrongDual ℂ S) :=
+  mappingSeminorm B ⟨normSeminorm ℂ ℂ, continuous_norm⟩
+
+section
+
+local instance circleSchwartzT2 : T2Space S := elementarySchwartz_t2
+
+private theorem circleDual_withSeminorms :
+    WithSeminorms (fun i : CircleBoundedSet × Unit ↦ circleTestSeminorm i.1) := by
+  let B : Set (Set S) := {B | IsVonNBounded ℂ B}
+  have hd : Dense (Submodule.span ℂ (⋃₀ B) : Set S) := by
+    rw [show ⋃₀ B = univ from sUnion_isVonNBounded_eq_univ]
+    simp
+  exact uniformConvergenceCLM_withSeminorms B (fun _ h ↦ h) hd _ (norm_withSeminorms ℂ ℂ)
+
+private theorem circleFourierWeight_pos (m : ℤ) : 0 < unitCircleFourierWeight m := by
+  by_cases hm : m = 0
+  · simp [hm, unitCircleFourierWeight]
+  · have h : (m : ℝ) ≠ 0 := by exact_mod_cast hm
+    simp only [unitCircleFourierWeight, hm, ↓reduceIte, zero_add]
+    positivity
+
+private def scaledCircleFourierTerm (m : ℤ) (f : S) : S :=
+  ((unitCircleFourierWeight m : ℂ)⁻¹) • (cyclicFourierCoeff m f • cyclicExponential m)
+
+/-- Normalizing the Fourier projections by their summable weight carries a bounded
+test set into another bounded test set, uniformly in the frequency. -/
+private def circleFourierTestSet (B : CircleBoundedSet) : CircleBoundedSet := by
+  refine ⟨range (fun t : ℤ × B.val ↦ scaledCircleFourierTerm t.1 t.2.val), ?_⟩
+  apply (PolynormableSpace.withSeminorms ℂ S).isVonNBounded_iff_seminorm_bounded.mpr
+  rintro ⟨q, hq⟩
+  obtain ⟨Q, hQ, h⟩ := exists_circleFourier_term_bound q hq
+  obtain ⟨R, hR, hB⟩ := (PolynormableSpace.withSeminorms ℂ S).isVonNBounded_iff_seminorm_bounded.mp B.property ⟨Q, hQ⟩
+  refine ⟨R + 1, by positivity, ?_⟩
+  rintro _ ⟨⟨m, f⟩, rfl⟩
+  change q (scaledCircleFourierTerm m f.val) < R + 1
+  rw [scaledCircleFourierTerm, map_smul_eq_mul, norm_inv, Complex.norm_real, Real.norm_eq_abs, abs_of_pos (circleFourierWeight_pos m)]
+  have ht := (inv_mul_le_iff₀ (circleFourierWeight_pos m)).mpr (h f m)
+  exact ht.trans_lt ((hB f f.property).trans (lt_add_one _))
+
+private theorem circleTestSeminorm_ge (B : CircleBoundedSet)
+    (l : StrongDual ℂ S) (f : B.val) : ‖l f.val‖ ≤ circleTestSeminorm B l := by
+  rw [circleTestSeminorm, mappingSeminorm_apply]
+  obtain ⟨r, _, hr⟩ := ((PolynormableSpace.withSeminorms ℂ ℂ).image_isVonNBounded_iff_seminorm_bounded l).mp
+    (B.property.image l) ⟨normSeminorm ℂ ℂ, continuous_norm⟩
+  exact le_ciSup (f := fun x : B.val ↦ ‖l x.val‖) ⟨r, forall_mem_range.mpr fun x ↦ (hr x.val x.property).le⟩ f
+
+private theorem circleTestSeminorm_fourier_le (B : CircleBoundedSet)
+    (l : StrongDual ℂ S) (m : ℤ) :
+    circleTestSeminorm B (l (cyclicExponential m) • cyclicFourierCoeff m) ≤
+      unitCircleFourierWeight m * circleTestSeminorm (circleFourierTestSet B) l := by
+  rw [circleTestSeminorm, mappingSeminorm_apply]
+  apply Real.iSup_le _ (mul_nonneg (circleFourierWeight_pos m).le (apply_nonneg _ _))
+  intro f
+  have hy : scaledCircleFourierTerm m f.val ∈ (circleFourierTestSet B).val :=
+    mem_range_self (⟨m, f⟩ : ℤ × B.val)
+  have h := circleTestSeminorm_ge (circleFourierTestSet B) l ⟨_, hy⟩
+  change ‖l (scaledCircleFourierTerm m f.val)‖ ≤ _ at h
+  rw [scaledCircleFourierTerm, map_smul, norm_smul, norm_inv, Complex.norm_real,
+    Real.norm_eq_abs, abs_of_pos (circleFourierWeight_pos m), map_smul, smul_eq_mul, mul_comm (cyclicFourierCoeff m f.val)] at h
+  exact (inv_mul_le_iff₀ (circleFourierWeight_pos m)).mp h
+
+end
+
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient basis of the
 strong dual is absolute, with coordinates given by evaluation on the monomials. -/
 theorem cyclicFourierCoeff_absolute :
     SchauderBasis.IsAbsolute (cyclicFourierCoeff ∘ freq)
-      (fun n ↦ ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (cyclicExponential (freq n))) := by sorry
+      (fun n ↦ ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (cyclicExponential (freq n))) := by
+  classical
+  intro p hp
+  obtain ⟨s, C, _, hC⟩ := Seminorm.bound_sum_of_continuous circleDual_withSeminorms p hp
+  let Q : Seminorm ℂ (StrongDual ℂ S) := C • ∑ i ∈ s, circleTestSeminorm (circleFourierTestSet i.1)
+  have hQ : Continuous Q := (Seminorm.continuous_finsetSum (s := s) fun i _ ↦
+    circleDual_withSeminorms.continuous_seminorm (circleFourierTestSet i.1, ())).const_smul C
+  let W : NNReal := Real.toNNReal (∑' m : ℤ, unitCircleFourierWeight m)
+  have hW : (W : ℝ) = ∑' m : ℤ, unitCircleFourierWeight m :=
+    Real.coe_toNNReal _ (tsum_nonneg unitCircleFourierWeight_nonneg)
+  refine ⟨W • Q, hQ.const_smul W, fun l ↦ ?_⟩
+  let t (m : ℤ) := l (cyclicExponential m) • cyclicFourierCoeff m
+  have evalSum (a : Finset (CircleBoundedSet × Unit)) (r : CircleBoundedSet × Unit → Seminorm ℂ (StrongDual ℂ S))
+      (g : StrongDual ℂ S) : (∑ i ∈ a, r i) g = ∑ i ∈ a, r i g := by
+    induction a using Finset.induction_on with
+    | empty => simp
+    | insert i a hi ih => rw [Finset.sum_insert hi, Finset.sum_insert hi, add_apply, ih]
+  have ht (m : ℤ) : p (t m) ≤ unitCircleFourierWeight m * Q l := by
+    refine (hC (t m)).trans ?_
+    change (C : ℝ) * (∑ i ∈ s, circleTestSeminorm i.1) (t m) ≤
+      unitCircleFourierWeight m * ((C : ℝ) * (∑ i ∈ s, circleTestSeminorm (circleFourierTestSet i.1)) l)
+    rw [evalSum, evalSum]
+    calc
+      _ ≤ (C : ℝ) * ∑ i ∈ s, unitCircleFourierWeight m * circleTestSeminorm (circleFourierTestSet i.1) l :=
+        mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun i _ ↦ circleTestSeminorm_fourier_le i.1 l m) C.coe_nonneg
+      _ = _ := by rw [← Finset.mul_sum]; ring
+  let e := Equiv.intEquivNat.symm
+  have hs := summable_unitCircleFourierWeight.mul_right (Q l)
+  have htS : Summable fun m : ℤ ↦ p (t m) := .of_nonneg_of_le (fun m ↦ apply_nonneg _ _) ht hs
+  refine ⟨e.summable_iff.mpr htS, ?_⟩
+  change (∑' n : ℕ, p (t (e n))) ≤ (W • Q) l
+  rw [e.tsum_eq (fun m ↦ p (t m))]
+  refine (htS.tsum_le_tsum ht hs).trans_eq ?_
+  rw [tsum_mul_right]
+  change _ = (W : ℝ) * Q l
+  rw [hW]
 
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals
 are bounded in the strong dual. -/
