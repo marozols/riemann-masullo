@@ -674,10 +674,36 @@ theorem cyclicFourierCoeff_absolute :
     SchauderBasis.IsAbsolute (cyclicFourierCoeff ∘ freq)
       (fun n ↦ ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (cyclicExponential (freq n))) := by sorry
 
+private theorem norm_cyclicFourierCoeff_le (m : ℤ) (f : S) :
+    ‖cyclicFourierCoeff m f‖ ≤ elementarySchwartzSeminorm (jetIndex 0) f := by
+  let J := circleJetLM 0 f
+  have he (z : T) : J z = f (point z) := by
+    obtain ⟨x, rfl⟩ := QuotientAddGroup.mk_surjective z
+    change iteratedDeriv 0 (fun y : ℝ ↦ circleRestriction f y) x = _
+    rw [iteratedDeriv_zero]
+    rfl
+  have hb (z : T) : ‖f (point z)‖ ≤ ‖J‖ := he z ▸ J.norm_coe_le_norm z
+  have h := norm_integral_le_of_norm_le_const (μ := (AddCircle.haarAddCircle : Measure T))
+    (f := fun z : T ↦ fourier (-m) z • f (point z))
+    (ae_of_all _ fun z ↦ by simpa only [norm_smul, fourier_apply, Circle.norm_coe, one_mul] using hb z)
+  calc
+    _ ≤ ‖J‖ := by
+      change ‖∫ z : T, fourier (-m) z • f (point z) ∂AddCircle.haarAddCircle‖ ≤ _
+      simpa only [Measure.real, measure_univ, ENNReal.toReal_one, mul_one] using h
+    _ = _ := (circleSeminorm_eq_jetNorm (jetIndex 0) f).symm
+
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals
 are bounded in the strong dual. -/
 theorem cyclicFourierCoeff_bounded :
-    IsVonNBounded ℂ (range cyclicFourierCoeff) := by sorry
+    IsVonNBounded ℂ (range cyclicFourierCoeff) := by
+  apply ContinuousLinearMap.isVonNBounded_iff.mpr
+  intro B hB
+  obtain ⟨C, _, hC⟩ := (withGeneratingSeminorms_spec _ _).isVonNBounded_iff_seminorm_bounded.mp hB (jetIndex 0)
+  apply (NormedSpace.isVonNBounded_iff ℂ).mpr
+  apply (isBounded_iff_forall_norm_le).2
+  refine ⟨C, ?_⟩
+  rintro _ ⟨_, ⟨m, rfl⟩, f, hf, rfl⟩
+  exact (norm_cyclicFourierCoeff_le m f).trans (hC f hf).le
 
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals are
 equicontinuous as maps on the circle Schwartz space. -/
