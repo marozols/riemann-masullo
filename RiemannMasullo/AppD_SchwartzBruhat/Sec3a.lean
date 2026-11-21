@@ -2,6 +2,8 @@ module
 
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec2b
 import Mathlib.Analysis.Complex.Liouville
+import Mathlib.Analysis.Complex.RealDeriv
+import RiemannMasullo.ForMathlib.Analysis.Complex.VerticalCauchyIntegral
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
 import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
@@ -266,6 +268,262 @@ abbrev SchwartzBergman (I : Set ℝ) :=
         (eLpNorm (weightedVerticalTrace i.1 i.2 f.val) 2 volume).toReal)
       (schwartzBergman_l2_seminorm I i).1 (schwartzBergman_l2_seminorm I i).2)
 
+section VerticalTraces
+
+local notation "linePoint" => (fun (x y : ℝ) ↦ (x : ℂ) + y * Complex.I)
+
+private theorem exists_bracketing_lines {I : Set ℝ} (hI : IsOpen I) (a : I) :
+    ∃ l r : I, (l : ℝ) < a ∧ (a : ℝ) < r := by
+  obtain ⟨u, v, hav, huv⟩ := mem_nhds_iff_exists_Ioo_subset.mp (hI.mem_nhds a.property)
+  obtain ⟨l, hul, hla⟩ := exists_between hav.1
+  obtain ⟨r, har, hrv⟩ := exists_between hav.2
+  exact ⟨⟨l, huv ⟨hul, hla.trans hav.2⟩⟩, ⟨r, huv ⟨hav.1.trans har, hrv⟩⟩, hla, har⟩
+
+/-- Weighted values inside the strip are bounded by the two boundary trace norms. -/
+private theorem bergman_interior_lp_bound {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (l r : I) (p q : ℝ≥0∞) [ENNReal.HolderTriple p q 1]
+    (hp : 1 < p) (hp' : p < ⊤) (hq : 1 < q) (hq' : q < ⊤) {δ : ℝ} (hδ : 0 < δ) :
+    ∃ D ≥ (0 : ℝ), ∀ (k : ℕ) (f : schwartzBergmanSubmodule I) (z : ℂ),
+      (l : ℝ) + δ ≤ z.re → z.re ≤ (r : ℝ) - δ →
+        ‖z ^ k * f.val z‖ ≤ D * (lpNorm (weightedVerticalTrace l k f.val) p volume +
+          lpNorm (weightedVerticalTrace r k f.val) p volume) := by
+  obtain ⟨C, hC, hkernel⟩ := verticalCauchy_lpBound p q hq hq' hδ
+  refine ⟨C / (2 * Real.pi), by positivity, ?_⟩
+  intro k f z hl hr
+  have hlz : (l : ℝ) < z.re := by linarith
+  have hzr : z.re < (r : ℝ) := by linarith
+  obtain ⟨a, _, hal, _⟩ := exists_bracketing_lines hI l
+  obtain ⟨_, b, _, hrb⟩ := exists_bracketing_lines hI r
+  let F (w : ℂ) := w ^ k * f.val w
+  have hF : DifferentiableOn ℂ F (Complex.re ⁻¹' Ioo (a : ℝ) (b : ℝ)) :=
+    (differentiableOn_id.pow k).mul (f.property.2.1.mono
+      (preimage_mono (Ioo_subset_Icc_self.trans (hInt.out a.property b.property))))
+  obtain ⟨M, hM⟩ := f.property.2.2 l r (hlz.trans hzr).le (hInt.out l.property r.property) (k+1)
+  have hdec : ∀ᶠ y : ℝ in comap abs atTop, ∀ x ∈ Icc (l : ℝ) r, ‖F (linePoint x y)‖ ≤ max M 0 / |y| := by
+    have ht : Tendsto (abs : ℝ → ℝ) (comap abs atTop) atTop := tendsto_comap
+    filter_upwards [ht.eventually (eventually_gt_atTop 0)] with y hy
+    intro x hx
+    let w := linePoint x y
+    have hw : w ∈ Complex.re ⁻¹' Icc (l : ℝ) r := by simpa [w] using hx
+    have him : |y| ≤ ‖w‖ := by simpa [w] using Complex.abs_im_le_norm w
+    apply (le_div_iff₀ hy).mpr
+    calc ‖F w‖ * |y| ≤ ‖F w‖ * ‖w‖ := mul_le_mul_of_nonneg_left him (norm_nonneg _)
+      _ = ‖w ^ (k+1) * f.val w‖ := by simp only [F, pow_succ, ← norm_mul]; congr 1; ring
+      _ ≤ max M 0 := (hM ⟨w, hw, rfl⟩).trans (le_max_left _ _)
+  have hL := hkernel (σ := (l : ℝ)) (z := z) (by rw [abs_of_neg (sub_neg.mpr hlz)]; linarith)
+    (schwartzBergman_trace_memLp I l p hp hp' k f)
+  have hR := hkernel (σ := (r : ℝ)) (z := z) (by rw [abs_of_pos (sub_pos.mpr hzr)]; linarith)
+    (schwartzBergman_trace_memLp I r p hp hp' k f)
+  have eq := verticalCauchyIntegral_sub_eq hF hal hrb ⟨hlz,hzr⟩ (le_max_right M 0) hdec hL.1 hR.1
+  have hb := (norm_sub_le _ _).trans (add_le_add hR.2 hL.2)
+  have hb' := (congrArg norm eq.symm).le.trans hb
+  rw [norm_mul, norm_mul, Complex.norm_real, Real.norm_of_nonneg Real.pi_pos.le] at hb'
+  norm_num at hb'
+  change ‖F z‖ ≤ _
+  rw [div_mul_eq_mul_div]
+  apply (le_div_iff₀ (show 0 < 2 * Real.pi by positivity)).mpr
+  calc ‖F z‖ * (2 * Real.pi) ≤ C * lpNorm (weightedVerticalTrace r k f.val) p volume +
+        C * lpNorm (weightedVerticalTrace l k f.val) p volume := by simpa only [mul_comm ‖F z‖] using hb'
+    _ = _ := by ring
+
+/-- Differentiating a holomorphic function along a vertical trace introduces a factor of i. -/
+private theorem hasDerivAt_vertical_iterate {I : Set ℝ} (hI : IsOpen I) (a : I)
+    {f : ℂ → ℂ} (hf : DifferentiableOn ℂ f (Complex.re ⁻¹' I)) (n : ℕ) (x : ℝ) :
+    HasDerivAt (fun y : ℝ ↦ Complex.I ^ n * iteratedDeriv n f (linePoint a y))
+      (Complex.I ^ (n+1) * iteratedDeriv (n+1) f (linePoint a x)) x := by
+  have hU := hI.preimage Complex.continuous_re
+  have han : ∀ m, AnalyticOnNhd ℂ (iteratedDeriv m f) (Complex.re ⁻¹' I) := by
+    intro m
+    induction m with
+    | zero => simpa using hf.analyticOnNhd hU
+    | succ m ih => rw [iteratedDeriv_succ]; exact fun z hz ↦ (ih z hz).deriv
+  have hd := (han n _ (show linePoint a x ∈ Complex.re ⁻¹' I by simp)).differentiableAt.hasDerivAt
+  have hline : HasDerivAt (fun w : ℂ ↦ (a.val : ℂ) + w * Complex.I) Complex.I (x : ℂ) := by
+    simpa using (((hasDerivAt_id (x : ℂ)).mul_const Complex.I).const_add (a.val : ℂ))
+  have h := ((hd.comp (x : ℂ) hline).comp_ofReal).const_mul (Complex.I ^ n)
+  simpa only [Function.comp_apply, iteratedDeriv_succ, pow_succ, mul_left_comm,
+    mul_assoc, mul_comm (deriv _ _)] using h
+
+private theorem iteratedDeriv_vertical {I : Set ℝ} (hI : IsOpen I) (a : I)
+    {f : ℂ → ℂ} (hf : DifferentiableOn ℂ f (Complex.re ⁻¹' I)) (n : ℕ) :
+    iteratedDeriv n (fun y : ℝ ↦ f (linePoint a y)) =
+      fun y ↦ Complex.I ^ n * iteratedDeriv n f (linePoint a y) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [iteratedDeriv_succ, ih]
+    funext x
+    exact (hasDerivAt_vertical_iterate hI a hf n x).deriv
+
+/-- Both neighboring trace norms control each Schwartz seminorm on the intermediate line. -/
+private theorem bergman_line_lp_bound {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (l a r : I) (hl : (l : ℝ) < a) (hr : (a : ℝ) < r)
+    (p q : ℝ≥0∞) [ENNReal.HolderTriple p q 1] (hp : 1 < p) (hp' : p < ⊤)
+    (hq : 1 < q) (hq' : q < ⊤) (k n : ℕ) :
+    ∃ C ≥ (0 : ℝ), ∀ (f : schwartzBergmanSubmodule I) (y : ℝ),
+      |y| ^ k * ‖iteratedDeriv n (fun u : ℝ ↦ f.val (linePoint a u)) y‖ ≤
+        C * (lpNorm (weightedVerticalTrace l k f.val) p volume +
+          lpNorm (weightedVerticalTrace r k f.val) p volume) := by
+  let d := min ((a : ℝ) - l) ((r : ℝ) - a) / 2
+  have hd : 0 < d := by dsimp [d]; positivity
+  have hl' : (l : ℝ) + 2 * d ≤ a := by dsimp [d]; linarith [min_le_left ((a : ℝ) - l) ((r : ℝ) - a)]
+  have hr' : (a : ℝ) + 2 * d ≤ r := by dsimp [d]; linarith [min_le_right ((a : ℝ) - l) ((r : ℝ) - a)]
+  obtain ⟨D, hD, hbound⟩ := bergman_interior_lp_bound hI hInt l r p q hp hp' hq hq' hd
+  refine ⟨n.factorial * (2 ^ k * D) / (d/4)^n, by positivity, ?_⟩
+  intro f y
+  let z := linePoint a y
+  have hre : z.re = a := by simp [z]
+  let Q := lpNorm (weightedVerticalTrace l k f.val) p volume + lpNorm (weightedVerticalTrace r k f.val) p volume
+  have hQ : 0 ≤ Q := add_nonneg lpNorm_nonneg lpNorm_nonneg
+  obtain ⟨R, hRlo, hRhi, hweight⟩ : ∃ R : ℝ, d/4 ≤ R ∧ R ≤ d ∧
+      ∀ w ∈ Metric.sphere z R, ‖z‖ ≤ 2 * ‖w‖ := by
+    by_cases hz : ‖z‖ ≤ d/2
+    · refine ⟨d, by linarith, le_rfl, ?_⟩
+      intro w hw
+      have ht := dist_le_norm_add_norm w z
+      rw [Metric.mem_sphere.mp hw] at ht
+      linarith
+    · refine ⟨d/4, le_rfl, by linarith, ?_⟩
+      intro w hw
+      have ht := norm_sub_norm_le z w
+      rw [← dist_eq_norm, dist_comm, Metric.mem_sphere.mp hw] at ht
+      linarith
+  have hstrip {w : ℂ} (hw : w ∈ Metric.closedBall z R) :
+      (l : ℝ) + d ≤ w.re ∧ w.re ≤ (r : ℝ) - d := by
+    have h := (Complex.abs_re_le_norm (w-z)).trans (mem_closedBall_iff_norm.mp hw)
+    rw [Complex.sub_re, hre, abs_le] at h
+    constructor <;> linarith [h.1, h.2]
+  have hdiff := (f.property.2.1.const_mul (z ^ k)).diffContOnCl_ball (c := z) (R := R)
+    (fun w hw ↦ hInt.out l.property r.property ⟨by linarith [(hstrip hw).1], by linarith [(hstrip hw).2]⟩)
+  have hcircle (w : ℂ) (hw : w ∈ Metric.sphere z R) : ‖z ^ k * f.val w‖ ≤ 2 ^ k * (D * Q) := by
+    have hs := hstrip (Metric.sphere_subset_closedBall hw)
+    calc ‖z ^ k * f.val w‖ = ‖z‖ ^ k * ‖f.val w‖ := by rw [norm_mul, norm_pow]
+      _ ≤ (2 * ‖w‖)^k * ‖f.val w‖ := by gcongr; exact hweight w hw
+      _ = 2 ^ k * ‖w ^ k * f.val w‖ := by rw [mul_pow, norm_mul, norm_pow, mul_assoc]
+      _ ≤ _ := mul_le_mul_of_nonneg_left (hbound k f w hs.1 hs.2) (by positivity)
+  have hest := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le n (by linarith : 0 < R) hdiff hcircle
+  rw [iteratedDeriv_const_mul_field, norm_mul, norm_pow] at hest
+  rw [iteratedDeriv_vertical hI a f.property.2.1, norm_mul, norm_pow, Complex.norm_I, one_pow, one_mul]
+  calc |y| ^ k * ‖iteratedDeriv n f.val z‖ ≤ ‖z‖ ^ k * ‖iteratedDeriv n f.val z‖ := by
+        gcongr
+        simpa [z] using Complex.abs_im_le_norm z
+    _ ≤ _ := hest
+    _ ≤ n.factorial * (2 ^ k * (D * Q)) / (d/4)^n := div_le_div_of_nonneg_left
+      (by positivity) (by positivity) (pow_le_pow_left₀ (by positivity) hRlo n)
+    _ = _ := by dsimp only [Q]; ring
+
+/-- Paper: Lemma D.3.1.2, p. 799. Restriction to a vertical line as a real Schwartz function. -/
+private def bergmanLine {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (a : I) : SchwartzBergman I →ₗ[ℂ] 𝓢(ℝ, ℂ) where
+  toFun f := {
+    toFun := fun x ↦ f.val (linePoint a x)
+    smooth' := by
+      apply contDiff_of_differentiable_iteratedDeriv
+      intro n _ x
+      rw [iteratedDeriv_vertical hI a f.property.2.1]
+      exact (hasDerivAt_vertical_iterate hI a f.property.2.1 n x).differentiableAt
+    decay' := by
+      intro k n
+      obtain ⟨l, r, hl, hr⟩ := exists_bracketing_lines hI a
+      obtain ⟨C, _, h⟩ := bergman_line_lp_bound hI hInt l a r hl hr 2 2
+        (by norm_num) (by norm_num) (by norm_num) (by norm_num) k n
+      exact ⟨_, fun x ↦ by simpa only [norm_iteratedFDeriv_eq_norm_iteratedDeriv, Real.norm_eq_abs] using h f x⟩ }
+  map_add' _ _ := by ext; rfl
+  map_smul' _ _ := by ext; rfl
+
+/-- Multiply a Schwartz function by the vertical polynomial weight and include it in Lᵖ. -/
+private def weightedSchwartzLp (a : ℝ) (k : ℕ) (p : ℝ≥0∞) [Fact (1 ≤ p)] :
+    𝓢(ℝ, ℂ) →L[ℂ] Lp ℂ p (volume : Measure ℝ) :=
+  (SchwartzMap.toLpCLM ℂ ℂ p volume).comp (SchwartzMap.smulLeftCLM ℂ fun y : ℝ ↦ (linePoint a y)^k)
+
+/-- Paper: (D.3.1.7), p. 799. The weighted Lᵖ norm of the trace on a single line. -/
+private def bergmanLpSeminorm {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (p : ℝ≥0∞) [Fact (1 ≤ p)] (a : I) (k : ℕ) : Seminorm ℂ (SchwartzBergman I) :=
+  (normSeminorm ℂ _).comp ((weightedSchwartzLp a k p).toLinearMap.comp (bergmanLine hI hInt a))
+
+private theorem bergmanLpSeminorm_apply {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (p : ℝ≥0∞) [Fact (1 ≤ p)] (a : I) (k : ℕ) (f : SchwartzBergman I) :
+    bergmanLpSeminorm hI hInt p a k f = lpNorm (weightedVerticalTrace a k f.val) p volume := by
+  change ‖((SchwartzMap.smulLeftCLM ℂ (fun y : ℝ ↦ (linePoint a y)^k)) (bergmanLine hI hInt a f)).toLp p volume‖ = _
+  rw [SchwartzMap.norm_toLp, toReal_eLpNorm]
+  congr 1
+  have hg : (fun y : ℝ ↦ (linePoint a y) ^ k).HasTemperateGrowth := by fun_prop
+  rw [SchwartzMap.smulLeftCLM_apply hg]
+  rfl
+
+private theorem bergman_with_l2 {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I) :
+    WithSeminorms (fun i : I × ℕ ↦ bergmanLpSeminorm hI hInt 2 i.1 i.2) := by
+  let P : I × ℕ → Seminorm ℂ (SchwartzBergman I) := fun i ↦ Seminorm.of
+      (fun f : schwartzBergmanSubmodule I ↦ (eLpNorm (weightedVerticalTrace i.1 i.2 f.val) 2 volume).toReal)
+      (schwartzBergman_l2_seminorm I i).1 (schwartzBergman_l2_seminorm I i).2
+  have heq : (fun i : I × ℕ ↦ bergmanLpSeminorm hI hInt 2 i.1 i.2) = P := by
+    funext i
+    ext f
+    exact bergmanLpSeminorm_apply hI hInt 2 i.1 i.2 f
+  rw [heq]
+  exact withGeneratingSeminorms_spec (schwartzBergmanSubmodule I) P
+
+private theorem continuous_bergmanLine_of_bracketing {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (a l r : I) (hl : (l : ℝ) < a) (hr : (a : ℝ) < r)
+    (p q : ℝ≥0∞) [Fact (1 ≤ p)] [ENNReal.HolderTriple p q 1]
+    (hp : 1 < p) (hp' : p < ⊤) (hq : 1 < q) (hq' : q < ⊤)
+    [t : TopologicalSpace (SchwartzBergman I)] [IsTopologicalAddGroup (SchwartzBergman I)]
+    (hL : ∀ k, Continuous (bergmanLpSeminorm hI hInt p l k))
+    (hR : ∀ k, Continuous (bergmanLpSeminorm hI hInt p r k)) :
+    Continuous (bergmanLine hI hInt a) := by
+  apply (schwartz_withSeminorms ℂ ℝ ℂ).continuous_of_continuous_comp
+  rintro ⟨k,n⟩
+  obtain ⟨C, hC, hb⟩ := bergman_line_lp_bound hI hInt l a r hl hr p q hp hp' hq hq' k n
+  let c : ℝ≥0 := ⟨C,hC⟩
+  apply Seminorm.continuous_of_le (q := c • (bergmanLpSeminorm hI hInt p l k + bergmanLpSeminorm hI hInt p r k))
+    (((hL k).add (hR k)).const_smul c)
+  intro f
+  change SchwartzMap.seminorm ℂ k n (bergmanLine hI hInt a f) ≤
+    C * (bergmanLpSeminorm hI hInt p l k f + bergmanLpSeminorm hI hInt p r k f)
+  rw [bergmanLpSeminorm_apply, bergmanLpSeminorm_apply]
+  apply SchwartzMap.seminorm_le_bound' _ _ _ _ (mul_nonneg hC (add_nonneg lpNorm_nonneg lpNorm_nonneg))
+  exact hb f
+
+private theorem continuous_bergmanLine {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I)
+    (a : I) : Continuous (bergmanLine hI hInt a) := by
+  obtain ⟨l, r, hl, hr⟩ := exists_bracketing_lines hI a
+  have hc := (bergman_with_l2 hI hInt).continuous_seminorm
+  exact continuous_bergmanLine_of_bracketing hI hInt a l r hl hr 2 2 (by norm_num)
+    (by norm_num) (by norm_num) (by norm_num) (fun k ↦ hc (l,k)) (fun k ↦ hc (r,k))
+
+private theorem le_topology_withSeminorms {E ι : Type*} [AddCommGroup E] [Module ℂ E]
+    [t : TopologicalSpace E] [IsTopologicalAddGroup E] {u : TopologicalSpace E}
+    {P : ι → Seminorm ℂ E} (hP : WithSeminorms (topology := u) P)
+    (hc : ∀ i, Continuous[t, _] (P i)) : t ≤ u :=
+  continuous_id_iff_le.mp (@WithSeminorms.continuous_of_continuous_comp ℂ ℂ E E ι
+    _ _ _ _ _ _ (RingHom.id ℂ) _ P t _ u hP (LinearMap.id (R := ℂ)) hc)
+
+private theorem bergman_embedding {I : Set ℝ} (hI : IsOpen I) (hInt : OrdConnected I) :
+    IsEmbedding (fun (f : SchwartzBergman I) (a : I) ↦ bergmanLine hI hInt a f) := by
+  let T := LinearMap.pi (bergmanLine hI hInt)
+  change IsEmbedding T
+  have hcont : Continuous T := continuous_pi (continuous_bergmanLine hI hInt)
+  refine ⟨⟨le_antisymm (continuous_iff_le_induced.mp hcont) ?_⟩, ?_⟩
+  · let t := TopologicalSpace.induced T inferInstance
+    have hT : Continuous[t, _] T := continuous_induced_dom
+    have hprod := withSeminorms_pi fun _ : I ↦ schwartz_withSeminorms ℂ ℝ ℂ
+    have hsource := bergman_with_l2 hI hInt
+    let : TopologicalSpace (SchwartzBergman I) := t
+    let : IsTopologicalAddGroup (SchwartzBergman I) := (T.withSeminorms_induced hprod).isTopologicalAddGroup
+    apply le_topology_withSeminorms (t := t) hsource
+    rintro ⟨a,k⟩
+    exact ((weightedSchwartzLp a k 2).continuous.comp ((continuous_apply a).comp hT)).norm
+  · intro f g h
+    apply Subtype.ext
+    funext z
+    by_cases hz : z.re ∈ I
+    · have eq := congrArg (fun v : 𝓢(ℝ, ℂ) ↦ v z.im) (congrFun h ⟨z.re, hz⟩)
+      change f.val (linePoint z.re z.im) = g.val (linePoint z.re z.im) at eq
+      simpa only [Complex.re_add_im] using eq
+    · exact (f.property.1 hz).trans (g.property.1 hz).symm
+
+end VerticalTraces
+
 /-- Paper: Lemma D.3.1.2, p. 799. Weighted Lᵖ norms on a sequence of lines
 reaching both ends of the interval generate the Schwartz–Bergman topology.
 Deviation: The endpoint condition is expressed by bracketing every real point of I. -/
@@ -283,7 +541,11 @@ theorem schwartzBergman_schwartzLine_topology (I : Set ℝ) (hI : IsOpen I)
     (hInt : OrdConnected I) (hne : I.Nonempty) :
     ∃ T : SchwartzBergman I → (I → 𝓢(ℝ, ℂ)),
       (∀ f (a : I) x, T f a x = weightedVerticalTrace a 0 f.val x) ∧ IsEmbedding T :=
-  by sorry
+  by
+    refine ⟨fun f a ↦ bergmanLine hI hInt a f, ?_, bergman_embedding hI hInt⟩
+    intro f a x
+    simp only [weightedVerticalTrace, pow_zero, one_mul]
+    rfl
 
 /-- Paper: Lemma D.3.1.2, p. 799. The Schwartz–Bergman space is Fréchet. -/
 theorem schwartzBergman_frechet (I : Set ℝ) (hI : IsOpen I) (hInt : OrdConnected I)

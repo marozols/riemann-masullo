@@ -3,6 +3,8 @@ module
 public import Mathlib.Analysis.Calculus.ParametricIntegral
 public import Mathlib.Analysis.Complex.RemovableSingularity
 public import Mathlib.Analysis.MellinTransform
+public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.Analysis.SpecialFunctions.JapaneseBracket
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 
 /-!
@@ -209,5 +211,65 @@ theorem hasDerivAt_verticalCauchyIntegral {Φ : ℂ → ℂ} {z : ℂ} {σ : ℝ
       push_cast
       field_simp [hne]
       ring
+
+open scoped ENNReal
+
+local notation "envelope" => (fun y : ℝ ↦ (1 + ‖y‖)⁻¹)
+
+/-- The translated Cauchy kernel has uniformly bounded conjugate-exponent norm away
+from the line. Hölder's inequality then bounds each simple Cauchy integral. -/
+theorem verticalCauchy_lpBound (p q : ℝ≥0∞) [ENNReal.HolderTriple p q 1]
+    (hq : 1 < q) (hq' : q < ⊤) {δ : ℝ} (hδ : 0 < δ) :
+    ∃ C ≥ (0 : ℝ), ∀ {σ : ℝ} {z : ℂ}, δ ≤ |σ - z.re| → ∀ {f : ℝ → ℂ}, MemLp f p volume →
+      Integrable (fun y : ℝ ↦ f y / (verticalPoint σ y - z)) ∧
+      ‖∫ y : ℝ, f y / (verticalPoint σ y - z)‖ ≤ C * lpNorm f p volume := by
+  have hmodel : MemLp envelope q volume := by
+    apply (integrable_norm_rpow_iff (by fun_prop) (zero_lt_one.trans hq).ne' hq'.ne).mp
+    have hdim : 1 < q.toReal := by
+      simpa using (ENNReal.toReal_lt_toReal ENNReal.one_ne_top hq'.ne).2 hq
+    have he (x : ℝ) : ‖(1 + ‖x‖)⁻¹‖ = (1 + ‖x‖)⁻¹ := Real.norm_of_nonneg (by positivity)
+    simpa only [he, Real.rpow_neg_eq_inv_rpow] using
+      (integrable_one_add_norm (μ := (volume : Measure ℝ)) (r := q.toReal) (by simpa using hdim))
+  let A := δ⁻¹ + 1
+  have hA : 0 ≤ A := by dsimp [A]; positivity
+  refine ⟨A * lpNorm envelope q volume, mul_nonneg hA lpNorm_nonneg, ?_⟩
+  intro σ z hσ f hf
+  let K (y : ℝ) := (verticalPoint σ y - z)⁻¹
+  let g := envelope ∘ (fun y : ℝ ↦ y + -z.im)
+  have mp := measurePreserving_add_right (volume : Measure ℝ) (-z.im)
+  have hg : MemLp g q volume := hmodel.comp_measurePreserving mp
+  have sep (y : ℝ) : δ ≤ ‖verticalPoint σ y - z‖ :=
+    hσ.trans (by simpa using Complex.abs_re_le_norm (verticalPoint σ y - z))
+  have hK : Continuous K := by
+    apply Continuous.inv₀ (by fun_prop) fun y ↦ norm_pos_iff.mp (hδ.trans_le (sep y))
+  have bound (y : ℝ) : ‖K y‖ ≤ A * ‖g y‖ := by
+    have him : |y - z.im| ≤ ‖verticalPoint σ y - z‖ := by simpa using Complex.abs_im_le_norm (verticalPoint σ y - z)
+    have hy : 0 < ‖verticalPoint σ y - z‖ := hδ.trans_le (sep y)
+    have hinv : 1 ≤ δ⁻¹ * ‖verticalPoint σ y - z‖ := (one_le_inv_mul₀ hδ).mpr (sep y)
+    change ‖(verticalPoint σ y - z)⁻¹‖ ≤ A * ‖(1 + ‖y + -z.im‖)⁻¹‖
+    rw [norm_inv, Real.norm_of_nonneg (by positivity), ← div_eq_mul_inv, inv_eq_one_div,
+      div_le_div_iff₀ hy (by positivity)]
+    dsimp [A]
+    rw [← sub_eq_add_neg]
+    linarith
+  have hk : MemLp K q volume := hg.of_le_mul (c := A) hK.aestronglyMeasurable (.of_forall bound)
+  have hprod : MemLp (f • K) 1 volume := hf.smul hk
+  have eq : (fun y : ℝ ↦ f y / (verticalPoint σ y - z)) = f • K := by ext; rfl
+  rw [eq]
+  refine ⟨memLp_one_iff_integrable.mp hprod, ?_⟩
+  have hqeq : eLpNorm g q volume = eLpNorm envelope q volume :=
+    eLpNorm_comp_measurePreserving hmodel.aestronglyMeasurable mp
+  have hk' := eLpNorm_le_mul_eLpNorm_of_ae_le_mul (μ := volume) hK.aestronglyMeasurable (.of_forall bound) q
+  rw [hqeq] at hk'
+  have key : lpNorm K q volume ≤ A * lpNorm envelope q volume := by
+    simpa only [← toReal_eLpNorm, ENNReal.toReal_mul, ENNReal.toReal_ofReal hA] using
+      ENNReal.toReal_mono (ENNReal.mul_ne_top ENNReal.ofReal_ne_top hmodel.eLpNorm_ne_top) hk'
+  calc ‖∫ y, (f • K) y‖ ≤ ∫ y, ‖(f • K) y‖ := norm_integral_le_integral_norm _
+    _ = lpNorm (f • K) 1 volume := (lpNorm_one_eq_integral_norm hprod.aestronglyMeasurable).symm
+    _ ≤ lpNorm f p volume * lpNorm K q volume := by
+      simpa only [← toReal_eLpNorm, ENNReal.toReal_mul] using ENNReal.toReal_mono
+        (ENNReal.mul_ne_top hf.eLpNorm_ne_top hk.eLpNorm_ne_top)
+        (eLpNorm_smul_le_mul_eLpNorm (p := p) (q := q) (r := 1) hf.aestronglyMeasurable hk.aestronglyMeasurable)
+    _ ≤ _ := by rw [mul_comm (lpNorm f p volume)]; exact mul_le_mul_of_nonneg_right key lpNorm_nonneg
 
 end RiemannMasullo
