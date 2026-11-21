@@ -217,7 +217,8 @@ theorem quotientDual_weakEmbedding (M : Submodule ℂ X) (hM : IsClosed (M : Set
 strong dual consists precisely of the functionals vanishing on the subspace. -/
 theorem quotientDual_strongRange (M : Submodule ℂ X) (hM : IsClosed (M : Set X)) :
     range (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) =
-      {l : StrongDual ℂ X | ∀ x ∈ M, l x = 0} := by sorry
+      {l : StrongDual ℂ X | ∀ x ∈ M, l x = 0} := by
+  exact (quotientDual_weakEmbedding M hM).2
 
 /-- Paper: Lemma 4.2.1.3(1), p. 163. For a nuclear Fréchet space the quotient
 adjoint also embeds the strong dual, with image the same annihilator. -/
