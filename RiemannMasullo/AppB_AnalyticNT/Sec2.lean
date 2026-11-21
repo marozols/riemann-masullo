@@ -149,7 +149,22 @@ theorem exponentialDecay_iff_reflected (f g : 𝓢(ℝ, ℂ)) (hg : ∀ x : ℝ,
 and backward semi-exponential decay. -/
 theorem backwardSemiExponentialDecay_iff_forward_reflected
     (f g : 𝓢(ℝ, ℂ)) (hg : ∀ x : ℝ, g x = f (-x)) :
-    BackwardSemiExponentialDecay g ↔ ForwardSemiExponentialDecay f := by sorry
+    BackwardSemiExponentialDecay g ↔ ForwardSemiExponentialDecay f := by
+  have normEq (n : ℕ) (x : ℝ) : ‖iteratedDeriv n (g : ℝ → ℂ) x‖ = ‖iteratedDeriv n (f : ℝ → ℂ) (-x)‖ := by
+    rw [show (g : ℝ → ℂ) = fun y ↦ f (-y) from funext hg, iteratedDeriv_comp_neg]
+    simp [norm_pow]
+  constructor
+  · intro h j A hA
+    obtain ⟨C, hC⟩ := (h j A hA).bound
+    apply Asymptotics.IsBigO.of_bound C
+    filter_upwards [tendsto_neg_atTop_atBot.eventually hC] with x hx
+    simpa only [normEq, neg_neg, mul_neg, neg_mul] using hx
+  · intro h j A hA
+    obtain ⟨C, hC⟩ := (h j A hA).bound
+    apply Asymptotics.IsBigO.of_bound C
+    filter_upwards [tendsto_neg_atBot_atTop.eventually hC] with x hx
+    rw [normEq]
+    simpa only [neg_mul_neg] using hx
 
 /-- Paper: Lemma B.2.1.4(3), p. 593. The zero extension of a function with
 exponential decay is an ordinary Schwartz function on the real line. -/
