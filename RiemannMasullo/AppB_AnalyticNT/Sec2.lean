@@ -5,6 +5,8 @@ public import Mathlib.Analysis.Distribution.SchwartzSpace.Deriv
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
+import Mathlib.MeasureTheory.Integral.Asymptotics
 
 /-!
 # Mellin transforms and asymptotic Cauchy integrals
@@ -445,6 +447,62 @@ local notation "normalizedCauchyIntegral" =>
     (Nat.factorial N : ℂ) / (2 * (Real.pi : ℂ) * Complex.I) *
       verticalLineIntegral (cauchyKernel Φ N z) σ)
 
+/-- A continuous trace with inverse-square decay at both ends is integrable. -/
+private theorem integrable_of_eventual_sq_decay {u : ℝ → ℂ} (hu : Continuous u) {C : ℝ} (hC : 0 < C)
+    (h : ∀ᶠ y : ℝ in comap abs atTop, ‖u y‖ ≤ C / |y| ^ 2) : Integrable u := by
+  apply hu.locallyIntegrable.integrable_of_isBigO_cocompact _
+    (integrable_inv_one_add_sq.integrableAtFilter _)
+  apply Asymptotics.IsBigO.of_bound (2 * C)
+  have hf : comap (abs : ℝ → ℝ) atTop = cocompact ℝ := by
+    rw [show (abs : ℝ → ℝ) = norm from funext fun x ↦ (Real.norm_eq_abs x).symm,
+      comap_norm_atTop, Metric.cobounded_eq_cocompact]
+  rw [← hf]
+  have hlarge : ∀ᶠ y : ℝ in comap abs atTop, 1 ≤ |y| := tendsto_comap.eventually (eventually_ge_atTop 1)
+  filter_upwards [h, hlarge] with y hy hy'
+  apply hy.trans
+  rw [Real.norm_of_nonneg (by positivity), ← div_eq_mul_inv, sq_abs]
+  have hy2 : 1 ≤ y ^ 2 := by nlinarith [sq_abs y, sq_nonneg (|y| - 1)]
+  apply (div_le_div_iff₀ (by linarith) (by positivity)).mpr
+  nlinarith [mul_nonneg hC.le (sub_nonneg.mpr hy2)]
+
+/-- Staying away from the real part of the pole gives a bounded Cauchy multiplier. -/
+private theorem kernel_integrable_from_trace {Φ : ℂ → ℂ} {σ : ℝ} (h : Complex.VerticalIntegrable Φ σ)
+    (N : ℕ) (z : ℂ) (hz : z.re ≠ σ) :
+    Complex.VerticalIntegrable (fun s ↦ Φ s / (s - z) ^ (N + 1)) σ := by
+  let w (y : ℝ) := (σ : ℂ) + y * Complex.I
+  have hw (y : ℝ) : w y - z ≠ 0 := by
+    intro h
+    have hr := congrArg Complex.re (sub_eq_zero.mp h)
+    exact hz (by simpa [w] using hr.symm)
+  let K (y : ℝ) := ((w y - z) ^ (N + 1))⁻¹
+  have hc : Continuous K := by
+    apply Continuous.inv₀ _ fun y ↦ pow_ne_zero _ (hw y)
+    dsimp [w]
+    fun_prop
+  have hbound (y : ℝ) : ‖K y‖ ≤ (|σ - z.re| ^ (N + 1))⁻¹ := by
+    have hsep : |σ - z.re| ≤ ‖w y - z‖ := by simpa [w] using Complex.abs_re_le_norm (w y - z)
+    rw [show ‖K y‖ = (‖w y - z‖ ^ (N + 1))⁻¹ by simp [K]]
+    exact inv_anti₀ (pow_pos (abs_pos.mpr (sub_ne_zero.mpr hz.symm)) _)
+      (pow_le_pow_left₀ (abs_nonneg _) hsep _)
+  exact (h.bdd_mul hc.aestronglyMeasurable (Eventually.of_forall hbound)).congr
+    (Eventually.of_forall fun y ↦ by simp [K, w, div_eq_inv_mul])
+
+/-- Paper: Theorem B.2.2.4(1), p. 602. Every interior vertical trace is
+absolutely integrable because it has inverse-square decay at large heights. -/
+theorem UniformlySchwartzOnStrip.verticalIntegrable {Φ : ℂ → ℂ} {a b : ℝ} (hΦ : UniformlySchwartzOnStrip Φ a b)
+    (σ : ℝ) (hσ : σ ∈ Ioo a b) : Complex.VerticalIntegrable Φ σ := by
+  let δ := min (σ - a) (b - σ) / 2
+  have hδ : 0 < δ := by dsimp [δ]; exact half_pos (lt_min (sub_pos.mpr hσ.1) (sub_pos.mpr hσ.2))
+  have hleft : a + δ < σ := by dsimp [δ]; linarith [min_le_left (σ - a) (b - σ), hσ.1]
+  have hright : σ < b - δ := by dsimp [δ]; linarith [min_le_right (σ - a) (b - σ), hσ.2]
+  obtain ⟨C, hC, h⟩ := hΦ.2.2 δ hδ (hleft.trans hright) 2 (by norm_num)
+  refine integrable_of_eventual_sq_decay ?_ hC ?_
+  · apply hΦ.2.1.continuousOn.comp_continuous
+    · fun_prop
+    · intro y
+      simpa using hσ
+  · exact h.mono fun y hy ↦ hy σ ⟨hleft.le, hright.le⟩
+
 section CauchyStrip
 
 variable {Φ : ℂ → ℂ} {a b : ℝ} (hΦ : UniformlySchwartzOnStrip Φ a b)
@@ -455,7 +513,8 @@ include hΦ
 integrable on each interior line off the real part of the evaluation point. -/
 theorem cauchyKernel_verticalIntegrable_on_strip (σ : ℝ) (hσ : σ ∈ Ioo a b)
     (N : ℕ) (z : ℂ) (hz : z.re ≠ σ) :
-    Complex.VerticalIntegrable (cauchyKernel Φ N z) σ := by sorry
+    Complex.VerticalIntegrable (cauchyKernel Φ N z) σ := by
+  exact kernel_integrable_from_trace (hΦ.verticalIntegrable σ hσ) N z hz
 
 variable (ε : ℝ) (hε : 0 < ε) (hWidth : a + ε < b - ε) (N : ℕ) (z : ℂ)
 
