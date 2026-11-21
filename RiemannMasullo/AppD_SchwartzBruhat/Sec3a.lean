@@ -5,6 +5,9 @@ import Mathlib.Analysis.Complex.Liouville
 public import Mathlib.Analysis.MellinTransform
 public import Mathlib.Analysis.Calculus.IteratedDeriv.Defs
 import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
+import Mathlib.Analysis.SpecialFunctions.Gaussian.GaussianIntegral
+import Mathlib.Analysis.Calculus.IteratedDeriv.Lemmas
+import Mathlib.Analysis.SpecialFunctions.ExpDeriv
 
 /-!
 # Schwartz–Bergman spaces and Schwartz–Bruhat functions with exponential decay
@@ -459,13 +462,149 @@ theorem exponentialDecayL2Integrand_zero_log (a : ℝ) (m : ℕ)
     exponentialDecayL2Integrand a 0 m f x =
       (Real.exp (a * |x|) : ℂ) * iteratedDeriv m f.val x := by sorry
 
+private def decayTwistCLM (c : ℝ) : PositiveRealExponentialDecay univ →L[ℂ] 𝓢(ℝ, ℂ) :=
+  ⟨logExponentialDecayTwist univ ⟨c, mem_univ c⟩,
+    (continuous_apply (⟨c, mem_univ c⟩ : (univ : Set ℝ))).comp
+      (positiveRealExponentialDecay_isEmbedding univ univ_nonempty).continuous⟩
+
+private theorem decayProfile_smooth (f : PositiveRealExponentialDecay univ) : ContDiff ℝ ∞ f.val := by
+  have h : ⇑(decayTwistCLM 0 f) = f.val := by
+    funext x
+    change logExponentialDecayTwist univ ⟨0, _⟩ f x = _
+    simpa only [Subtype.coe_mk, zero_mul, Real.exp_zero, Complex.ofReal_one, one_mul] using
+      logExponentialDecayTwist_apply univ ⟨0, mem_univ (0 : ℝ)⟩ f x
+  rw [← h]
+  exact (decayTwistCLM 0 f).smooth _
+
+/-- Differentiate the profile before applying the exponential twist. -/
+private def decayWeightedDeriv (c : ℝ) (m : ℕ) : PositiveRealExponentialDecay univ →L[ℂ] 𝓢(ℝ, ℂ) :=
+  ((SchwartzMap.derivCLM ℂ ℂ - (c : ℂ) • ContinuousLinearMap.id ℂ _) ^ m).comp (decayTwistCLM c)
+
+private theorem decayWeightedDeriv_apply (c : ℝ) (m : ℕ) (f : PositiveRealExponentialDecay univ) :
+    ⇑(decayWeightedDeriv c m f) =
+      fun x : ℝ ↦ (Real.exp (c * x) : ℂ) * iteratedDeriv m f.val x := by
+  induction m with
+  | zero =>
+    funext x
+    exact logExponentialDecayTwist_apply univ ⟨c, mem_univ c⟩ f x
+  | succ m ih =>
+    funext x
+    simp only [decayWeightedDeriv, pow_succ', ContinuousLinearMap.comp_apply] at ih ⊢
+    change deriv (⇑(decayWeightedDeriv c m f)) x - c * decayWeightedDeriv c m f x = _
+    change ⇑(decayWeightedDeriv c m f) = _ at ih
+    rw [ih, iteratedDeriv_succ]
+    have he : HasDerivAt (fun x : ℝ ↦ (Real.exp (c * x) : ℂ)) ((c * Real.exp (c * x) : ℝ) : ℂ) x := by
+      apply HasDerivAt.ofReal_comp
+      simpa [mul_comm] using ((hasDerivAt_id x).const_mul c).exp
+    have hd := ((decayProfile_smooth f).differentiable_iteratedDeriv m
+      (by exact_mod_cast ENat.natCast_lt_top m)) x
+    rw [(he.fun_mul hd.hasDerivAt).deriv]
+    push_cast
+    ring
+
+/-- The polynomially weighted exponential envelope belongs to L² on both half-lines. -/
+private theorem memLp_decayEnvelope (s b : ℝ) (hs : 0 < s) (hb : 0 ≤ b) :
+    MemLp (fun x : ℝ ↦ |x| ^ b * Real.exp (-s * |x|)) 2 volume := by
+  have hcont : Continuous (fun x : ℝ ↦ |x| ^ b * Real.exp (-s * |x|)) :=
+    ((Real.continuous_rpow_const hb).comp continuous_abs).mul
+      (Real.continuous_exp.comp (continuous_const.mul continuous_abs))
+  apply (integrable_norm_rpow_iff hcont.aestronglyMeasurable (by norm_num) (by norm_num)).mp
+  have hpos : IntegrableOn
+      (fun x : ℝ ↦ ‖|x| ^ b * Real.exp (-s * |x|)‖ ^ (2 : ℝ≥0∞).toReal) (Ioi 0) := by
+    refine (integrableOn_rpow_mul_exp_neg_mul_rpow (p := 1) (b := 2 * s) (s := b * 2)
+      (by linarith) (by norm_num) (by positivity)).congr_fun (fun x hx ↦ ?_) measurableSet_Ioi
+    change 0 < x at hx
+    dsimp only
+    rw [abs_of_pos hx, Real.norm_of_nonneg (by positivity), ENNReal.toReal_ofNat,
+      Real.rpow_two, mul_pow, Real.rpow_one, ← Real.rpow_mul_natCast hx.le, ← Real.exp_nat_mul]
+    push_cast
+    ring_nf
+  rw [← integrableOn_univ, ← @Iio_union_Ici _ _ (0 : ℝ), integrableOn_union,
+    integrableOn_Ici_iff_integrableOn_Ioi]
+  refine ⟨?_, hpos⟩
+  rw [← (Measure.measurePreserving_neg (volume : Measure ℝ)).integrableOn_comp_preimage
+      (Homeomorph.neg ℝ).measurableEmbedding]
+  simpa [Function.comp_def, neg_preimage] using hpos
+
+private def decayL2ProfileMap (a b : ℝ) (m : ℕ) : PositiveRealExponentialDecay univ →ₗ[ℂ] (ℝ → ℂ) :=
+  (LinearMap.mulLeft ℂ fun x : ℝ ↦ ((Real.exp (a * |x|) * |x| ^ b : ℝ) : ℂ)).comp
+    (realSchwartzCoe.comp (decayWeightedDeriv 0 m).toLinearMap)
+
+private theorem decayL2ProfileMap_apply (a b : ℝ) (m : ℕ) (f : PositiveRealExponentialDecay univ)
+    (x : ℝ) :
+    decayL2ProfileMap a b m f x = exponentialDecayL2Integrand a b m f x := by
+  change _ * (decayWeightedDeriv 0 m f x) = _
+  rw [congrFun (decayWeightedDeriv_apply 0 m f) x]
+  simp [exponentialDecayL2Integrand]
+
 /-- Paper: Lemma D.3.2.7(1), p. 803. Each weighted derivative is in L² and its
 L² norm defines a continuous seminorm. The choice b = 0 includes (D.3.2.3). -/
 theorem exponentialDecayL2_continuous_seminorm (a b : ℝ) (ha : 0 < a) (hb : 0 ≤ b) (m : ℕ) :
     let w := exponentialDecayL2Integrand a b m
     (∀ f, MemLp (w f) 2 volume) ∧
       ∃ p : Seminorm ℂ (PositiveRealExponentialDecay univ), Continuous p ∧
-        ∀ f, ENNReal.ofReal (p f) = eLpNorm (w f) 2 volume := by sorry
+        ∀ f, ENNReal.ofReal (p f) = eLpNorm (w f) 2 volume := by
+  let T := decayL2ProfileMap a b m
+  have hT (f : PositiveRealExponentialDecay univ) : T f = exponentialDecayL2Integrand a b m f :=
+    funext (decayL2ProfileMap_apply a b m f)
+  let H (x : ℝ) := |x| ^ b * Real.exp (-a * |x|)
+  have hH : MemLp H 2 volume := memLp_decayEnvelope a b ha hb
+  let q (c : ℝ) := (SchwartzMap.seminorm ℂ 0 0).comp (decayWeightedDeriv c m).toLinearMap
+  let Q := q (2 * a) + q (-(2 * a))
+  have hc (c : ℝ) : Continuous (q c) :=
+    ((schwartz_withSeminorms ℂ ℝ ℂ).continuous_seminorm (0, 0)).comp
+      (decayWeightedDeriv c m).continuous
+  have hQ : Continuous Q := (hc _).add (hc _)
+  have hmeas (f : PositiveRealExponentialDecay univ) : AEStronglyMeasurable (T f) volume := by
+    rw [hT]
+    apply Continuous.aestronglyMeasurable
+    exact (Complex.continuous_ofReal.comp
+      ((Real.continuous_exp.comp (continuous_const.mul continuous_abs)).mul
+        ((Real.continuous_rpow_const hb).comp continuous_abs))).mul
+      ((decayProfile_smooth f).continuous_iteratedDeriv m (by exact_mod_cast (le_top : (m : ℕ∞) ≤ ⊤)))
+  have hbound (f : PositiveRealExponentialDecay univ) : ∀ᵐ x ∂volume, ‖T f x‖ ≤ Q f * ‖H x‖ := by
+    apply Eventually.of_forall
+    intro x
+    have hside (c : ℝ) (hx : c * x = (2 * a) * |x|) : ‖T f x‖ ≤ q c f * ‖H x‖ := by
+      have he : Real.exp (a * |x|) = Real.exp (c * x) * Real.exp (-a * |x|) := by
+        rw [← Real.exp_add, hx]
+        congr 1
+        ring
+      have h := (decayWeightedDeriv c m f).norm_le_seminorm ℂ x
+      change ‖decayWeightedDeriv c m f x‖ ≤ q c f at h
+      calc
+        ‖T f x‖ = ‖decayWeightedDeriv c m f x‖ * ‖H x‖ := by
+          rw [hT, congrFun (decayWeightedDeriv_apply c m f) x]
+          simp only [exponentialDecayL2Integrand, H, norm_mul, Complex.norm_real,
+            Real.norm_of_nonneg (Real.exp_pos _).le,
+            Real.norm_of_nonneg (Real.rpow_nonneg (abs_nonneg x) b), he]
+          ring
+        _ ≤ _ := mul_le_mul_of_nonneg_right h (norm_nonneg _)
+    rcases le_total 0 x with hx | hx
+    · exact (hside (2 * a) (by rw [abs_of_nonneg hx])).trans
+        (mul_le_mul_of_nonneg_right (le_add_of_nonneg_right (apply_nonneg _ _)) (norm_nonneg _))
+    · exact (hside (-(2 * a)) (by rw [abs_of_nonpos hx]; ring)).trans
+        (mul_le_mul_of_nonneg_right (le_add_of_nonneg_left (apply_nonneg _ _)) (norm_nonneg _))
+  have hm (f : PositiveRealExponentialDecay univ) : MemLp (T f) 2 volume :=
+    hH.of_le_mul (hmeas f) (hbound f)
+  let L : PositiveRealExponentialDecay univ →ₗ[ℂ] Lp ℂ 2 (volume : Measure ℝ) :=
+    { toFun := fun f ↦ (hm f).toLp (T f)
+      map_add' := fun f g ↦ by simp only [map_add]; rfl
+      map_smul' := fun c f ↦ by simp only [map_smul]; rfl }
+  let p := (normSeminorm ℂ _).comp L
+  have hp (f : PositiveRealExponentialDecay univ) : p f = (eLpNorm (T f) 2 volume).toReal :=
+    Lp.norm_toLp _ (hm f)
+  refine ⟨fun f ↦ hT f ▸ hm f, p, ?_, fun f ↦ ?_⟩
+  · let C := (eLpNorm H 2 volume).toNNReal
+    apply Seminorm.continuous_of_le (q := C • Q) (hQ.const_smul C)
+    intro f
+    rw [hp]
+    have h := ENNReal.toReal_mono (ENNReal.mul_ne_top ENNReal.ofReal_ne_top hH.eLpNorm_ne_top)
+      (eLpNorm_le_mul_eLpNorm_of_ae_le_mul (hmeas f) (hbound f) 2)
+    change _ ≤ (eLpNorm H 2 volume).toReal * Q f
+    simpa [ENNReal.toReal_mul, ENNReal.toReal_ofReal (apply_nonneg Q f), mul_comm] using h
+  · rw [hp, hT f, ENNReal.ofReal_toReal]
+    exact (hT f ▸ hm f).eLpNorm_ne_top
 
 /-- Paper: Lemma D.3.2.7(2), p. 803. Exponential weights on an unbounded sequence
 of positive exponents generate the topology. -/
