@@ -10,6 +10,7 @@ import Mathlib.Analysis.MellinInversion
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 import Mathlib.MeasureTheory.Integral.Asymptotics
 import RiemannMasullo.ForMathlib.Analysis.MellinTransform
+import RiemannMasullo.ForMathlib.Analysis.Complex.VerticalCauchyIntegral
 
 /-!
 # Mellin transforms and asymptotic Cauchy integrals
@@ -647,7 +648,40 @@ include hε hWidth
 minus the normalized left-line integral gives the derivative at a point between the lines. -/
 theorem asymptoticCauchy_eq_iteratedDeriv (hz : z.re ∈ Ioo (a + ε) (b - ε)) :
     normalizedCauchyIntegral Φ N (b - ε) z - normalizedCauchyIntegral Φ N (a + ε) z =
-      iteratedDeriv N Φ z := by sorry
+      iteratedDeriv N Φ z := by
+  let c := a + ε
+  let d := b - ε
+  have ha : a < c := by dsimp [c]; linarith
+  have hb : d < b := by dsimp [d]; linarith
+  have hc : c ∈ Ioo a b := ⟨ha, hWidth.trans hb⟩
+  have hd : d ∈ Ioo a b := ⟨ha.trans hWidth, hb⟩
+  let J (n : ℕ) (σ : ℝ) (w : ℂ) := normalizedCauchyIntegral Φ n σ w
+  change J N d z - J N c z = iteratedDeriv N Φ z
+  induction N generalizing z with
+  | zero =>
+    obtain ⟨C, hC, hdecay⟩ := hΦ.2.2 ε hε hWidth 1 le_rfl
+    have hk (σ : ℝ) (hσ : σ ∈ Ioo a b) (hne : z.re ≠ σ) :
+        Complex.VerticalIntegrable (fun w ↦ Φ w / (w - z)) σ := by
+      simpa using cauchyKernel_verticalIntegrable_on_strip hΦ σ hσ 0 z hne
+    have h := verticalCauchyIntegral_sub_eq hΦ.2.1 ha hb hz hC.le
+      (by simpa only [pow_one] using hdecay) (hk c hc hz.1.ne') (hk d hd hz.2.ne)
+    simp only [J, Nat.factorial_zero, Nat.cast_one, zero_add, pow_one, iteratedDeriv_zero,
+      verticalLineIntegral]
+    rw [← mul_sub, ← mul_sub, h]
+    field_simp [Complex.I_ne_zero, Real.pi_ne_zero]
+  | succ n ih =>
+    have hJ (σ : ℝ) (hσ : σ ∈ Ioo a b) (hne : z.re ≠ σ) :
+        HasDerivAt (J n σ) (J (n + 1) σ z) z := by
+      have h := hasDerivAt_verticalCauchyIntegral hne (hΦ.verticalIntegrable σ hσ) n
+        (cauchyKernel_verticalIntegrable_on_strip hΦ σ hσ n z hne)
+      convert (h.const_mul Complex.I).const_mul ((n.factorial : ℂ) / (2 * (Real.pi : ℂ) * Complex.I)) using 1
+      · rfl
+      · simp only [J, verticalLineIntegral, Nat.factorial_succ, Nat.cast_mul, Nat.cast_add, Nat.cast_one]
+        ring
+    have heq : (fun w ↦ J n d w - J n c w) =ᶠ[𝓝 z] iteratedDeriv n Φ :=
+      ((isOpen_Ioo.preimage Complex.continuous_re).eventually_mem hz).mono fun w hw ↦ ih w hw
+    rw [iteratedDeriv_succ, ← heq.deriv_eq]
+    exact ((hJ d hd hz.2.ne).sub (hJ c hc hz.1.ne')).deriv.symm
 
 /-- Paper: Theorem B.2.2.4(1), p. 602. The two normalized line integrals
 agree when the evaluation point is outside the closed strip they bound. -/
