@@ -9,6 +9,16 @@ public section
 namespace RiemannMasullo
 
 open Filter MeasureTheory
+open scoped Asymptotics
+
+/-- An exponential growth bound becomes a real-power bound after composition with `log`. -/
+theorem isBigO_comp_log_rpow_of_isBigO_exp {g : ℝ → ℂ} {c : ℝ} {l L : Filter ℝ}
+    (h : g =O[l] (fun x ↦ Real.exp (c * x)))
+    (ht : Tendsto Real.log L l) (hpos : ∀ᶠ t in L, 0 < t) :
+    (fun t ↦ g (Real.log t)) =O[L] (fun t ↦ t ^ c) := by
+  apply (h.comp_tendsto ht).congr' EventuallyEq.rfl
+  filter_upwards [hpos] with t ht
+  simp only [Function.comp_apply, Real.rpow_def_of_pos ht, mul_comm]
 
 /-- A logarithmic profile has an absolutely convergent Mellin integral at `s` if its
 exponential weight at the real part of `s` is integrable on the real line. -/

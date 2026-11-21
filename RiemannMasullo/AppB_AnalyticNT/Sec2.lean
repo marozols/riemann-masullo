@@ -198,6 +198,16 @@ exponential decay. -/
 theorem ExponentialDecay.deriv (f : 𝓢(ℝ, ℂ)) (hf : ExponentialDecay f) :
     ExponentialDecay (SchwartzMap.derivCLM ℂ ℂ f) := by sorry
 
+private theorem fromLog_locallyIntegrable (f : 𝓢(ℝ, ℂ)) :
+    LocallyIntegrableOn (fromLog f) (Ioi 0) volume :=
+  (f.continuous.comp_continuousOn (Real.continuousOn_log.mono
+    (fun _ hx ↦ ne_of_gt hx))).locallyIntegrableOn measurableSet_Ioi
+
+private theorem isBigO_fromLog_atTop (f : 𝓢(ℝ, ℂ)) (hf : ForwardSemiExponentialDecay f)
+    {A : ℝ} (hA : 0 < A) : (fromLog f) =O[atTop] (fun t ↦ t ^ (-A)) :=
+  isBigO_comp_log_rpow_of_isBigO_exp (by simpa only [iteratedDeriv_zero] using hf 0 A hA)
+    Real.tendsto_log_atTop (eventually_gt_atTop 0)
+
 -- Equation (B.2.1.2) is Mathlib's `mellin`, with `MellinConvergent`
 -- for absolute convergence and `HasMellin` for a convergent integral with a specified value.
 
@@ -215,7 +225,15 @@ theorem mellinConvergent_of_forwardSemiExponentialDecay (s : ℂ) (hs : 0 < s.re
 /-- Paper: Proposition B.2.1.5(1), p. 594. The Mellin transform is
 holomorphic in the open right half-plane. -/
 theorem differentiableOn_mellin_of_forwardSemiExponentialDecay :
-    DifferentiableOn ℂ (mellin (fromLog f)) (Complex.re ⁻¹' Ioi 0) := by sorry
+    DifferentiableOn ℂ (mellin (fromLog f)) (Complex.re ⁻¹' Ioi 0) := by
+  intro s hs
+  have hs' : 0 < s.re := hs
+  apply DifferentiableAt.differentiableWithinAt
+  apply mellin_differentiableAt_of_isBigO_rpow (b := 0) (fromLog_locallyIntegrable f)
+    (isBigO_fromLog_atTop f hf (A := s.re + 1) (by linarith)) (lt_add_one _) _ hs'
+  apply Asymptotics.IsBigO.of_bound (SchwartzMap.seminorm ℂ 0 0 f)
+  filter_upwards with t
+  simpa using f.norm_le_seminorm ℂ (Real.log t)
 
 /-- Paper: Proposition B.2.1.5(2), p. 594. For each positive integer
 power, one constant gives the vertical decay bound throughout the prescribed closed strip. -/
