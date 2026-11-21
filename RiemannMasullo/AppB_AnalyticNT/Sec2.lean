@@ -186,7 +186,11 @@ theorem exists_schwartz_zeroExtension_of_exponentialDecay (f : 𝓢(ℝ, ℂ))
 /-- Paper: Lemma B.2.1.4(4), p. 593. Logarithmic differentiation preserves
 forward semi-exponential decay. -/
 theorem ForwardSemiExponentialDecay.deriv (f : 𝓢(ℝ, ℂ)) (hf : ForwardSemiExponentialDecay f) :
-    ForwardSemiExponentialDecay (SchwartzMap.derivCLM ℂ ℂ f) := by sorry
+    ForwardSemiExponentialDecay (SchwartzMap.derivCLM ℂ ℂ f) := by
+  intro j A hA
+  rw [show (⇑(SchwartzMap.derivCLM ℂ ℂ f) : ℝ → ℂ) = _root_.deriv f from
+    funext (SchwartzMap.derivCLM_apply ℂ f), ← iteratedDeriv_succ']
+  exact hf (j + 1) A hA
 
 /-- Paper: Lemma B.2.1.4(4), p. 593. Logarithmic differentiation preserves
 backward semi-exponential decay. -/
