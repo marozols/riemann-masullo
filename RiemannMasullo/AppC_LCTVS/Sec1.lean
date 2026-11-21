@@ -953,7 +953,12 @@ def IsStrictLFSpace (E : Type*) [AddCommGroup E] [Module ℂ E] [t : Topological
 
 /-- Paper: Definition C.1.5.2, p. 664. A Fréchet space is an LF-space via its constant
 defining sequence. -/
-theorem isLFSpace_of_isFrechetTVS (hE : IsFrechetTVS E) : IsLFSpace E := by sorry
+theorem isLFSpace_of_isFrechetTVS (hE : IsFrechetTVS E) : IsLFSpace E := by
+  obtain ⟨hadd, hpoly, hmetr, hcomplete⟩ := hE
+  refine ⟨inferInstance, fun _ ↦ E, fun _ ↦ inferInstance, fun _ ↦ inferInstance,
+    fun _ ↦ inferInstance, fun _ ↦ ⟨hadd, hpoly, hmetr, hcomplete⟩,
+    fun _ ↦ ContinuousLinearMap.id ℂ E, fun _ ↦ ContinuousLinearMap.id ℂ E, ?_⟩
+  exact isInjectiveLCLimit_const
 
 /-- Paper: Example C.1.4.6(4), p. 662. Strict LF-spaces are LF-spaces and a closed
 quotient of an LF-space is LF.
