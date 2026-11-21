@@ -833,7 +833,20 @@ theorem compactIntervalPeriodization_dual_absoluteBasis (a b : ℝ) (ha : 0 < a)
 /-- Paper: Remark 4.2.2.6, p. 173. Periodization on ordinary Schwartz
 profiles has a continuous linear right inverse. -/
 theorem cyclicSchwartzPeriodization_hasSection :
-    ∃ s : S →L[ℂ] 𝓢(ℝ, ℂ), Function.RightInverse s (cyclicSchwartzPeriodization γ hγ) := by sorry
+    ∃ s : S →L[ℂ] 𝓢(ℝ, ℂ), Function.RightInverse s (cyclicSchwartzPeriodization γ hγ) := by
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  let J := (supportedToSchwartzCLM ℂ (cyclicLiftSupport γ)).comp (cyclicCompactLift γ hγ)
+  refine ⟨J, fun f ↦ ?_⟩
+  have h := cyclicExponentialLift_rightInverse γ hγ f
+  let F := cyclicExponentialLift γ hγ f
+  have he : logExponentialDecayTwist univ a F = J f := by
+    ext x
+    change logExponentialDecayTwist univ a (show logExponentialDecaySubmodule univ from F) x = J f x
+    rw [logExponentialDecayTwist_apply univ a _ x]
+    simp [a]
+    rfl
+  change cyclicSchwartzPeriodization γ hγ (logExponentialDecayTwist univ a F) = f at h
+  rwa [he] at h
 
 /-- Paper: Remark 4.2.2.6, p. 173. Periodization on exponential Schwartz
 profiles has a continuous linear right inverse. -/
