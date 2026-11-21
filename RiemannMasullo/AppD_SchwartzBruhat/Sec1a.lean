@@ -792,8 +792,11 @@ on the Schwartz submodule. -/
 theorem elementarySchwartzSeminorm_add_le (i : ElementarySchwartzIndex m n r)
     (f g : elementarySchwartzSubmodule m n r F) :
     (elementarySchwartzBound (f + g).val i).toReal ≤
-      (elementarySchwartzBound f.val i).toReal + (elementarySchwartzBound g.val i).toReal :=
-  by sorry
+      (elementarySchwartzBound f.val i).toReal + (elementarySchwartzBound g.val i).toReal := by
+  change (elementarySchwartzBound (f.val + g.val) i).toReal ≤ _
+  exact (ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨(f.property.2 i).ne, (g.property.2 i).ne⟩)
+    (elementarySchwartzBound_add_le f.property.1 g.property.1 i)).trans_eq
+    (ENNReal.toReal_add (f.property.2 i).ne (g.property.2 i).ne)
 
 /-- Paper: Definition D.1.3.1, p. 750. Scaling a Schwartz function multiplies its
 real-valued weighted bound by the norm of the scalar. -/
