@@ -6,6 +6,8 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import Mathlib.MeasureTheory.Function.ContinuousMapDense
+
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
 @[expose] public noncomputable section
@@ -55,7 +57,14 @@ theorem regularL2_memLp_compactlySupported (f : G →C_c ℂ) :
 /-- Paper: Remark 4.3.1.4, p. 175. Classes of continuous compactly
 supported functions are dense in Haar L². -/
 theorem regularL2_compactlySupported_dense :
-    DenseRange (fun f : G →C_c ℂ ↦ (regularL2_memLp_compactlySupported ν f).toLp f) := by sorry
+    DenseRange (fun f : G →C_c ℂ ↦ (regularL2_memLp_compactlySupported ν f).toLp f) := by
+  intro f
+  refine (mem_closure_iff_nhds_basis Metric.nhds_basis_closedEBall).2 fun ε hε ↦ ?_
+  obtain ⟨g, hs, hdist, hc, hg⟩ :=
+    (Lp.memLp f).exists_hasCompactSupport_eLpNorm_sub_le (by norm_num) hε.ne'
+  let k : G →C_c ℂ := ⟨⟨g, hc⟩, hs⟩
+  refine ⟨hg.toLp g, ⟨k, rfl⟩, ?_⟩
+  rwa [Metric.mem_closedEBall', ← Lp.toLp_coeFn f (Lp.memLp f), Lp.edist_toLp_toLp]
 
 /-- Paper: Lemma 4.3.1.5(1), p. 176. The Haar L² space is separable. -/
 theorem regularL2_separable : SeparableSpace (RegularL2 ν) := by sorry
