@@ -17,6 +17,7 @@ import Mathlib.Analysis.Normed.Operator.BanachSteinhaus
 import Mathlib.Topology.Algebra.Module.Star
 import Mathlib.Topology.Baire.CompleteMetrizable
 import Mathlib.Topology.ContinuousMap.ZeroAtInfty
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.WithSeminorms
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.Quotient
@@ -1025,6 +1026,42 @@ private theorem IsInjectiveLCLimit.isEmbedding_stage
     rw [p.mem_ball_zero, ← heqz]
     exact q.mem_ball_zero.mp hz
 
+/-- Seminorms that vanish on successively larger stages admit a continuous upper bound
+on the limit, since only finitely many contribute on any one stage. -/
+private theorem IsInjectiveLCLimit.exists_seminorm_ge_of_vanishing_on_stages
+    [∀ k, IsTopologicalAddGroup (X k)]
+    {j : ∀ k, X k →L[ℂ] X (k+1)} {i : ∀ k, X k →L[ℂ] E} (h : IsInjectiveLCLimit j i)
+    (q : ℕ → Seminorm ℂ E) (hq : ∀ n, Continuous (q n)) (hz : ∀ n z, q n (i n z) = 0) :
+    ∃ P : Seminorm ℂ E, Continuous P ∧ ∀ n, q n ≤ P := by
+  classical
+  let S (k : ℕ) : Submodule ℂ E := (i k).toLinearMap.range
+  have hmono : Monotone S := monotone_nat_of_le_succ fun k ↦ by
+    rintro _ ⟨y, rfl⟩
+    exact ⟨j k y, DFunLike.congr_fun (h.compatible k) y⟩
+  let M (k : ℕ) := (Finset.range k).sup (fun n ↦ (q n).comp (i k).toLinearMap)
+  have hM (k n : ℕ) (y : X k) : q n (i k y) ≤ M k y := by
+    by_cases hn : n < k
+    · exact (Finset.le_sup (f := fun n ↦ (q n).comp (i k).toLinearMap)
+        (Finset.mem_range.mpr hn) : _ ≤ M k) y
+    · obtain ⟨z, hzy⟩ := hmono (Nat.le_of_not_gt hn) (show i k y ∈ S k from ⟨y, rfl⟩)
+      change i n z = i k y at hzy
+      rw [← hzy, hz]
+      exact apply_nonneg _ _
+  have hb : BddAbove (range q) := Seminorm.bddAbove_range_iff.mpr fun y ↦ by
+    obtain ⟨k, z, rfl⟩ := h.exhaustive y
+    exact ⟨M k z, forall_mem_range.mpr fun n ↦ hM k n z⟩
+  let P : Seminorm ℂ E := ⨆ n, q n
+  have hseminorms : WithSeminorms
+      (Subtype.val : {p : Seminorm ℂ E // ∀ k, Continuous (p ∘ i k)} → Seminorm ℂ E) :=
+    ⟨h.topology_eq⟩
+  refine ⟨P, hseminorms.continuous_seminorm ⟨P, fun k ↦ ?_⟩, fun n ↦ le_ciSup hb n⟩
+  have hcont : Continuous (M k) := Seminorm.continuous_finsetSup fun n _ ↦ (hq n).comp (i k).continuous
+  refine Seminorm.continuous_of_le (p := P.comp (i k).toLinearMap) hcont
+    (Seminorm.le_def.mpr fun y ↦ ?_)
+  change P (i k y) ≤ M k y
+  rw [Seminorm.iSup_apply hb]
+  exact ciSup_le fun n ↦ hM k n y
+
 /-- Paper: Remark C.1.3.3, p. 660. A strict countable limit of complete Hausdorff
 locally convex spaces is complete. If the stages are Fréchet and each inclusion
 is proper, the limit is nonmetrizable.
@@ -1043,9 +1080,6 @@ theorem strictLCLimit_complete_nonmetrizable [IsTopologicalAddGroup E]
   let : ∀ k, IsUniformAddGroup (X k) := fun _ ↦ isUniformAddGroup_of_addCommGroup
   let : ∀ k, CompleteSpace (X k) := hc
   let S (k : ℕ) : Submodule ℂ E := (i k).toLinearMap.range
-  have hmono : Monotone S := monotone_nat_of_le_succ fun k ↦ by
-    rintro _ ⟨y, rfl⟩
-    exact ⟨j k y, DFunLike.congr_fun (h.compatible k) y⟩
   have hcomplete (k : ℕ) : IsComplete (S k : Set E) := by
     have hi : IsUniformInducing (i k) :=
       AddMonoidHom.isUniformInducing_of_isInducing (h.isEmbedding_stage hj k).isInducing
@@ -1087,28 +1121,10 @@ theorem strictLCLimit_complete_nonmetrizable [IsTopologicalAddGroup E]
     choose q hq hzero hout using hsep
     -- Each stage sees only a finite supremum of the weighted seminorms.
     let Q (n : ℕ) : Seminorm ℂ E := ((n : NNReal) + 1) • q n
-    let M (k : ℕ) := (Finset.range k).sup (fun n ↦ (Q n).comp (i k).toLinearMap)
-    have hQ (k n : ℕ) (y : X k) : Q n (i k y) ≤ M k y := by
-      by_cases hn : n < k
-      · exact (Finset.le_sup (f := fun n ↦ (Q n).comp (i k).toLinearMap)
-          (Finset.mem_range.mpr hn) : _ ≤ M k) y
-      · have hmem : i k y ∈ S n := hmono (Nat.le_of_not_gt hn) ⟨y, rfl⟩
-        simp only [Q, smul_apply, hzero n (i k y) hmem, smul_zero]
-        exact apply_nonneg (M k) y
-    have hb : BddAbove (range Q) := Seminorm.bddAbove_range_iff.mpr fun y ↦ by
-      obtain ⟨k, z, rfl⟩ := h.exhaustive y
-      exact ⟨M k z, forall_mem_range.mpr fun n ↦ hQ k n z⟩
-    let P : Seminorm ℂ E := ⨆ n, Q n
-    have hP : Continuous P := by
-      refine hseminorms.continuous_seminorm ⟨P, fun k ↦ ?_⟩
-      have hM : Continuous (M k) := Seminorm.continuous_finsetSup fun n _ ↦
-        ((hq n).const_smul ((n : NNReal) + 1)).comp (i k).continuous
-      refine Seminorm.continuous_of_le (p := P.comp (i k).toLinearMap) hM
-        (Seminorm.le_def.mpr fun y ↦ ?_)
-      change P (i k y) ≤ M k y
-      rw [Seminorm.iSup_apply hb]
-      exact ciSup_le fun n ↦ hQ k n y
-    have hle (n : ℕ) : Q n ≤ P := le_ciSup hb n
+    obtain ⟨P, hP, hle⟩ := h.exists_seminorm_ge_of_vanishing_on_stages Q
+      (fun n ↦ (hq n).const_smul ((n : NNReal) + 1)) (fun n z ↦ by
+        have hz : q n (i n z) = 0 := hzero n _ ⟨z, rfl⟩
+        simp only [Q, smul_apply, hz, smul_zero])
     have hUC : UniformContinuous P := Seminorm.uniformContinuous_of_continuousAt_zero hP.continuousAt
     let v : UniformSpace.Completion E → ℝ := UniformSpace.Completion.extension P
     have hv : Continuous v := UniformSpace.Completion.continuous_extension
@@ -1186,12 +1202,86 @@ theorem exists_quotient_not_strictLF :
       IsStrictLFSpace E ∧ ∃ M : Submodule ℂ E, IsClosed (M : Set E) ∧
         ¬ IsStrictLFSpace (E ⧸ M) := by sorry
 
+/-- A point outside a stage of a system of closed embeddings is detected by a continuous
+seminorm on the limit that vanishes on that stage. -/
+private theorem IsInjectiveLCLimit.exists_seminorm_vanishing_on_stage
+    [∀ k, IsTopologicalAddGroup (X k)] [∀ k, PolynormableSpace ℂ (X k)]
+    {j : ∀ k, X k →L[ℂ] X (k+1)} {i : ∀ k, X k →L[ℂ] E} (h : IsInjectiveLCLimit j i)
+    (hj : ∀ k, IsClosedEmbedding (j k)) (n : ℕ) {x : E} (hx : x ∉ range (i n)) :
+    ∃ q : Seminorm ℂ E, Continuous q ∧ 0 < q x ∧ ∀ z, q (i n z) = 0 := by
+  have transition (a b : ℕ) (hab : a ≤ b) :
+      ∃ t : X a →L[ℂ] X b, (i b).comp t = i a ∧ IsClosedEmbedding t := by
+    induction b, hab using Nat.le_induction with
+    | base => exact ⟨ContinuousLinearMap.id ℂ _, rfl, IsClosedEmbedding.id⟩
+    | succ b _ ih =>
+      obtain ⟨t, ht, htc⟩ := ih
+      exact ⟨(j b).comp t, by rw [← ContinuousLinearMap.comp_assoc, h.compatible, ht],
+        (hj b).comp htc⟩
+  obtain ⟨m, y, hy⟩ := h.exhaustive x
+  have hnm : n ≤ m := by
+    by_contra! hmn
+    obtain ⟨t, ht, _⟩ := transition m n hmn.le
+    exact hx ⟨t y, (DFunLike.congr_fun ht y).trans hy⟩
+  obtain ⟨t, ht, htc⟩ := transition n m hnm
+  have hyout : y ∉ t.toLinearMap.range := by
+    rintro ⟨z, rfl⟩
+    exact hx ⟨z, (DFunLike.congr_fun ht z).symm.trans hy⟩
+  let : Module ℝ (X m) := Module.restrictScalars ℝ ℂ (X m)
+  let : IsScalarTower ℝ ℂ (X m) := IsScalarTower.restrictScalars ℝ ℂ (X m)
+  let : LocallyConvexSpace ℝ (X m) := (PolynormableSpace.withSeminorms ℂ (X m)).toLocallyConvexSpace
+  obtain ⟨φ, hφ, hzero⟩ := exists_dual_eq_zero_on_submodule_of_notMem t.toLinearMap.range
+    htc.isClosed_range hyout
+  let p := (normSeminorm ℂ ℂ).comp φ.toLinearMap
+  obtain ⟨q, hq, hqm⟩ := h.seminorm_extension (fun k ↦ (hj k).isEmbedding) m p φ.continuous.norm
+  have he (z : X m) : q (i m z) = ‖φ z‖ := DFunLike.congr_fun hqm z
+  refine ⟨q, hq, ?_, fun z ↦ ?_⟩
+  · rw [← hy, he]
+    exact norm_pos_iff.mpr hφ
+  · calc
+      q (i n z) = q (i m (t z)) := congrArg q (DFunLike.congr_fun ht z).symm
+      _ = ‖φ (t z)‖ := he (t z)
+      _ = 0 := norm_eq_zero.mpr (hzero (t z) ⟨z, rfl⟩)
+
 /-- Paper: Proposition C.1.5.3, p. 664. In a strict limit with closed stage embeddings
 a subset is bounded exactly when it is the image of a bounded subset of a single stage. -/
 theorem isVonNBounded_iff_bounded_stage [∀ k, T2Space (X k)] [∀ k, PolynormableSpace ℂ (X k)]
     {j : ∀ k, X k →L[ℂ] X (k+1)} {i : ∀ k, X k →L[ℂ] E} (h : IsInjectiveLCLimit j i)
     (hj : ∀ k, IsClosedEmbedding (j k)) (B : Set E) :
-    IsVonNBounded ℂ B ↔ ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ i k '' A = B := by sorry
+    IsVonNBounded ℂ B ↔ ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ i k '' A = B := by
+  classical
+  let : ∀ k, IsTopologicalAddGroup (X k) := fun k ↦ PolynormableSpace.isTopologicalAddGroup ℂ (X k)
+  have hP : WithSeminorms
+      (Subtype.val : {p : Seminorm ℂ E // ∀ k, Continuous (p ∘ i k)} → Seminorm ℂ E) :=
+    ⟨h.topology_eq⟩
+  let : PolynormableSpace ℂ E := hP.toPolynormableSpace
+  constructor
+  · intro hB
+    have hb := (PolynormableSpace.withSeminorms ℂ E).isVonNBounded_iff_seminorm_bounded.mp hB
+    suffices hcontains : ∃ k, B ⊆ range (i k) by
+      obtain ⟨k, hk⟩ := hcontains
+      refine ⟨k, (i k) ⁻¹' B, ?_, image_preimage_eq_of_subset hk⟩
+      apply (PolynormableSpace.withSeminorms ℂ (X k)).isVonNBounded_iff_seminorm_bounded.mpr
+      intro p
+      obtain ⟨q, hq, he⟩ := h.seminorm_extension (fun n ↦ (hj n).isEmbedding) k p.val p.property
+      obtain ⟨R, hR, hRB⟩ := hb ⟨q, hq⟩
+      refine ⟨R, hR, fun y hy ↦ ?_⟩
+      change p.val y < R
+      rw [← DFunLike.congr_fun he y]
+      exact hRB _ hy
+    by_contra hno
+    choose x hxB hx using fun n ↦ Set.not_subset.mp (fun hsub ↦ hno ⟨n, hsub⟩)
+    choose q hq hpos hzero using fun n ↦ h.exists_seminorm_vanishing_on_stage hj n (hx n)
+    let w (n : ℕ) : NNReal := ⟨(n : ℝ) / q n (x n), div_nonneg (Nat.cast_nonneg n) (hpos n).le⟩
+    let Q (n : ℕ) := w n • q n
+    obtain ⟨P, hcont, hle⟩ := h.exists_seminorm_ge_of_vanishing_on_stages Q
+      (fun n ↦ (hq n).const_smul (w n)) (fun n z ↦ by simp only [Q, smul_apply, hzero, smul_zero])
+    obtain ⟨R, _, hRB⟩ := hb ⟨P, hcont⟩
+    obtain ⟨n, hn⟩ := exists_nat_gt R
+    have he : Q n (x n) = n := div_mul_cancel₀ _ (hpos n).ne'
+    have hlt := ((hle n) (x n)).trans_lt (hRB _ (hxB n))
+    exact hn.not_gt (he ▸ hlt)
+  · rintro ⟨k, A, hA, rfl⟩
+    exact hA.image (i k)
 
 /-- Paper: Lemma C.1.5.4, p. 665. If a Hausdorff topological vector space is exhausted
 by rising images of Fréchet spaces under continuous linear injections, every continuous
