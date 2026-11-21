@@ -374,7 +374,22 @@ theorem compactSupport_translate_no_inductiveLimit (hE : IsFrechetTVS E)
     (f : C_c(ℝ, E)) (hf : f ≠ 0) (hK : tsupport (f : ℝ → E) ⊆ Icc 0 1)
     (g : ℕ → C_c(ℝ, E)) (hg : ∀ n x, g n x = f (x - n)) :
     letI := compactSupportLCTopology ℝ E
-    ¬ ∃ a : C_c(ℝ, E), Tendsto g atTop (𝓝 a) := by sorry
+    ¬ ∃ a : C_c(ℝ, E), Tendsto g atTop (𝓝 a) := by
+  let := compactSupportLCTopology ℝ E
+  let := compactSupportLCTopology_polynormable (X := ℝ) (E := E)
+  let := PolynormableSpace.isTopologicalAddGroup ℂ C_c(ℝ, E)
+  rintro ⟨a, ha⟩
+  obtain ⟨K, hKr⟩ := compactSupport_bounded_subset_stage (range g) (ha.isVonNBounded_range ℂ)
+  obtain ⟨R, hR⟩ := K.isCompact.bddAbove
+  obtain ⟨y, hy⟩ : ∃ y : ℝ, f y ≠ 0 := by
+    by_contra! h
+    exact hf (CompactlySupportedContinuousMap.ext h)
+  have hy0 : 0 ≤ y := (hK (subset_tsupport f hy)).1
+  obtain ⟨n, hn⟩ := exists_nat_gt R
+  have hnz : g n (y + n) ≠ 0 := by simpa only [hg, add_sub_cancel_right] using hy
+  have hmem := (mem_compactSupportStage_iff K (g n)).mp (hKr (mem_range_self n))
+    (subset_tsupport (g n) hnz)
+  exact (hn.trans_le (le_add_of_nonneg_left hy0)).not_ge (hR hmem)
 
 -- TODO(paper-gap): The last sentence of Example C.5.1.5 extends the distinction to
 -- compact manifolds, where the two topologies agree.
