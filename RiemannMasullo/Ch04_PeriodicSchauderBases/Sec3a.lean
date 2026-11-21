@@ -90,6 +90,21 @@ theorem regularTranslate_ae_eq (g : G) (f : RegularL2 ν) :
     (regularTranslate ν g f : G → ℂ) =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by
   exact DomMulAct.smul_Lp_ae_eq (DomMulAct.mk g⁻¹) f
 
+private theorem regularTranslate_toLp_ae_eq (g : G) (f : G →C_c ℂ) :
+    (regularTranslate ν g ((regularL2_memLp_compactlySupported ν f).toLp f) : G → ℂ)
+      =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by
+  exact ((regularL2_memLp_compactlySupported ν f).comp_measurePreserving
+    (measurePreserving_mul_left ν g⁻¹)).coeFn_toLp
+
+private theorem eq_regularTranslate_of_compactlySupported (g : G)
+    (T : RegularL2 ν →L[ℂ] RegularL2 ν)
+    (hT : ∀ f : G →C_c ℂ, (T ((regularL2_memLp_compactlySupported ν f).toLp f) : G → ℂ)
+      =ᵐ[ν] fun x ↦ f (g⁻¹ * x)) (u : RegularL2 ν) : T u = regularTranslate ν g u := by
+  refine (regularL2_compactlySupported_dense ν).induction_on u
+    (isClosed_eq T.continuous (continuous_const_smul (DomMulAct.mk g⁻¹))) ?_
+  intro f
+  exact Lp.ext ((hT f).trans (regularTranslate_toLp_ae_eq ν g f).symm)
+
 /-- Paper: Lemma 4.3.1.5(2), p. 176. Translation extends to a unique strongly
 continuous linear action on Haar L². Its values on compactly supported
 continuous functions agree almost everywhere with the original formula. -/
@@ -98,7 +113,26 @@ theorem existsUnique_regularL2_action :
       (∀ f : RegularL2 ν, Continuous fun g ↦ ρ g f) ∧
       ∀ (g : G) (f : G →C_c ℂ),
         (ρ g ((regularL2_memLp_compactlySupported ν f).toLp f) : G → ℂ)
-          =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by sorry
+          =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by
+  have : Fact ((2 : ℝ≥0∞) ≠ ∞) := ⟨by norm_num⟩
+  let ρ : G →* (RegularL2 ν →L[ℂ] RegularL2 ν) :=
+    { toFun := fun g ↦
+        (Lp.compMeasurePreservingₗᵢ ℂ _ (measurePreserving_mul_left ν g⁻¹)).toContinuousLinearMap
+      map_one' := by
+        ext f : 1
+        change DomMulAct.mk (1 : G)⁻¹ • f = f
+        simp
+      map_mul' := by
+        intro g h
+        ext f : 1
+        change DomMulAct.mk (g * h)⁻¹ • f = DomMulAct.mk g⁻¹ • DomMulAct.mk h⁻¹ • f
+        rw [mul_inv_rev, DomMulAct.mk_mul]
+        exact (inferInstance : MulAction Gᵈᵐᵃ (RegularL2 ν)).mul_smul _ _ _ }
+  refine ⟨ρ, ⟨fun f ↦ ?_, regularTranslate_toLp_ae_eq ν⟩, ?_⟩
+  · exact (DomMulAct.continuous_mk.comp continuous_inv).smul continuous_const
+  · intro σ hσ
+    ext g f : 2
+    exact eq_regularTranslate_of_compactlySupported ν g (σ g) (hσ.2 g) f
 
 /-- Paper: Lemma 4.3.1.5(2), p. 176. The regular representation uses the unique
 strongly continuous extension of translation from compactly supported functions. -/
