@@ -295,7 +295,17 @@ Deviation: The same formulation covers the scalar example and its Fréchet-value
 theorem compactSupport_translate_tendsto_compactOpen (f : C_c(ℝ, E)) (hf : f ≠ 0)
     (hK : tsupport (f : ℝ → E) ⊆ Icc 0 1)
     (g : ℕ → C_c(ℝ, E)) (hg : ∀ n x, g n x = f (x - n)) :
-    Tendsto (fun n ↦ (g n).toContinuousMap) atTop (𝓝 0) := by sorry
+    Tendsto (fun n ↦ (g n).toContinuousMap) atTop (𝓝 0) := by
+  apply ContinuousMap.tendsto_nhds_compactOpen.mpr
+  intro K hcompact U _ hU
+  obtain ⟨R, hR⟩ := hcompact.bddAbove
+  obtain ⟨N, hN⟩ := exists_nat_gt R
+  filter_upwards [eventually_ge_atTop N] with n hn x hx
+  have hneg : x - n < 0 := sub_neg.mpr ((hR hx).trans_lt (hN.trans_le (Nat.cast_le.mpr hn)))
+  have hout : x - n ∉ tsupport (f : ℝ → E) := fun hs ↦ hneg.not_ge (hK hs).1
+  change g n x ∈ U
+  rw [hg, image_eq_zero_of_notMem_tsupport hout]
+  exact hU hx
 
 /-- Paper: Example C.5.1.5, p. 722. Positive integer translates of a nonzero continuous
 map supported in the unit interval have no limit in the inductive limit topology.
