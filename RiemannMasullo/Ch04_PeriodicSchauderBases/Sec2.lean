@@ -6,6 +6,7 @@ public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
+import Mathlib.Analysis.Calculus.SmoothSeries
 import RiemannMasullo.ForMathlib.Analysis.Fourier.UnitCircle
 
 /-!
@@ -922,10 +923,211 @@ profiles has a continuous linear right inverse. -/
 theorem cyclicPeriodization_hasSection :
     ∃ s : S →L[ℂ] E, Function.RightInverse s (cyclicPeriodizationCLM γ hγ) := by sorry
 
+private def circleSequenceMass (s : ℤ → ℂ) (j : ℕ) (m : ℤ) : NNReal :=
+  (1 + ‖(m : ℝ)‖₊)^j * ‖s m‖₊
+
+private theorem circleSequenceMass_coe (s : ℤ → ℂ) (j : ℕ) (m : ℤ) :
+    (circleSequenceMass s j m : ℝ) = (1 + ‖(m : ℝ)‖)^j * ‖s m‖ := by
+  simp [circleSequenceMass]
+
+private theorem latticeBound_one (s : (Fin 1 → ℤ) → ℂ) (j : ℕ) :
+    rapidDecaySequenceBound j s =
+      ∑' m : ℤ, (circleSequenceMass (fun k ↦ s (fun _ ↦ k)) j m : ENNReal) := by
+  let e := (Equiv.funUnique (Fin 1) ℤ).symm
+  unfold rapidDecaySequenceBound
+  rw [← e.tsum_eq]
+  apply tsum_congr
+  intro m
+  have hn : ‖(WithLp.toLp 2 (fun _ : Fin 1 ↦ (m : ℝ)) : EuclideanSpace ℝ (Fin 1))‖₊ = ‖(m : ℝ)‖₊ := by
+    apply NNReal.eq
+    simp [EuclideanSpace.norm_eq, Real.sqrt_sq_eq_abs]
+  change (1 + (‖(WithLp.toLp 2 (fun _ : Fin 1 ↦ (m : ℝ)) : EuclideanSpace ℝ (Fin 1))‖₊ : ENNReal))^j *
+    (‖s (fun _ ↦ m)‖₊ : ENNReal) = _
+  simp [circleSequenceMass, hn, ENNReal.coe_pow, ENNReal.coe_add, ENNReal.coe_mul]
+
+private theorem lattice_one_summable (s : RapidDecaySequence 1) (j : ℕ) :
+    Summable (fun m : ℤ ↦ (circleSequenceMass (fun k ↦ s (fun _ ↦ k)) j m : ℝ)) := by
+  apply NNReal.summable_coe.mpr
+  apply ENNReal.tsum_coe_ne_top_iff_summable.mp
+  rw [← latticeBound_one]
+  exact (s.property j).ne
+
+private theorem latticeSeminorm_one (s : RapidDecaySequence 1) (j : ℕ) :
+    rapidDecaySequenceSeminorm j s = ∑' m : ℤ, (circleSequenceMass (fun k ↦ s (fun _ ↦ k)) j m : ℝ) := by
+  change (rapidDecaySequenceBound j s.val).toReal = _
+  rw [latticeBound_one, ← ENNReal.coe_tsum (NNReal.summable_coe.mp (lattice_one_summable s j))]
+  exact NNReal.coe_tsum
+
+private theorem circleFrequency_norm (m : ℤ) : ‖unitCircleFrequency m‖ = (2*Real.pi) * ‖(m : ℝ)‖ := by
+  simp [unitCircleFrequency, Real.norm_eq_abs, abs_of_pos Real.pi_pos, Complex.norm_intCast]
+
+private theorem circle_polynomial_weight_le (j : ℕ) (m : ℤ) :
+    (1 + ‖(m : ℝ)‖)^j ≤ (2:ℝ)^j * (1 + ‖unitCircleFrequency m‖^j) := by
+  have hm : ‖(m : ℝ)‖ ≤ ‖unitCircleFrequency m‖ := by
+    rw [circleFrequency_norm]
+    nlinarith only [Real.pi_gt_three, norm_nonneg (m : ℝ), mul_nonneg
+      (show 0 ≤ 2*Real.pi-1 by linarith [Real.pi_gt_three]) (norm_nonneg (m : ℝ))]
+  by_cases h : ‖(m : ℝ)‖ ≤ 1
+  · have hp := pow_le_pow_left₀ (by positivity : 0 ≤ 1 + ‖(m : ℝ)‖) (by linarith : 1 + ‖(m : ℝ)‖ ≤ 2) j
+    exact hp.trans (le_mul_of_one_le_right (by positivity) (by linarith [pow_nonneg (norm_nonneg (unitCircleFrequency m)) j]))
+  · calc
+      _ ≤ (2 * ‖unitCircleFrequency m‖)^j := by gcongr; linarith
+      _ ≤ _ := by rw [mul_pow]; gcongr; linarith
+
+private def circleSequenceValue (f : S) (a : Fin 1 → ℤ) := cyclicFourierCoeff (a 0) f
+
+/-- A continuous seminorm bounds each weighted absolute sum of Fourier coefficients. -/
+private theorem circleSequence_analysis_bound (j : ℕ) :
+    ∃ Q : Seminorm ℂ S, Continuous Q ∧ ∀ f : S,
+      let w := circleSequenceMass (fun m ↦ cyclicFourierCoeff m f) j
+      Summable (fun m ↦ (w m : ℝ)) ∧ (∑' m, (w m : ℝ)) ≤ Q f := by
+  let p := (elementarySchwartzSeminorm (jetIndex 0) + elementarySchwartzSeminorm (jetIndex j) : Seminorm ℂ S)
+  have htop := withGeneratingSeminorms_spec (elementarySchwartzSubmodule 0 1 0 PUnit.{1}) elementarySchwartzSeminorm
+  have hp : Continuous p := (htop.continuous_seminorm (jetIndex 0)).add (htop.continuous_seminorm (jetIndex j))
+  obtain ⟨q, hq, ha⟩ := cyclicExponential_absoluteBasis.2 p hp
+  let C : NNReal := 2^j
+  refine ⟨C • q, hq.const_smul C, fun f ↦ ?_⟩
+  let t (m : ℤ) := p (cyclicFourierCoeff m f • cyclicExponential m)
+  let e := Equiv.intEquivNat.symm
+  obtain ⟨ha₁, ha₂⟩ := ha f
+  have hs : Summable t := e.summable_iff.mp ha₁
+  have ht : (∑' m, t m) ≤ q f := by
+    rwa [← e.tsum_eq t]
+  have hterm (m : ℤ) : (circleSequenceMass (fun m ↦ cyclicFourierCoeff m f) j m : ℝ) ≤ (C : ℝ) * t m := by
+    rw [circleSequenceMass_coe]
+    change _ ≤ (C : ℝ) * p (cyclicFourierCoeff m f • cyclicExponential m)
+    rw [map_smul_eq_mul]
+    have he (k : ℕ) : elementarySchwartzSeminorm (jetIndex k) (cyclicExponential m) = ‖unitCircleFrequency m‖^k := by
+      rw [circleSeminorm_eq_jetNorm]
+      change ‖circleJetLM k (cyclicExponential m)‖ = _
+      rw [circleJetLM_exponential, norm_smul, fourier_norm, mul_one, norm_pow]
+    change _ ≤ (2:ℝ)^j * (‖cyclicFourierCoeff m f‖ * (_ + _))
+    rw [he 0, he j, pow_zero]
+    calc
+      _ ≤ ((2:ℝ)^j * (1 + ‖unitCircleFrequency m‖^j)) * ‖cyclicFourierCoeff m f‖ := by
+        exact mul_le_mul_of_nonneg_right (circle_polynomial_weight_le j m) (norm_nonneg _)
+      _ = _ := by ring
+  have hmajor := hs.mul_left (C : ℝ)
+  have hsum := Summable.of_nonneg_of_le (fun m ↦ (circleSequenceMass _ j m).coe_nonneg) hterm hmajor
+  refine ⟨hsum, (hsum.tsum_le_tsum hterm hmajor).trans ?_⟩
+  rw [tsum_mul_left]
+  exact mul_le_mul_of_nonneg_left ht C.coe_nonneg
+
+private def circleSequenceAnalysis : S →ₗ[ℂ] RapidDecaySequence 1 where
+  toFun f := ⟨circleSequenceValue f, fun j ↦ by
+    obtain ⟨_, _, h⟩ := circleSequence_analysis_bound j
+    rw [latticeBound_one]
+    exact lt_top_iff_ne_top.mpr (ENNReal.tsum_coe_ne_top_iff_summable.mpr
+      (NNReal.summable_coe.mp (h f).1))⟩
+  map_add' f g := Subtype.ext (funext fun a ↦ (cyclicFourierCoeff (a 0)).map_add f g)
+  map_smul' c f := Subtype.ext (funext fun a ↦ (cyclicFourierCoeff (a 0)).map_smul c f)
+
+private theorem continuous_circleSequenceAnalysis : Continuous circleSequenceAnalysis := by
+  apply (withGeneratingSeminorms_spec (rapidDecaySequenceSubmodule 1) rapidDecaySequenceSeminorm).continuous_of_continuous_comp
+  intro j
+  obtain ⟨q, hq, hbound⟩ := circleSequence_analysis_bound j
+  apply Seminorm.continuous_of_le hq
+  intro f
+  change rapidDecaySequenceSeminorm j (circleSequenceAnalysis f) ≤ q f
+  rw [latticeSeminorm_one]
+  exact (hbound f).2
+
+private theorem injective_circleSequenceAnalysis : Injective circleSequenceAnalysis := by
+  intro f g h
+  have hc (m : ℤ) : cyclicFourierCoeff m f = cyclicFourierCoeff m g :=
+    congrArg (fun s : RapidDecaySequence 1 ↦ s (fun _ ↦ m)) h
+  have hf := hasSum_circleFourier f
+  simp_rw [hc] at hf
+  let : T2Space S := elementarySchwartz_t2
+  exact hf.unique (hasSum_circleFourier g)
+
+private theorem circleFrequency_power_le (j : ℕ) (m : ℤ) :
+    ‖unitCircleFrequency m‖^j ≤ (2 * Real.pi)^j * (1 + ‖(m:ℝ)‖)^j := by
+  rw [circleFrequency_norm, ← mul_pow]
+  gcongr
+  linarith
+
+private theorem circleSequence_surjective : Surjective circleSequenceAnalysis := by
+  intro s
+  let c (m : ℤ) := s (fun _ ↦ m)
+  let v (k : ℕ) (m : ℤ) : ℝ := (2*Real.pi)^k * (circleSequenceMass c k m : ℝ)
+  have hv (k : ℕ) : Summable (v k) := (lattice_one_summable s k).mul_left _
+  let t (m : ℤ) (z : T) := c m * fourier m z
+  have hmono (m : ℤ) : ContDiff ℝ ∞ (fun x : ℝ ↦ fourier m (x : T)) := by
+    have hcoe : ContDiff ℝ ∞ ((↑) : ℝ → ℂ) := Complex.ofRealCLM.contDiff
+    simp only [fourier_coe_apply]
+    fun_prop
+  have ht (m : ℤ) : ContDiff ℝ ∞ (fun x : ℝ ↦ t m (x : T)) := contDiff_const.mul (hmono m)
+  have hb (k : ℕ) (m : ℤ) (x : ℝ) :
+      ‖iteratedFDeriv ℝ k (fun x : ℝ ↦ t m (x : T)) x‖ ≤ v k m := by
+    rw [norm_iteratedFDeriv_eq_norm_iteratedDeriv]
+    change ‖iteratedDeriv k (fun y : ℝ ↦ c m * fourier m (y : T)) x‖ ≤ _
+    rw [iteratedDeriv_const_mul _ ((hmono m).of_le (by simp)).contDiffAt, iteratedDeriv_unitCircle_fourier,
+      norm_mul, norm_mul, norm_pow]
+    simp only [fourier_apply, Circle.norm_coe, mul_one]
+    change _ ≤ (2*Real.pi)^k * (circleSequenceMass c k m : ℝ)
+    rw [circleSequenceMass_coe]
+    calc
+      _ ≤ ‖c m‖ * ((2*Real.pi)^k * (1+‖(m : ℝ)‖)^k) := by
+        exact mul_le_mul_of_nonneg_left (circleFrequency_power_le k m) (norm_nonneg _)
+      _ = _ := by ring
+  let u (z : T) := ∑' m, t m z
+  have hu : ContDiff ℝ ∞ (fun x : ℝ ↦ u (x : T)) :=
+    contDiff_tsum (v := v) ht (fun k _ ↦ hv k) (fun k m x _ ↦ hb k m x)
+  let f : S := ⟨fun g ↦ u (g.2.1 0), mem_elementarySchwartz_circle_of_contDiff hu⟩
+  have hs (z : T) : HasSum (fun m ↦ fourier m z • c m) (u z) := by
+    have hnorm (m : ℤ) : ‖t m z‖ ≤ v 0 m := by
+      simp [t, v, circleSequenceMass, fourier_apply, Circle.norm_coe]
+    have h := ((hv 0).of_norm_bounded hnorm).hasSum
+    exact h.congr_fun fun m ↦ mul_comm (fourier m z) (c m)
+  have hc := fourierCoeff_eq_of_hasSum hs
+  refine ⟨f, Subtype.ext <| funext fun a ↦ ?_⟩
+  change fourierCoeff u (a 0) = s a
+  rw [hc]
+  exact congrArg s (funext fun i ↦ congrArg a (Subsingleton.elim _ _))
+
+/-- Each uniform derivative norm of a smooth function is controlled by a single
+weighted absolute sum of its Fourier coefficients. -/
+private theorem circleSequence_inverse_bound (i : ElementarySchwartzIndex 0 1 0) (f : S) :
+    elementarySchwartzSeminorm i f ≤ (2*Real.pi)^(i.2.2.1 0) *
+      rapidDecaySequenceSeminorm (i.2.2.1 0) (circleSequenceAnalysis f) := by
+  let k := i.2.2.1 0
+  let c (m : ℤ) := cyclicFourierCoeff m f
+  let v (m : ℤ) : ℝ := (2*Real.pi)^k * (circleSequenceMass c k m : ℝ)
+  let t (m : ℤ) : C(T, ℂ) := (unitCircleFrequency m^k * c m) • fourier m
+  have hsum : HasSum t (circleJetLM k f) :=
+    hasSum_unitCircleJet_fourier (circleRestriction f) (circleRestriction_smooth f) k
+  have hv : Summable v := (lattice_one_summable (circleSequenceAnalysis f) k).mul_left _
+  have hnorm (m : ℤ) : ‖t m‖ ≤ v m := by
+    simp only [t, norm_smul, fourier_norm, mul_one, norm_mul, norm_pow]
+    change _ ≤ (2*Real.pi)^k * (circleSequenceMass c k m : ℝ)
+    rw [circleSequenceMass_coe]
+    calc
+      _ ≤ ((2*Real.pi)^k * (1 + ‖(m : ℝ)‖)^k) * ‖c m‖ := by
+        exact mul_le_mul_of_nonneg_right (circleFrequency_power_le k m) (norm_nonneg _)
+      _ = _ := by ring
+  rw [circleSeminorm_eq_jetNorm, ← hsum.tsum_eq, latticeSeminorm_one]
+  calc
+    _ ≤ ∑' m, v m := tsum_of_norm_bounded hv.hasSum hnorm
+    _ = _ := tsum_mul_left
+
 /-- Paper: Remark 4.2.2.6, p. 173. The circle Schwartz space is topologically
 and linearly isomorphic to the space of rapidly decreasing integer sequences. -/
 theorem cyclicSchwartz_equiv_rapidDecay :
-    Nonempty (S ≃L[ℂ] RapidDecaySequence 1) := by sorry
+    Nonempty (S ≃L[ℂ] RapidDecaySequence 1) := by
+  let e := LinearEquiv.ofBijective circleSequenceAnalysis ⟨injective_circleSequenceAnalysis, circleSequence_surjective⟩
+  refine ⟨{ e with continuous_toFun := continuous_circleSequenceAnalysis, continuous_invFun := ?_ }⟩
+  apply (withGeneratingSeminorms_spec (elementarySchwartzSubmodule 0 1 0 PUnit.{1}) elementarySchwartzSeminorm).continuous_of_continuous_comp e.symm.toLinearMap
+  intro i
+  let k := i.2.2.1 0
+  let C : NNReal := ⟨(2*Real.pi)^k, by positivity⟩
+  let p : Seminorm ℂ (RapidDecaySequence 1) := rapidDecaySequenceSeminorm k
+  have hq : Continuous p := (withGeneratingSeminorms_spec (rapidDecaySequenceSubmodule 1) rapidDecaySequenceSeminorm).continuous_seminorm k
+  apply Seminorm.continuous_of_le (q := C • p) (hq.const_smul C)
+  intro s
+  have h := circleSequence_inverse_bound i (e.symm s)
+  change elementarySchwartzSeminorm i (e.symm s) ≤ (2*Real.pi)^k * rapidDecaySequenceSeminorm k (e (e.symm s)) at h
+  rwa [e.apply_symm_apply] at h
 
 /-- Paper: Remark 4.2.2.6, p. 173. The real Schwartz space is topologically
 and linearly isomorphic to the space of rapidly decreasing sequences. -/
