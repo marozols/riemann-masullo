@@ -8,15 +8,19 @@ public import Mathlib.Analysis.LocallyConvex.WeakSpace
 public import Mathlib.Analysis.Normed.Module.Completion
 public import Mathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
 import Mathlib.Algebra.Module.ULift
+import Mathlib.Analysis.LocallyConvex.Separation
 import Mathlib.Analysis.InnerProductSpace.Dual
 import Mathlib.Analysis.Normed.Lp.lpSpace
 import Mathlib.Analysis.Normed.Module.DoubleDual
+import Mathlib.Analysis.Normed.Module.FiniteDimension
 import Mathlib.Analysis.Normed.Operator.BanachSteinhaus
 import Mathlib.Topology.Algebra.Module.Star
+import Mathlib.Topology.Baire.CompleteMetrizable
 import Mathlib.Topology.ContinuousMap.ZeroAtInfty
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.WithSeminorms
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.Seminorm.DirectSum
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.WeakDual
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
 
 /-!
 # Locally convex topological vector spaces
@@ -909,7 +913,15 @@ structure IsInjectiveLCLimit (j : ∀ k, X k →L[ℂ] X (k+1)) (i : ∀ k, X k 
 the original locally convex space as its limit. -/
 theorem isInjectiveLCLimit_const [PolynormableSpace ℂ E] :
     IsInjectiveLCLimit (X := fun _ ↦ E) (fun _ ↦ ContinuousLinearMap.id ℂ E)
-      (fun _ ↦ ContinuousLinearMap.id ℂ E) := by sorry
+      (fun _ ↦ ContinuousLinearMap.id ℂ E) := by
+  refine ⟨fun _ ↦ Function.injective_id, fun _ ↦ rfl, fun x ↦ ⟨0, x, rfl⟩, ?_⟩
+  change tE = (SeminormFamily.moduleFilterBasis
+    (Subtype.val : {p : Seminorm ℂ E // ∀ _ : ℕ, Continuous p} → Seminorm ℂ E)).topology
+  have h : (fun p : Seminorm ℂ E ↦ ∀ _ : ℕ, Continuous p) =
+      (fun p : Seminorm ℂ E ↦ Continuous p) := by
+    simp only [forall_const]
+  rw [h]
+  exact (PolynormableSpace.withSeminorms ℂ E).withSeminorms_eq
 
 /-- Paper: Remark C.1.3.3, p. 660. A strict countable limit of complete Hausdorff
 locally convex spaces is complete. If the stages are Fréchet and each inclusion
@@ -975,7 +987,59 @@ theorem frechet_factorization [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [
     (hX : ∀ k, IsFrechetTVS (X k)) (i : ∀ k, X k →L[ℂ] E) (hi : ∀ k, Function.Injective (i k))
     (hr : ∀ k, range (i k) ⊆ range (i (k+1))) (hcov : ∀ x : E, ∃ k, x ∈ range (i k))
     {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F] (hF : IsFrechetTVS F)
-    (u : F →L[ℂ] E) : ∃ k, ∃ v : F →L[ℂ] X k, (i k).comp v = u := by sorry
+    (u : F →L[ℂ] E) : ∃ k, ∃ v : F →L[ℂ] X k, (i k).comp v = u := by
+  obtain ⟨hTF, hPF, hMF, hCF⟩ := hF
+  let : UniformSpace F := IsTopologicalAddGroup.rightUniformSpace F
+  have : IsUniformAddGroup F := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace F := hCF
+  have : (uniformity F).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero F]
+    infer_instance
+  have : BaireSpace F := by
+    let := UniformSpace.metricSpace F
+    infer_instance
+  -- Project the closed graphs of the equations u x = iₖ y onto F.
+  let diff (k : ℕ) := u.comp (ContinuousLinearMap.fst ℂ F (X k)) -
+    (i k).comp (ContinuousLinearMap.snd ℂ F (X k))
+  let G (k : ℕ) := (diff k).ker
+  let p (k : ℕ) := (ContinuousLinearMap.fst ℂ F (X k)).comp (G k).subtypeL
+  have hg (k : ℕ) (z : G k) : u z.val.1 = i k z.val.2 := sub_eq_zero.mp z.property
+  have hcover : ⋃ k, range (p k) = univ := by
+    apply eq_univ_of_forall
+    intro x
+    obtain ⟨k, y, hy⟩ := hcov (u x)
+    exact mem_iUnion.mpr ⟨k, ⟨(x, y), sub_eq_zero.mpr hy.symm⟩, rfl⟩
+  -- Baire gives a nonmeagre range, which is the hypothesis of the open mapping theorem.
+  have hex : ∃ k, ¬ IsMeagre (range (p k)) := by
+    by_contra! hm
+    have hm' := isMeagre_iUnion hm
+    rw [hcover] at hm'
+    exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty hm'
+  obtain ⟨k, hk⟩ := hex
+  obtain ⟨hTk, hPk, hMk, hCk⟩ := hX k
+  let : UniformSpace (X k) := IsTopologicalAddGroup.rightUniformSpace (X k)
+  have : IsUniformAddGroup (X k) := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace (X k) := hCk
+  have : CompleteSpace (G k) := completeSpace_coe_iff_isComplete.mpr (diff k).isClosed_ker.isComplete
+  have : IsUniformAddGroup (G k) := (G k).toAddSubgroup.isUniformAddGroup
+  have : FirstCountableTopology (G k) :=
+    inferInstanceAs (FirstCountableTopology ((G k) : Set (F × X k)))
+  have hop := isOpenMap_of_not_isMeagre_range (p k) hk
+  have hs : Function.Surjective (p k) := by
+    apply LinearMap.range_eq_top.mp
+    apply Submodule.eq_top_of_nonempty_interior'
+    have ho : IsOpen (range (p k)) := hop.isOpen_range
+    rw [show ((p k).range : Set F) = range (p k) from rfl, ho.interior_eq]
+    exact range_nonempty _
+  have hinj : Function.Injective (p k) := by
+    intro z w hzw
+    apply Subtype.ext
+    exact Prod.ext hzw (hi k ((hg k z).symm.trans ((congrArg u hzw).trans (hg k w))))
+  let e := LinearEquiv.ofBijective (p k).toLinearMap ⟨hinj, hs⟩
+  let inv : F →L[ℂ] G k := ⟨e.symm, e.toEquiv.continuous_symm_iff.mpr hop⟩
+  refine ⟨k, ((ContinuousLinearMap.snd ℂ F (X k)).comp (G k).subtypeL).comp inv, ?_⟩
+  ext x
+  exact (hg k (inv x)).symm.trans (congrArg u (e.apply_symm_apply x))
 
 -- TODO(paper-gap): On p. 665 the second Baire argument only establishes a dense union.
 
@@ -1361,7 +1425,31 @@ def IsSchwartzTVS (E : Type*) [AddCommGroup E] [Module ℂ E] [TopologicalSpace 
 exactly when it is finite-dimensional.
 Deviation: Sanity check using the norm seminorm in the definition. -/
 theorem isSchwartzTVS_iff_finiteDimensional (E : Type*) [NormedAddCommGroup E] [NormedSpace ℂ E] :
-    IsSchwartzTVS E ↔ FiniteDimensional ℂ E := by sorry
+    IsSchwartzTVS E ↔ FiniteDimensional ℂ E := by
+  constructor
+  · intro h
+    obtain ⟨V, hV, htb⟩ := h.2 (normSeminorm ℂ E) continuous_norm
+    apply FiniteDimensional.of_totallyBounded_nhds_zero ℂ hV
+    have hu : (inferInstance : UniformSpace E) =
+        (normSeminorm ℂ E).toSeminormedAddCommGroup.toUniformSpace := by
+      simpa using (SeminormFamily.withSeminorms_iff_uniformSpace_eq_iInf _).mp
+        (norm_withSeminorms ℂ E)
+    exact (congrArg (fun u : UniformSpace E ↦ @TotallyBounded E u V) hu).mpr htb
+  · intro hE
+    have : ProperSpace E := FiniteDimensional.proper ℂ E
+    refine ⟨inferInstance, fun p hp ↦
+      ⟨Metric.closedBall 0 1, Metric.closedBall_mem_nhds _ zero_lt_one, ?_⟩⟩
+    -- The norm-compact unit ball stays compact for each continuous seminorm topology.
+    let t (s : {s : Seminorm ℂ E // Continuous s}) :=
+      s.val.toSeminormedAddCommGroup.toUniformSpace.toTopologicalSpace
+    have hle : (inferInstance : TopologicalSpace E) ≤ t ⟨p, hp⟩ :=
+      (PolynormableSpace.withSeminorms ℂ E).topologicalSpace_eq_iInf.le.trans
+        (iInf_le t ⟨p, hp⟩)
+    have hc : @Continuous E E _ (t ⟨p, hp⟩) id := continuous_id_of_le hle
+    apply @IsCompact.totallyBounded E p.toSeminormedAddCommGroup.toUniformSpace
+    have himg := @IsCompact.image E E _ (t ⟨p, hp⟩) _ id (isCompact_closedBall (0 : E) 1) hc
+    rw [Set.image_id] at himg
+    exact himg
 
 -- TODO(paper-gap): Example C.1.5.10 requires nuclear locally convex spaces from §C.2.4.
 
@@ -1404,7 +1492,139 @@ theorem dual_of_injectiveLCLimit (h : IsInjectiveLCLimit j i) :
     IsEmbedding (fun (L : WeakDual ℂ E) k ↦ StrongDual.toWeakDual (L.toStrongDual.comp (i k))) ∧
     ((∀ B : Set E, IsVonNBounded ℂ B →
       ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ B = i k '' A) →
-      IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k))) := by sorry
+      IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k))) := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro l hl
+    -- The union of the stage graphs is the graph of a linear functional on E.
+    let graph (k : ℕ) := LinearMap.range ((i k).toLinearMap.prod (l k).toLinearMap)
+    have hm : Monotone graph := monotone_nat_of_le_succ fun k _ ⟨a, ha⟩ ↦ by
+      refine ⟨j k a, ?_⟩
+      exact (Prod.ext (DFunLike.congr_fun (h.compatible k) a) (DFunLike.congr_fun (hl k) a)).trans ha
+    let G := ⨆ k, graph k
+    let proj : G →ₗ[ℂ] E := (LinearMap.fst ℂ E ℂ).comp G.subtype
+    have hmem (k : ℕ) (x : X k) : (i k x, l k x) ∈ G := le_iSup graph k ⟨x, rfl⟩
+    have hinj : Function.Injective proj := by
+      apply (injective_iff_map_eq_zero _).mpr
+      rintro ⟨p, hp⟩ hp0
+      obtain ⟨k, a, ha⟩ := (Submodule.mem_iSup_of_directed graph hm.directed_le).mp hp
+      have ha0 : a = 0 := h.injective k ((congrArg Prod.fst ha).trans (hp0.trans (map_zero _).symm))
+      subst a
+      exact Subtype.ext (ha.symm.trans (map_zero _))
+    have hsurj : Function.Surjective proj := by
+      intro x
+      obtain ⟨k, y, rfl⟩ := h.exhaustive x
+      exact ⟨⟨_, hmem k y⟩, rfl⟩
+    let e := LinearEquiv.ofBijective proj ⟨hinj, hsurj⟩
+    let L := ((LinearMap.snd ℂ E ℂ).comp G.subtype).comp e.symm.toLinearMap
+    have hLi (k : ℕ) (x : X k) : L (i k x) = l k x := by
+      have he : e.symm (i k x) = ⟨_, hmem k x⟩ := e.symm_apply_eq.mpr rfl
+      change (e.symm (i k x)).val.2 = _
+      rw [he]
+    -- Its norm is one of the seminorms defining the final locally convex topology.
+    let p := (normSeminorm ℂ ℂ).comp L
+    have hp (k : ℕ) : Continuous (p ∘ (i k).toLinearMap) := by
+      simpa only [p, Function.comp_def, Seminorm.comp_apply, coe_normSeminorm,
+        ContinuousLinearMap.coe_coe, hLi] using (l k).continuous.norm
+    let P : SeminormFamily ℂ E {s : Seminorm ℂ E // ∀ k, Continuous (s ∘ (i k).toLinearMap)} :=
+      Subtype.val
+    have hP : WithSeminorms P := ⟨h.topology_eq⟩
+    have hL : Continuous L := by
+      apply continuous_of_continuousAt_zero L
+      have hn := (hP.continuous_seminorm ⟨p, hp⟩).continuousAt (x := 0)
+      rw [ContinuousAt, map_zero, tendsto_zero_iff_norm_tendsto_zero]
+      change Tendsto (fun x ↦ ‖L x‖) (𝓝 0) (𝓝 ‖L 0‖) at hn
+      simpa only [map_zero, norm_zero] using hn
+    refine ⟨⟨L, hL⟩, fun k ↦ ContinuousLinearMap.ext (hLi k), ?_⟩
+    intro L' hL'
+    ext x
+    obtain ⟨k, y, rfl⟩ := h.exhaustive x
+    exact (DFunLike.congr_fun (hL' k) y).trans (hLi k y).symm
+  · -- Every evaluation on E comes from an evaluation on one stage.
+    choose k x hx using h.exhaustive
+    let eval (l : (k : ℕ) → WeakDual ℂ (X k)) (a : E) := l (k a) (x a)
+    have heval : Continuous eval := continuous_pi fun a ↦
+      (WeakDual.eval_continuous (x a)).comp (continuous_apply (k a))
+    let res (L : WeakDual ℂ E) (n : ℕ) := StrongDual.toWeakDual (L.toStrongDual.comp (i n))
+    have hc : Continuous res := continuous_pi fun n ↦
+      WeakDual.continuous_of_continuous_eval fun y ↦ WeakDual.eval_continuous (𝕜 := ℂ) (i n y)
+    refine IsEmbedding.of_comp hc heval ?_
+    have heq : eval ∘ res = fun L a ↦ L a := by
+      funext L a
+      exact congrArg L (hx a)
+    rw [heq]
+    exact WeakBilin.isEmbedding ContinuousLinearMap.coe_injective
+  · intro hb
+    let res : StrongDual ℂ E →L[ℂ] ((k : ℕ) → StrongDual ℂ (X k)) :=
+      ContinuousLinearMap.pi fun k ↦ ContinuousLinearMap.precomp ℂ (i k)
+    change IsEmbedding res
+    constructor
+    · apply IsTopologicalAddGroup.isInducing_iff_nhds_zero.mpr
+      refine le_antisymm (map_le_iff_le_comap.mp ?_) ?_
+      · simpa only [Tendsto, map_zero] using res.continuous.tendsto 0
+      · apply ContinuousLinearMap.hasBasis_nhds_zero.ge_iff.mpr
+        rintro ⟨B, V⟩ ⟨hB, hV⟩
+        obtain ⟨k, A, hA, rfl⟩ := hb B hB
+        have hA' : ∀ᶠ L : StrongDual ℂ (X k) in 𝓝 0, MapsTo L A V :=
+          ContinuousLinearMap.eventually_nhds_zero_mapsTo hA hV
+        have hpr := (continuous_apply k : Continuous
+          (fun l : (k : ℕ) → StrongDual ℂ (X k) ↦ l k)).tendsto 0
+        refine Filter.mem_comap.mpr ⟨{l | MapsTo (l k) A V}, hpr hA', ?_⟩
+        rintro L hL _ ⟨x, hx, rfl⟩
+        exact hL hx
+    · intro L M he
+      ext a
+      obtain ⟨k, x, rfl⟩ := h.exhaustive a
+      exact DFunLike.congr_fun (congrFun he k) x
+
+omit [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [T2Space E] [PolynormableSpace ℂ E]
+  [∀ k, IsTopologicalAddGroup (X k)] [∀ k, T2Space (X k)] [∀ k, PolynormableSpace ℂ (X k)] in
+/-- Paper: Remark C.1.6.2, p. 670. If restriction is an embedding, the polar of
+a bounded set contains the pullback of the polar of a bounded set at a single stage. -/
+private theorem IsInjectiveLCLimit.exists_stage_polar (h : IsInjectiveLCLimit j i)
+    (he : IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k)))
+    (B : Set E) (hB : IsVonNBounded ℂ B) :
+    ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ ∀ L : StrongDual ℂ E,
+      (∀ a ∈ A, ‖L (i k a)‖ ≤ 1) → ∀ b ∈ B, ‖L b‖ ≤ 1 := by
+  let R (k : ℕ) : StrongDual ℂ E →L[ℂ] StrongDual ℂ (X k) := ContinuousLinearMap.precomp ℂ (i k)
+  -- Compatibility makes the filters pulled back from the individual stages decreasing.
+  let N (k : ℕ) := comap (R k) (𝓝 0)
+  have hN : Antitone N := antitone_nat_of_succ_le fun k ↦ by
+    let J : StrongDual ℂ (X (k+1)) →L[ℂ] StrongDual ℂ (X k) := ContinuousLinearMap.precomp ℂ (j k)
+    have hcomp : ⇑(R k) = J ∘ R (k+1) := by
+      funext L
+      ext a
+      exact (congrArg L (DFunLike.congr_fun (h.compatible k) a)).symm
+    change comap (R (k+1)) (𝓝 0) ≤ comap (R k) (𝓝 0)
+    rw [hcomp, ← comap_comap]
+    apply comap_mono
+    apply map_le_iff_le_comap.mp
+    simpa only [Tendsto, map_zero] using J.continuous.tendsto 0
+  let S := {L : StrongDual ℂ E | ∀ b ∈ B, ‖L b‖ ≤ 1}
+  have hS : S ∈ 𝓝 0 := by
+    filter_upwards [ContinuousLinearMap.eventually_nhds_zero_mapsTo (σ := RingHom.id ℂ) hB
+      (Metric.closedBall_mem_nhds (0 : ℂ) (zero_lt_one : (0 : ℝ) < 1))] with L hL
+    intro b hb
+    simpa only [Metric.mem_closedBall, dist_zero_right] using hL hb
+  have heq : 𝓝 (0 : StrongDual ℂ E) = ⨅ k, N k := by
+    rw [he.isInducing.nhds_eq_comap, nhds_pi, Filter.pi, comap_iInf]
+    simp only [comap_comap]
+    rfl
+  obtain ⟨k, U, hU, hUS⟩ := (mem_iInf_of_directed hN.directed_ge S).mp (heq ▸ hS)
+  obtain ⟨⟨A, ε⟩, ⟨hA, hε⟩, hAU⟩ :=
+    (ContinuousLinearMap.hasBasis_nhds_zero_of_basis Metric.nhds_basis_closedBall).mem_iff.mp hU
+  -- Rescale the stage test set so its polar uses the unit disc.
+  let c : ℂ := (ε : ℂ)⁻¹
+  let d : X k →L[ℂ] X k := c • ContinuousLinearMap.id ℂ (X k)
+  refine ⟨k, d '' A, hA.image d, fun L hL ↦ hUS (hAU ?_)⟩
+  intro a ha
+  have hv := hL (d a) ⟨a, ha, rfl⟩
+  change ‖L ((i k) (c • a))‖ ≤ 1 at hv
+  simp only [map_smul, norm_smul, c, norm_inv, Complex.norm_real, Real.norm_eq_abs,
+    abs_of_pos hε, ← div_eq_inv_mul] at hv
+  apply Metric.mem_closedBall.mpr
+  rw [dist_zero_right]
+  change ‖L (i k a)‖ ≤ ε
+  simpa only [one_mul] using (div_le_iff₀ hε).mp hv
 
 /-- Paper: Remark C.1.6.2, p. 670. The strong dual has the projective limit topology
 exactly when every bounded set is in the closure, in the limit, of the image of a
@@ -1412,7 +1632,78 @@ bounded set in one stage. -/
 theorem strongDual_isEmbedding_iff_closure_bounded_stage (h : IsInjectiveLCLimit j i) :
     IsEmbedding (fun (L : StrongDual ℂ E) k ↦ L.comp (i k)) ↔
       ∀ B : Set E, IsVonNBounded ℂ B →
-        ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ B ⊆ closure (i k '' A) := by sorry
+        ∃ k, ∃ A : Set (X k), IsVonNBounded ℂ A ∧ B ⊆ closure (i k '' A) := by
+  constructor
+  · intro he B hB
+    obtain ⟨k, A, hA, htest⟩ := h.exists_stage_polar he B hB
+    let : Module ℝ E := Module.restrictScalars ℝ ℂ _
+    let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ _
+    let : Module ℝ (X k) := Module.restrictScalars ℝ ℂ _
+    let : IsScalarTower ℝ ℂ (X k) := IsScalarTower.restrictScalars ℝ ℂ _
+    let : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
+    let : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
+    let Z := {p : Seminorm ℂ (X k) // Continuous p}
+    have hP := PolynormableSpace.withSeminorms ℂ (X k)
+    choose r hr hbound using hP.isVonNBounded_iff_seminorm_bounded.mp hA
+    -- Enlarge A to a bounded, balanced, convex set by intersecting seminorm balls.
+    let C := ⋂ p : Z, p.val.ball 0 (r p)
+    have hAC : A ⊆ C := fun a ha ↦ mem_iInter.mpr fun p ↦
+      (Seminorm.mem_ball_zero _).mpr (hbound p a ha)
+    have hC0 : (0 : X k) ∈ C := mem_iInter.mpr fun p ↦ by
+      simpa only [Seminorm.mem_ball_zero, map_zero] using hr p
+    have hC : IsVonNBounded ℂ C := hP.isVonNBounded_iff_seminorm_bounded.mpr fun p ↦
+      ⟨r p, hr p, fun a ha ↦ (Seminorm.mem_ball_zero _).mp (mem_iInter.mp ha p)⟩
+    have hbal : Balanced ℂ C := balanced_iInter fun p ↦ p.val.balanced_ball_zero _
+    have hconv : Convex ℝ C := convex_iInter fun p ↦ (p.val.restrictScalars ℝ).convex_ball _ _
+    let D := closure (i k '' C)
+    have hD0 : (0 : E) ∈ D := subset_closure ⟨0, hC0, map_zero _⟩
+    have hD : Balanced ℂ D := (hbal.image (i k).toLinearMap).closure
+    have hDc : Convex ℝ D := (hconv.linear_image ((i k).restrictScalars ℝ).toLinearMap).closure
+    refine ⟨k, C, hC, fun b hb ↦ ?_⟩
+    by_contra hn
+    obtain ⟨L, s, hLs, hsb⟩ := RCLike.geometric_hahn_banach_closed_point (𝕜 := ℂ)
+      hDc isClosed_closure hn
+    -- Balance turns the separating bound on the real part into a bound on the norm.
+    have hnorm (z : E) (hz : z ∈ D) : ‖L z‖ < s := by
+      obtain ⟨c, hc, heq⟩ := RCLike.exists_norm_eq_mul_self (L z)
+      have hz' := hLs (c • z) (balanced_iff_smul_mem.mp hD hc.le hz)
+      rw [map_smul, smul_eq_mul, ← heq, RCLike.ofReal_re] at hz'
+      exact hz'
+    have hs : 0 < s := (norm_nonneg _).trans_lt (hnorm 0 hD0)
+    let M := (s : ℂ)⁻¹ • L
+    have hM (z : E) : ‖M z‖ = ‖L z‖ / s := by
+      simp only [M, smul_apply, norm_smul, norm_inv, Complex.norm_real,
+        Real.norm_eq_abs, abs_of_pos hs, div_eq_inv_mul]
+    have hb' := htest M (fun a ha ↦ by
+      rw [hM, div_le_iff₀ hs, one_mul]
+      exact (hnorm _ (subset_closure ⟨a, hAC ha, rfl⟩)).le) b hb
+    rw [hM, div_le_iff₀ hs, one_mul] at hb'
+    exact (hsb.trans_le (Complex.re_le_norm _)).not_ge hb'
+  · intro hb
+    let res : StrongDual ℂ E →L[ℂ] ((k : ℕ) → StrongDual ℂ (X k)) :=
+      ContinuousLinearMap.pi fun k ↦ ContinuousLinearMap.precomp ℂ (i k)
+    change IsEmbedding res
+    constructor
+    · apply IsTopologicalAddGroup.isInducing_iff_nhds_zero.mpr
+      refine le_antisymm (map_le_iff_le_comap.mp ?_) ?_
+      · simpa only [Tendsto, map_zero] using res.continuous.tendsto 0
+      · apply (ContinuousLinearMap.hasBasis_nhds_zero_of_basis Metric.nhds_basis_closedBall).ge_iff.mpr
+        rintro ⟨B, ε⟩ ⟨hB, hε⟩
+        obtain ⟨k, A, hA, hsub⟩ := hb B hB
+        let V := Metric.closedBall (0 : ℂ) ε
+        have hA' : ∀ᶠ L : StrongDual ℂ (X k) in 𝓝 0, MapsTo L A V :=
+          ContinuousLinearMap.eventually_nhds_zero_mapsTo hA (Metric.closedBall_mem_nhds _ hε)
+        have hpr := (continuous_apply k : Continuous
+          (fun l : (k : ℕ) → StrongDual ℂ (X k) ↦ l k)).tendsto 0
+        refine Filter.mem_comap.mpr ⟨{l | MapsTo (l k) A V}, hpr hA', ?_⟩
+        rintro L hL b hb'
+        apply closure_minimal (t := L ⁻¹' V) ?_ (Metric.isClosed_closedBall.preimage L.continuous) (hsub hb')
+        rintro _ ⟨a, ha, rfl⟩
+        exact hL ha
+    · intro L M he
+      ext a
+      obtain ⟨k, x, rfl⟩ := h.exhaustive a
+      exact DFunLike.congr_fun (congrFun he k) x
 
 end Duality
 

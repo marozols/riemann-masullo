@@ -108,7 +108,14 @@ theorem infiniteIdeleLog_surjective : Surjective (infiniteIdeleLog F) := by
 /-- Paper: Lemma A.2.3.2(1), p. 548. The logarithm takes products to sums. -/
 theorem infiniteIdeleLog_mul (g h : 𝕀∞) :
     infiniteIdeleLog F (g * h) = infiniteIdeleLog F g + infiniteIdeleLog F h := by
-  sorry
+  have hne (u : 𝕀∞) (v : InfinitePlace F) : u.val v ≠ 0 :=
+    (Units.map (Pi.evalRingHom InfinitePlace.Completion v).toMonoidHom u).ne_zero
+  funext v
+  change (v.mult : ℝ) * Real.log ‖(g.val * h.val) v‖ =
+    v.mult * Real.log ‖g.val v‖ + v.mult * Real.log ‖h.val v‖
+  rw [← mul_add, ← Real.log_mul (norm_ne_zero_iff.mpr (hne g v)) (norm_ne_zero_iff.mpr (hne h v)),
+    ← norm_mul]
+  rfl
 
 /-- Paper: Lemma A.2.3.2(1), p. 548. The full logarithm is continuous. -/
 theorem infiniteIdeleLog_continuous : Continuous (infiniteIdeleLog F) := by
@@ -178,8 +185,8 @@ theorem regulator_kernel : (Units.logEmbedding F).ker = (Units.torsion F).toAddS
 
 /-- Paper: Lemma A.2.3.4(2), p. 548. The torsion units are the roots of unity of
 order dividing the number of torsion units. -/
-theorem regulator_torsion_roots : Units.torsion F = rootsOfUnity (Units.torsionOrder F) (𝓞 F) := by
-  sorry
+theorem regulator_torsion_roots : Units.torsion F = rootsOfUnity (Units.torsionOrder F) (𝓞 F) :=
+  (Units.rootsOfUnity_eq_torsion F).symm
 
 /-- Paper: Lemma A.2.3.4(2), p. 548. The group of torsion units is finite. -/
 theorem regulator_torsion_finite : Finite (Units.torsion F) := by

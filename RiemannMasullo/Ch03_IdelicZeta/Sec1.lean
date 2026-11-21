@@ -4,11 +4,14 @@ public import RiemannMasullo.AppA_AlgebraicNT.Sec1
 public import Mathlib.Analysis.SpecialFunctions.Pow.Complex
 public import Mathlib.Geometry.Manifold.LocalDiffeomorph
 public import Mathlib.NumberTheory.NumberField.HeckeLFunction
+public import Mathlib.Topology.Algebra.Group.Units
 public import Mathlib.Topology.Algebra.PontryaginDual
 
+import Mathlib.Analysis.Normed.Field.ProperSpace
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 
 import RiemannMasullo.ForMathlib.Analysis.Complex.CoveringMap
+import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
@@ -658,6 +661,13 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
       (∀ c, e c = dualQuasiCharacter m hm c) ∧ ∀ c, e.symm c = dualQuasiCharacter m hm c := by
   sorry
 
+/-- Paper: Following Equation (3.1.1.4), p. 119. Duality exchanges the components
+indexed by a norm-one character and its complex conjugate. -/
+theorem dualQuasiCharacter_image_component [IsTopologicalGroup G] (hm : IsProperMap m)
+    (hne : ∃ g, m g ≠ 1) (χ : PontryaginDual m.ker) :
+    dualQuasiCharacter m hm.continuous '' componentVerticalStrip m hm hne χ Set.univ =
+      componentVerticalStrip m hm hne χ⁻¹ Set.univ := by sorry
+
 end Generalities
 
 section Ideles
@@ -715,7 +725,19 @@ theorem sIdeleQuotientNorm_exists_section :
 
 /-- Paper: §3.1.2, p. 120. The global idele class norm is a proper module. -/
 theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
-  sorry
+  let n := ideleClassNorm F
+  let : CompactSpace n.ker := (ideleClassGroup_finiteness F).2.1
+  obtain ⟨_, _, _, _, _, _, _, _, hn, _, ⟨s, hs, hsn⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  let f (p : n.ker × ℝ≥0ˣ) := p.1.val * s p.2
+  have hf : Continuous f := (continuous_subtype_val.comp continuous_fst).mul (hs.comp continuous_snd)
+  have hcomp : n ∘ f = Prod.snd := by
+    funext p
+    change n (p.1.val * s p.2) = p.2
+    rw [map_mul, MonoidHom.mem_ker.mp p.1.property, hsn, one_mul]
+  apply isProperMap_of_comp_of_surj hf hn (hcomp ▸ isProperMap_snd_of_compactSpace)
+  intro g
+  refine ⟨(⟨g / s (n g), ?_⟩, n g), div_mul_cancel _ _⟩
+  exact MonoidHom.mem_ker.mpr (by rw [map_div, hsn, div_self'])
 
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
@@ -726,13 +748,27 @@ theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) :=
 passing to idele classes is continuous. -/
 theorem continuous_ideleClass_ofAdicCompletion (v : Primes(F)) :
     Continuous (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  apply continuous_const.prodMk
+  apply continuous_restrictedProduct_of_uniform
+  · intro w
+    exact (continuous_apply w).comp (continuous_mulSingle (A := fun u : Primes(F) ↦
+      u.adicCompletion F) v)
+  · filter_upwards [Filter.eventually_cofinite_ne v] with w hw x
+    change Pi.mulSingle v x w ∈ w.adicCompletionIntegers F
+    rw [Pi.mulSingle_eq_of_ne hw]
+    exact (w.adicCompletionIntegers F).one_mem
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting an infinite local multiplicative group
 into the idele class group is continuous. -/
 theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
     Continuous (IdeleClassGroup.ofCompletion (𝓞 F) F w) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
 
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
@@ -757,6 +793,22 @@ theorem heckeCharacter_eq_prod_restrictions (c : HeckeCharacter (𝓞 F) F)
         (RingHom.snd _ _)).toMonoidHom g)
     b.HasFiniteMulSupport ∧ c (QuotientGroup.mk g) = (∏ w, a w) * ∏ᶠ v, b v := by
   sorry
+
+open Classical in
+/-- Paper: §3.1.2, p. 120. A quasi-character of J_{F,S} is the product of its local
+restrictions at the infinite places and the finite places in S. Each restriction
+evaluates the character on the S-idele with the given coordinate and ones elsewhere. -/
+theorem sIdeleQuotientCharacter_eq_prod_restrictions (c : QuasiCharacter (SIdeleQuotient F S)) :
+    let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+      ((v : S) → v.val.adicCompletion F)
+    let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+    let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+    ∃ (a : (w : InfinitePlace F) → QuasiCharacter w.Completionˣ)
+        (b : (v : S) → QuasiCharacter (v.val.adicCompletion F)ˣ),
+      (∀ w u, a w u = c (QuotientGroup.mk (e.symm (eArch.symm (Pi.mulSingle w u), 1)))) ∧
+      (∀ v u, b v u = c (QuotientGroup.mk (e.symm (1, eS.symm (Pi.mulSingle v u))))) ∧
+      ∀ g : (SAdeleRing F S)ˣ, c (QuotientGroup.mk g) =
+        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by sorry
 
 local notation "finiteNorm" => Units.map nnNormHom.toMonoidHom
 local notation "infiniteNorm(" w ")" => (Units.map nnNormHom.toMonoidHom) ^ InfinitePlace.mult w
@@ -826,7 +878,19 @@ theorem infinitePlace_quasiCharacterParametrization (w : InfinitePlace F)
 gives complex exponent charts. Its multiplicity is one at real places and two at complex places. -/
 theorem infinitePlace_hasNormTwistCharts (w : InfinitePlace F) :
     HasNormTwistCharts (infiniteNorm(w) : w.Completionˣ →* ℝ≥0ˣ) := by
-  sorry
+  have htwo : 1 < ‖(2 : w.Completion)‖ := by
+    rw [← (InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) (2 : w.Completion), map_ofNat]
+    norm_num
+  let : NontriviallyNormedField w.Completion := ⟨⟨2, htwo⟩⟩
+  let : ProperSpace w.Completion :=
+    .of_nontriviallyNormedField_of_weaklyLocallyCompactSpace w.Completion
+  apply hasNormTwistCharts_of_proper _ (isProperMap_units_nnNorm_pow w.mult w.mult_ne_zero)
+  let u := Units.mk0 (2 : w.Completion) (by rintro h; rw [h, norm_zero] at htwo; linarith)
+  refine ⟨u, fun he ↦ ?_⟩
+  have hv := congrArg (fun y : ℝ≥0ˣ ↦ ((y : ℝ≥0) : ℝ)) he
+  change ‖(2 : w.Completion)‖ ^ w.mult = 1 at hv
+  exact (one_lt_pow₀ htwo w.mult_ne_zero).ne' hv
 
 /-- Paper: §3.1.2, p. 120. Equip the Hecke characters with the norm-twist atlas. -/
 scoped instance heckeCharacterChartedSpace : ChartedSpace ℂ (HeckeCharacter (𝓞 F) F) :=
@@ -1032,7 +1096,35 @@ theorem sIdeleInsertion_apply (g : (SAdeleRing F S)ˣ) :
 
 /-- Paper: Equation (3.1.2.7), p. 121. Extension by one is a closed topological embedding. -/
 theorem isClosedEmbedding_sIdeleInsertion : IsClosedEmbedding (sIdeleInsertion F S) := by
-  sorry
+  let : T2Space (IdeleGroup (𝓞 F) F) := (ideleGroup_topology F).1
+  let j := sIdeleInsertion F S
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := by
+    apply Continuous.units_map
+    exact continuous_fst.prodMk (continuous_pi fun v ↦
+      (RestrictedProduct.continuous_eval v.val).comp continuous_snd)
+  have hleft : LeftInverse p j := by
+    intro g
+    apply Units.ext
+    exact Prod.ext (sIdeleInsertion_apply F S g).1 (funext (sIdeleInsertion_apply F S g).2.1)
+  have hval : Continuous (fun g ↦ (j g).val) := by
+    apply Continuous.prodMk
+    · exact (continuous_fst.comp Units.continuous_val).congr fun g ↦
+        (sIdeleInsertion_apply F S g).1.symm
+    · apply continuous_restrictedProduct_of_uniform
+      · intro v
+        by_cases hv : v ∈ S
+        · exact ((continuous_apply (⟨v, hv⟩ : S)).comp
+            (continuous_snd.comp Units.continuous_val)).congr fun g ↦
+              ((sIdeleInsertion_apply F S g).2.1 ⟨v, hv⟩).symm
+        · exact continuous_const.congr fun g ↦ ((sIdeleInsertion_apply F S g).2.2 v hv).symm
+      · filter_upwards [S.eventually_cofinite_notMem] with v hv g
+        change (sIdeleInsertion F S g).val.2 v ∈ v.adicCompletionIntegers F
+        rw [(sIdeleInsertion_apply F S g).2.2 v hv]
+        exact (v.adicCompletionIntegers F).one_mem
+  apply hleft.isClosedEmbedding hp
+  refine Units.continuous_iff.mpr ⟨hval, (hval.comp continuous_inv).congr fun g ↦ ?_⟩
+  exact congrArg Units.val (map_inv j g)
 
 local notation "pullbackS(" c ")" => MonoidHom.comp (ContinuousMonoidHom.toMonoidHom c)
   (MonoidHom.comp (QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 F) F)) (sIdeleInsertion F S))

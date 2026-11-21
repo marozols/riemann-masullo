@@ -65,8 +65,30 @@ def chapter_label(path):
     return m.group(1)[0].lower() + m.group(1)[1:] if m else None
 
 
+def at_main():
+    """Whether this checkout is at the tip of origin/main. Applying from an older commit would
+    close the issues of every `sorry` added since, and reopen those proved since."""
+    run(["git", "fetch", "-q", "origin", "main"])
+    head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+    tip = run(["git", "rev-parse", "origin/main"]).stdout.strip()
+    return head == tip, head[:7], tip[:7]
+
+
 def main():
     apply = "--apply" in sys.argv
+    if apply:
+        # The integrator and the merger may both run this, from different checkouts. One at a
+        # time, so that neither opens an issue the other has just opened.
+        import fcntl
+        common = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]).stdout.strip()
+        lockdir = pathlib.Path(common).parent / ".agent"
+        lockdir.mkdir(exist_ok=True)
+        global _lock
+        _lock = open(lockdir / "issues.lock", "w")
+        fcntl.flock(_lock, fcntl.LOCK_EX)
+        ok, head, tip = at_main()
+        if not ok:
+            sys.exit(f"this checkout is at {head} and origin/main is at {tip}: update it, then rerun")
     branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
     if branch != "main":
         print(f"note: on branch {branch}, not main", file=sys.stderr)
@@ -82,6 +104,10 @@ def main():
 
     new = [k for k in current if k not in open_issues]
     stale = [k for k in open_issues if k not in current]
+    if apply and (new or stale):
+        ok, head, tip = at_main()
+        if not ok:
+            sys.exit(f"main moved to {tip} while this ran (checkout at {head}): update, then rerun")
     print(f"{len(current)} sorries at {sha}; {len(open_issues)} open proof issues; "
           f"{len(new)} to open, {len(stale)} to close")
     for key in new:

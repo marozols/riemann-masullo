@@ -48,7 +48,13 @@ Deviation: This is a sanity check for the three weak definitions. -/
 theorem weakComplexRegularity_iff (f : ℂ → ℂ) (k : ℕ) :
     (WeaklyContinuousOn f Ω ↔ ContinuousOn f Ω) ∧
       (WeaklyContDiffOrderOn k f Ω ↔ ContDiffOn ℝ k f Ω) ∧
-      (WeaklyHolomorphicOn f Ω ↔ DifferentiableOn ℂ f Ω) := by sorry
+      (WeaklyHolomorphicOn f Ω ↔ DifferentiableOn ℂ f Ω) := by
+  refine ⟨⟨fun h ↦ h (ContinuousLinearMap.id ℂ ℂ), ?_⟩,
+    ⟨fun h ↦ h (ContinuousLinearMap.id ℂ ℂ), ?_⟩,
+    ⟨fun h ↦ h (ContinuousLinearMap.id ℂ ℂ), ?_⟩⟩
+  · exact fun hf φ ↦ φ.continuous.comp_continuousOn hf
+  · exact fun hf φ ↦ (φ.restrictScalars ℝ).contDiff.comp_contDiffOn hf
+  · exact fun hf φ ↦ φ.differentiable.comp_differentiableOn hf
 
 variable [ContinuousSMul ℂ E]
 
@@ -62,7 +68,27 @@ difference quotients have a limit in the target at every point. -/
 theorem vectorHolomorphicOn_iff_tendsto (hΩ : IsOpen Ω) [IsTopologicalAddGroup E]
     (f : ℂ → E) :
     VectorHolomorphicOn f Ω ↔ ∀ z ∈ Ω, ∃ v : E,
-      Tendsto (fun w ↦ (w - z)⁻¹ • (f w - f z)) (𝓝[≠] z) (𝓝 v) := by sorry
+      Tendsto (fun w ↦ (w - z)⁻¹ • (f w - f z)) (𝓝[≠] z) (𝓝 v) := by
+  have slope_iff (z : ℂ) (v : E) : HasDerivAt f v z ↔
+      Tendsto (fun w ↦ (w - z)⁻¹ • (f w - f z)) (𝓝[≠] z) (𝓝 v) := by
+    rw [hasDerivAt_iff_hasFDerivAt, ← hasFDerivWithinAt_univ,
+      ← hasFDerivWithinAt_sdiff_singleton_self, ← Set.compl_eq_univ_sdiff,
+      hasFDerivWithinAt_iff_isLittleOTVS]
+    change (fun w ↦ f w - f z - (w - z) • v) =o[ℂ; 𝓝[≠] z] (fun w ↦ w - z) ↔ _
+    rw [Asymptotics.isLittleOTVS_iff_tendsto_inv_smul (by
+      filter_upwards with w hw
+      simp [sub_eq_zero.mp hw])]
+    conv_rhs => rw [← tendsto_sub_nhds_zero_iff]
+    apply tendsto_congr'
+    filter_upwards [eventually_mem_nhdsWithin] with w hw
+    simp [smul_sub, inv_smul_smul₀ (sub_ne_zero.mpr hw)]
+  constructor
+  · intro hf z hz
+    obtain ⟨L, hL⟩ := hf z hz
+    exact ⟨L 1, (slope_iff z _).mp (hL.hasFDerivAt (hΩ.mem_nhds hz)).hasDerivAt⟩
+  · intro hf z hz
+    obtain ⟨v, hv⟩ := hf z hz
+    exact ⟨_, ((slope_iff z v).mpr hv).hasFDerivAt.hasFDerivWithinAt⟩
 
 /-- Paper: Remark C.5.2.2, p. 737. On a complex domain, holomorphy agrees with
 the strong continuous differential of §C.5.1 in one complex variable. -/

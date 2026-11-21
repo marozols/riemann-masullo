@@ -123,21 +123,36 @@ theorem exists_disjoint_dSequence_translates [μ.IsHaarMeasure] (hU : IsDSequenc
 
 variable [SecondCountableTopology G]
 
+-- Retain the original hypotheses for the countable-subcover argument.
+set_option linter.unusedSectionVars false in
 /-- Paper: Lemma A.5.3.3, p. 579. A set that is negligible on a neighborhood of
 every point is negligible and measurable for the completed Haar measure. -/
 theorem measure_zero_of_locally_negligible [μ.IsHaarMeasure] {A : Set G}
     (hA : ∀ x : G, ∃ V ∈ 𝓝 x, μ (A ∩ V) = 0) :
-    μ A = 0 ∧ NullMeasurableSet A μ := by sorry
+    μ A = 0 ∧ NullMeasurableSet A μ := by
+  choose V hV hnull using hA
+  obtain ⟨t, ht, hcover⟩ := LindelofSpace.elim_nhds_subcover V hV
+  have hzero : μ A = 0 := by
+    rw [← inter_univ A, ← hcover]
+    simp only [inter_iUnion]
+    exact (measure_biUnion_null_iff ht).2 fun x _ ↦ hnull x
+  exact ⟨hzero, NullMeasurableSet.of_null hzero⟩
 
 /-- Paper: (A.5.3.2), p. 579. Take the limit superior of the masses of the
 translates under `ν`, normalized by the Haar masses of the sequence members. -/
 def dSequenceMeasureMaximal (μ ν : Measure G) (U : ℕ → Set G) (x : G) : ℝ≥0∞ :=
   limsup (fun k ↦ ν (x • U k) / μ (U k)) atTop
 
+-- Preserve the existing section hypotheses.
+set_option linter.unusedSectionVars false in
 /-- Paper: (A.5.3.2), p. 579. Taking the same Haar measure in both positions
 gives the constant maximal function one. -/
 theorem dSequenceMeasureMaximal_haar [μ.IsHaarMeasure] (hU : IsDSequence μ U) (x : G) :
-    dSequenceMeasureMaximal μ μ U x = 1 := by sorry
+    dSequenceMeasureMaximal μ μ U x = 1 := by
+  have hratio (k : ℕ) : μ (x • U k) / μ (U k) = 1 := by
+    obtain ⟨_, _, hpos, hfin⟩ := hU.1 k
+    rw [measure_smul, ENNReal.div_self hpos.ne' hfin.ne]
+  simp only [dSequenceMeasureMaximal, hratio, limsup_const]
 
 /-- Paper: Theorem A.5.3.4(1), p. 579. On `B` the measure maximal function satisfies
 the localized weak bound, with the mass on the right measured by `ν`.
@@ -275,10 +290,16 @@ translate used by the set average with the mass of the original member. -/
 def dSequenceAverage (μ : Measure G) (V : Set G) (f : G → ℂ) (x : G) : ℂ :=
   ⨍ y in x • V, f y ∂μ
 
+-- Retain the stated hypotheses; the proof needs only Haar invariance.
+set_option linter.unusedSectionVars false in
 /-- Paper: (A.5.4.1), p. 582. Averaging a constant over any sequence member
 recovers the constant at every point. -/
 theorem dSequenceAverage_const [μ.IsHaarMeasure] (hU : IsDSequence μ U)
-    (c : ℂ) (k : ℕ) (x : G) : dSequenceAverage μ (U k) (fun _ ↦ c) x = c := by sorry
+    (c : ℂ) (k : ℕ) (x : G) : dSequenceAverage μ (U k) (fun _ ↦ c) x = c := by
+  -- The translate `x • U k` has the positive finite mass of `U k` by Haar invariance.
+  obtain ⟨-, -, hpos, hfin⟩ := hU.1 k
+  rw [dSequenceAverage, setAverage_const] <;> rw [measure_smul]
+  exacts [hpos.ne', hfin.ne]
 
 -- TODO(paper-gap): The uniform continuity in Theorem A.5.4.1(1) fails for f(t) = t²
 -- on the additive real line with U k = [−2⁻ᵏ, 2⁻ᵏ]. The average is x² + 2⁻²ᵏ / 3.
@@ -291,7 +312,9 @@ def dSequenceRegularSet (μ : Measure G) (U : ℕ → Set G) (f : G → ℂ) : S
 /-- Paper: Theorem A.5.4.1(3), p. 582. Every point is regular for a constant
 function. -/
 theorem dSequenceRegularSet_const [μ.IsHaarMeasure] (hU : IsDSequence μ U) (c : ℂ) :
-    dSequenceRegularSet μ U (fun _ ↦ c) = univ := by sorry
+    dSequenceRegularSet μ U (fun _ ↦ c) = univ := by
+  refine eq_univ_of_forall fun x ↦ ⟨c, ?_⟩
+  simp only [dSequenceAverage_const hU, tendsto_const_nhds]
 
 -- TODO(paper-gap): In the proof of Theorem A.5.4.1(2), the boundary of a relatively compact
 -- open set can have positive Haar mass, and an indicator's averages can diverge at a point.

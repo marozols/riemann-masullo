@@ -46,7 +46,21 @@ theorem mem_range_integralIdeleInsertion (g : 𝕀[F]) :
     g ∈ range (integralIdeleInsertion F S) ↔
       ∀ v : HeightOneSpectrum (𝓞 F), v ∉ S →
         g.val.2 v ∈ v.adicCompletionIntegers F ∧
-          g.inv.2 v ∈ v.adicCompletionIntegers F := by sorry
+          g.inv.2 v ∈ v.adicCompletionIntegers F := by
+  have hmem (a : 𝔸[F]) :
+      a ∈ integralAdelesOutside F S ↔
+        ∀ v : HeightOneSpectrum (𝓞 F), v ∉ S → a.2 v ∈ v.adicCompletionIntegers F := by
+    simp only [integralAdelesOutside, Subring.mem_iInf]
+    rfl
+  constructor
+  · rintro ⟨u, rfl⟩ v hv
+    exact ⟨(hmem _).mp u.val.property v hv, (hmem _).mp u.inv.property v hv⟩
+  · intro hg
+    let u : (integralAdelesOutside F S)ˣ :=
+      ⟨⟨g.val, (hmem _).mpr fun v hv ↦ (hg v hv).1⟩,
+        ⟨g.inv, (hmem _).mpr fun v hv ↦ (hg v hv).2⟩,
+        Subtype.ext g.val_inv, Subtype.ext g.inv_val⟩
+    exact ⟨u, Units.ext rfl⟩
 
 /-- Paper: Lemma D.1.10.1(1), p. 784. Insertion from the full S-stage is a continuous
 injective open map. -/
@@ -153,7 +167,16 @@ Deviation: Sanity check on the topology formulation, stated with finite bounds. 
 theorem GeneratesSeminormTopology.isVonNBounded_iff
     {E ι : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
     {v : ι → E → ℝ≥0∞} (hv : GeneratesSeminormTopology v) (B : Set E) :
-    IsVonNBounded ℂ B ↔ ∀ i, ∃ C : ℝ≥0, ∀ f ∈ B, v i f ≤ (C : ℝ≥0∞) := by sorry
+    IsVonNBounded ℂ B ↔ ∀ i, ∃ C : ℝ≥0, ∀ f ∈ B, v i f ≤ (C : ℝ≥0∞) := by
+  obtain ⟨P, hP, hvalues⟩ := hv
+  simp_rw [hP.isVonNBounded_iff_seminorm_bounded, ← hvalues, ENNReal.ofReal_le_coe]
+  constructor
+  · intro h i
+    obtain ⟨r, hr, hbound⟩ := h i
+    exact ⟨⟨r, hr.le⟩, fun f hf ↦ (hbound f hf).le⟩
+  · intro h i
+    obtain ⟨C, hbound⟩ := h i
+    exact ⟨(C : ℝ) + 1, by positivity, fun f hf ↦ lt_of_le_of_lt (hbound f hf) (lt_add_one _)⟩
 
 /-- Paper: Proposition D.1.10.2, p. 784. A family of function transforms gives a
 generating Lᵖ family if the transforms belong to Lᵖ and their norms generate the topology.
