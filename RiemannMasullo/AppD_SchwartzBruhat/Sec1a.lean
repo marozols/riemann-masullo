@@ -12,6 +12,7 @@ import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Separation
 import Mathlib.Topology.Algebra.IsUniformGroup.Basic
 import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
+import Mathlib.Analysis.Calculus.ContDiff.Comp
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
@@ -590,7 +591,32 @@ theorem elementaryPartial_descends (f : ElementaryLieGroup m n r F → ℂ)
     (hf : ContDiff ℝ ∞ (fun xt ↦ f (elementaryCover xt a b))) :
     ContDiff ℝ ∞ (fun xt ↦ elementaryPartial f β γ xt a b) ∧
       ∀ u v, elementaryCover u a b = elementaryCover v a b →
-        elementaryPartial f β γ u a b = elementaryPartial f β γ v a b := by sorry
+        elementaryPartial f β γ u a b = elementaryPartial f β γ v a b := by
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let p : X → ℂ := fun w ↦ f (elementaryCover w a b)
+  have hs {k : ℕ} (d : Fin k → X) :
+      ContDiff ℝ ∞ (fun w ↦ (iteratedFDeriv ℝ k p w) d) :=
+    (ContinuousMultilinearMap.apply ℝ (fun _ : Fin k ↦ X) ℂ d).contDiff.comp
+      (hf.iteratedFDeriv_right (by simp))
+  refine ⟨hs _, fun u v huv ↦ ?_⟩
+  have hre : u.1 = v.1 := congrArg (fun y : ElementaryLieGroup m n r F ↦ y.1) huv
+  have htor (i : Fin n) : (u.2 i : AddCircle (1 : ℝ)) = (v.2 i : AddCircle (1 : ℝ)) :=
+    congrArg (fun y : ElementaryLieGroup m n r F ↦ y.2.1 i) huv
+  have hshift : (fun w : X ↦ p (w + (v - u))) = p := by
+    funext w
+    apply congrArg f
+    apply Prod.ext
+    · change w.1 + (v.1 - u.1) = w.1
+      simp [hre]
+    · refine Prod.ext (funext fun i ↦ ?_) rfl
+      change ((w.2 i + (v.2 i - u.2 i) : ℝ) : AddCircle (1 : ℝ)) = (w.2 i : AddCircle (1 : ℝ))
+      simp only [AddCircle.coe_add, AddCircle.coe_sub, htor, sub_self, add_zero]
+  have hderiv (k : ℕ) : iteratedFDeriv ℝ k p u = iteratedFDeriv ℝ k p v := by
+    simpa only [hshift, add_sub_cancel] using
+      (iteratedFDeriv_comp_add_right (f := p) k (v - u) u)
+  dsimp only [elementaryPartial]
+  dsimp only [p] at hderiv
+  rw [hderiv]
 
 /-- Paper: (D.1.3.7), p. 750. These are the two monomial multi-indices and the
 two derivative multi-indices in the paper's order. -/
