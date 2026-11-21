@@ -465,7 +465,8 @@ def regularIsotypicTransform (f : RegularL2 ν) :
 almost-everywhere integral with that character's conjugate. -/
 theorem regularIsotypicTransform_ae_eq (ω : PontryaginDual K) (f : RegularL2 ν) :
     (regularIsotypicTransform m hm ν ν₁ τ hτ f ω : ℝ≥0ˣ → ℂ) =ᵐ[positiveRealHaar]
-      fun t ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * τ t) ∂ν₁ := by sorry
+      fun t ↦ ∫ k : K, star (ω k : ℂ) * f ((k : G)⁻¹ * τ t) ∂ν₁ := by
+  exact (regularIsotypicComponent_memLp m hm ν ν₁ τ hτ ω f).2.coeFn_toLp
 
 /-- Paper: (4.3.2.7), p. 178. The transform is linear and continuous
 for the Hilbert direct sum topology. -/
