@@ -10,6 +10,8 @@ public import Mathlib.MeasureTheory.Integral.Prod
 public import Mathlib.MeasureTheory.Measure.Complex
 public import Mathlib.MeasureTheory.VectorMeasure.Integral
 public import Mathlib.Topology.Algebra.Group.Quotient
+import Mathlib.LinearAlgebra.Dual.Lemmas
+import Mathlib.Topology.Algebra.LinearMapCompletion
 
 /-!
 # Integration in the sense of Pettis
@@ -88,13 +90,68 @@ theorem toPettisWeakCompletion_natural (T : E →L[ℂ] F) (x : E) :
         (toPettisWeakCompletion E x).comp
           (ContinuousLinearMap.precomp ℂ T : StrongDual ℂ F →L[ℂ] StrongDual ℂ E).toLinearMap) := by sorry
 
+omit [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ E] [T2Space E] in
+/-- Paper: Lemma C.4.1.2, p. 710. Evaluations at vectors are dense in the pointwise topology
+on the algebraic dual of the continuous dual. -/
+private theorem denseRange_toPettisWeakCompletion : DenseRange (toPettisWeakCompletion E) := by
+  classical
+  intro a
+  -- Evaluation realizes the prescribed values on each finite span of functionals.
+  have matchFinite (s : Finset (StrongDual ℂ E)) :
+      ∃ x : E, ∀ φ ∈ s, φ x = (show Module.Dual ℂ (StrongDual ℂ E) from a) φ := by
+    let W := Submodule.span ℂ (s : Set (StrongDual ℂ E))
+    let : AddCommGroup W := inferInstance
+    let F : E →ₗ[ℂ] Module.Dual ℂ W := W.subtype.dualMap.comp (toPettisWeakCompletion E)
+    have hF : Injective F.flip := by
+      intro φ ψ h
+      apply Subtype.ext
+      exact ContinuousLinearMap.ext fun x ↦ LinearMap.congr_fun h x
+    have hsurj : Surjective F := (LinearMap.flip_injective_iff₂ (B := F)).mp hF
+    obtain ⟨x, hx⟩ := hsurj (W.subtype.dualMap a)
+    exact ⟨x, fun φ hφ ↦ LinearMap.congr_fun hx ⟨φ, Submodule.subset_span hφ⟩⟩
+  choose x hx using matchFinite
+  apply mem_closure_of_tendsto (f := fun s ↦ toPettisWeakCompletion E (x s)) (b := atTop)
+  · apply (WeakBilin.tendsto_iff_forall_eval_tendsto _ injective_id).2
+    intro φ
+    exact tendsto_atTop_of_eventually_const (i₀ := {φ}) fun s hs ↦
+      hx s φ (Finset.singleton_subset_iff.mp hs)
+  · exact Eventually.of_forall fun s ↦ mem_range_self (x s)
+
 /-- Paper: Lemma C.4.1.2, p. 710. Completing the weak space gives the
 pointwise-topologized algebraic dual, compatibly with the canonical map. -/
 theorem completion_weakSpace_eq_pettisWeakCompletion :
     letI := IsTopologicalAddGroup.rightUniformSpace (WeakSpace ℂ E)
     haveI : IsUniformAddGroup (WeakSpace ℂ E) := isUniformAddGroup_of_addCommGroup
     ∃ e : Completion (WeakSpace ℂ E) ≃L[ℂ] PettisWeakCompletion E,
-      ∀ x : E, e (toWeakSpace ℂ E x) = toPettisWeakCompletion E x := by sorry
+      ∀ x : E, e (toWeakSpace ℂ E x) = toPettisWeakCompletion E x := by
+  let := IsTopologicalAddGroup.rightUniformSpace (WeakSpace ℂ E)
+  let := isUniformAddGroup_of_addCommGroup (G := WeakSpace ℂ E)
+  let := IsTopologicalAddGroup.rightUniformSpace (PettisWeakCompletion E)
+  let := isUniformAddGroup_of_addCommGroup (G := PettisWeakCompletion E)
+  -- The algebraic dual is closed in the complete product of scalar coordinate spaces.
+  let eval : PettisWeakCompletion E →+ (StrongDual ℂ E → ℂ) :=
+    ⟨⟨fun a φ ↦ (show Module.Dual ℂ (StrongDual ℂ E) from a) φ, rfl⟩, fun _ _ ↦ rfl⟩
+  have hev : IsUniformInducing eval := AddMonoidHom.isUniformInducing_of_isInducing ⟨rfl⟩
+  let : CompleteSpace (PettisWeakCompletion E) :=
+    hev.completeSpace (LinearMap.isClosed_range_coe _ _ _).isComplete
+  let : T2Space (PettisWeakCompletion E) :=
+    (WeakBilin.isEmbedding (B := LinearMap.id) injective_id).t2Space
+  -- Extend evaluation. Its range is dense and complete, hence it is surjective.
+  let jLin := (toPettisWeakCompletion E).comp (toWeakSpace ℂ E).symm.toLinearMap
+  have hj : IsInducing jLin := ⟨induced_compose.symm⟩
+  let j : WeakSpace ℂ E →L[ℂ] PettisWeakCompletion E := ⟨jLin, hj.continuous⟩
+  have hi : IsUniformInducing j := AddMonoidHom.isUniformInducing_of_isInducing hj
+  have he : IsUniformInducing j.fromCompletion := Completion.isUniformInducing_extension hi
+  have hr : DenseRange j.fromCompletion := by
+    apply Dense.mono _ denseRange_toPettisWeakCompletion
+    rintro _ ⟨x, rfl⟩
+    exact ⟨(toWeakSpace ℂ E x : Completion (WeakSpace ℂ E)), j.fromCompletion_apply_coe _⟩
+  have hs : Surjective j.fromCompletion := by
+    rw [← range_eq_univ, ← he.isComplete_range.isClosed.closure_eq, hr.closure_range]
+  have hh : IsHomeomorph j.fromCompletion :=
+    isHomeomorph_iff_isEmbedding_surjective.mpr ⟨he.isUniformEmbedding.isEmbedding, hs⟩
+  exact ⟨.ofIsHomeomorph (.ofBijective j.fromCompletion.toLinearMap hh.bijective) hh,
+    fun x ↦ j.fromCompletion_apply_coe (toWeakSpace ℂ E x)⟩
 
 -- The first closure assertion of C.4.1.2(1) is Mathlib's Convex.toWeakSpace_closure.
 
