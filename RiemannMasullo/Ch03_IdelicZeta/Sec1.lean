@@ -8,6 +8,7 @@ public import Mathlib.Topology.Algebra.PontryaginDual
 
 import Mathlib.Topology.Algebra.Order.ArchimedeanDiscrete
 
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
 import RiemannMasullo.ForMathlib.Topology.Algebra.Group.Units
@@ -658,6 +659,130 @@ theorem dualQuasiCharacter_analyticEquiv [IsTopologicalGroup G] (hm : Continuous
 
 end Generalities
 
+section SplitCharacters
+
+local notation "valℝ" => fun (t : ℝ≥0ˣ) ↦ ((t : ℝ≥0) : ℝ)
+
+/-- The exponent of a positive-real character varies continuously in the compact-open topology. -/
+private theorem continuous_complexPowerExponent :
+    Continuous fun c : ℝ≥0ˣ →ₜ* ℂ ↦ (existsUnique_complexPower c).choose := by
+  let m := MonoidHom.id ℝ≥0ˣ
+  have hm : IsProperMap m := isProperMap_id
+  have hne : ∃ t, m t ≠ 1 := ⟨Units.mk0 2 (by norm_num), fun he ↦ by
+    have h := congrArg (fun u : ℝ≥0ˣ ↦ ((u : ℝ≥0) : ℝ)) he
+    norm_num [m] at h⟩
+  apply continuous_iff_continuousAt.mpr
+  intro c
+  obtain ⟨e, hc, -, he⟩ := hasNormTwistCharts_of_proper m hm hne c
+  apply (continuousAt_const.add (e.continuousAt hc) :
+    ContinuousAt (fun d ↦ (existsUnique_complexPower c).choose + e d) c).congr_of_eventuallyEq
+  filter_upwards [e.open_source.mem_nhds hc] with d hd
+  symm
+  change _ + e d = _
+  apply (existsUnique_complexPower d).choose_spec.2
+  intro t
+  have hv := he (e d) (e.map_source hd) t
+  rw [e.left_inv hd] at hv
+  rw [hv, (existsUnique_complexPower c).choose_spec.1 t,
+    Complex.cpow_add _ _ (Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr t.ne_zero))]
+  rfl
+
+/-- A continuous splitting determines both coordinates of a character, by restriction to
+the positive real section and to the compact norm-one subgroup. -/
+theorem quasiCharacterParametrization_of_split {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [LocallyCompactSpace G] (m : G →* ℝ≥0ˣ) (hm : Continuous m)
+    [CompactSpace m.ker] (σ : ℝ≥0ˣ →ₜ* G) (hσ : RightInverse σ m) :
+    ∃ e : QuasiCharacter G ≃ₜ (ℂ × PontryaginDual m.ker), ∀ c,
+      (∀ t, c (σ t) = (valℝ t : ℂ) ^ (e c).1) ∧
+        ∀ u : m.ker, ((e c).2 u : ℂ) = c u.val := by
+  have hrker (g : G) : g / σ (m g) ∈ m.ker := by
+    simp [MonoidHom.mem_ker, hσ (m g)]
+  let r : G →ₜ* m.ker :=
+    { toFun := fun g ↦ ⟨g / σ (m g), hrker g⟩
+      map_one' := Subtype.ext (by simp)
+      map_mul' := fun g h ↦ Subtype.ext (by simp [mul_div_mul_comm])
+      continuous_toFun := (continuous_id.div' (σ.continuous.comp hm)).subtype_mk hrker }
+  have hrσ (t : ℝ≥0ˣ) : r (σ t) = 1 := by
+    apply Subtype.ext
+    change σ t / σ (m (σ t)) = 1
+    simp [hσ t]
+  have hru (u : m.ker) : r u = u := by
+    apply Subtype.ext
+    change _ / σ (m u) = _
+    rw [u.prop, map_one, div_one]
+  let exponent (c : QuasiCharacter G) := (existsUnique_complexPower (c.comp σ)).choose
+  have hrad (c : QuasiCharacter G) (t : ℝ≥0ˣ) : c (σ t) = (valℝ t : ℂ) ^ exponent c :=
+    (existsUnique_complexPower (c.comp σ)).choose_spec.1 t
+  have hnorm (c : QuasiCharacter G) (u : m.ker) : ‖c (u : G)‖ = 1 := by
+    obtain ⟨B, hB⟩ := (isCompact_range (c.continuous.norm.comp
+      (continuous_subtype_val (p := fun g ↦ g ∈ m.ker)))).bddAbove
+    have hle (v : m.ker) : ‖c (v : G)‖ ≤ 1 := by
+      by_contra! h
+      obtain ⟨k, hk⟩ := pow_unbounded_of_one_lt B h
+      have hb := hB (Set.mem_range_self (v ^ k))
+      change ‖c ((v : G) ^ k)‖ ≤ B at hb
+      rw [map_pow, norm_pow] at hb
+      exact hk.not_ge hb
+    refine (hle u).antisymm ?_
+    have h := hle u⁻¹
+    rw [Subgroup.coe_inv, map_inv, norm_inv] at h
+    exact (inv_le_one₀ (norm_pos_iff.mpr ((Group.isUnit _).map c).ne_zero)).mp h
+  have hcircle (c : QuasiCharacter G) (u : m.ker) : c u ∈ Submonoid.unitSphere ℂ :=
+    mem_sphere_zero_iff_norm.mpr (hnorm c u)
+  let unitary (c : QuasiCharacter G) : PontryaginDual m.ker :=
+    { toFun := fun u ↦ ⟨c u, hcircle c u⟩
+      map_one' := Circle.ext (map_one c)
+      map_mul' := fun u v ↦ Circle.ext (map_mul c _ _)
+      continuous_toFun := (c.continuous.comp continuous_subtype_val).subtype_mk (hcircle c) }
+  have hpos (g : G) : 0 < valℝ (m g) := NNReal.coe_pos.mpr (pos_iff_ne_zero.mpr (m g).ne_zero)
+  have hbase : Continuous (fun g ↦ (valℝ (m g) : ℂ)) :=
+    Complex.continuous_ofReal.comp (NNReal.continuous_coe.comp (Units.continuous_val.comp hm))
+  -- Reconstruct each character from its values on the two factors.
+  let assemble (p : ℂ × PontryaginDual m.ker) : QuasiCharacter G :=
+    { toFun := fun g ↦ (p.2 (r g) : ℂ) * (valℝ (m g) : ℂ) ^ p.1
+      map_one' := by simp
+      map_mul' := fun g h ↦ by
+        simp only [map_mul, Circle.coe_mul, Units.val_mul, NNReal.coe_mul, Complex.ofReal_mul,
+          Complex.mul_cpow_ofReal_nonneg (hpos g).le (hpos h).le]
+        ring
+      continuous_toFun := (continuous_subtype_val.comp (p.2.continuous.comp r.continuous)).mul
+        (hbase.cpow continuous_const fun g ↦ Or.inl (hpos g)) }
+  have hσval (p : ℂ × PontryaginDual m.ker) (t : ℝ≥0ˣ) :
+      assemble p (σ t) = (valℝ t : ℂ) ^ p.1 := by
+    change (p.2 (r (σ t)) : ℂ) * (valℝ (m (σ t)) : ℂ) ^ p.1 = _
+    rw [hrσ, hσ, map_one, Circle.coe_one, one_mul]
+  have huval (p : ℂ × PontryaginDual m.ker) (u : m.ker) :
+      assemble p u = (p.2 u : ℂ) := by
+    change (p.2 (r u) : ℂ) * (valℝ (m u) : ℂ) ^ p.1 = _
+    rw [hru, u.prop]
+    simp
+  refine ⟨{
+    toFun := fun c ↦ (exponent c, unitary c)
+    invFun := assemble
+    left_inv := fun c ↦ by
+      ext1 g
+      change c (g / σ (m g)) * (valℝ (m g) : ℂ) ^ exponent c = c g
+      rw [← hrad, ← map_mul, div_mul_cancel]
+    right_inv := fun p ↦ Prod.ext
+      ((existsUnique_complexPower ((assemble p).comp σ)).choose_spec.2 _ (hσval p)).symm (by
+        ext1 u
+        exact Circle.ext (huval p u))
+    continuous_toFun := (continuous_complexPowerExponent.comp σ.continuous_comp_left).prodMk ?_
+    continuous_invFun := ContinuousMonoidHom.continuous_of_continuous_uncurry assemble ?_ },
+    fun c ↦ ⟨hrad c, fun _ ↦ rfl⟩⟩
+  · apply ContinuousMonoidHom.continuous_of_continuous_uncurry
+    exact (continuous_eval.comp
+      (continuous_fst.prodMk (continuous_subtype_val.comp continuous_snd))).subtype_mk
+        (fun p ↦ hcircle p.1 p.2)
+  · have : ContinuousEval (PontryaginDual m.ker) m.ker Circle :=
+      inferInstanceAs (ContinuousEval (m.ker →ₜ* Circle) m.ker Circle)
+    exact (continuous_subtype_val.comp (continuous_eval.comp
+      ((continuous_snd.comp continuous_fst).prodMk (r.continuous.comp continuous_snd)))).mul
+      ((hbase.comp continuous_snd).cpow (continuous_fst.comp continuous_fst) fun p ↦
+        Or.inl (hpos p.2))
+
+end SplitCharacters
+
 section Ideles
 
 variable (F : Type*) [Field F] [NumberField F]
@@ -792,7 +917,29 @@ theorem infinitePlace_quasiCharacterParametrization (w : InfinitePlace F)
     ∃ e : QuasiCharacter w.Completionˣ ≃ₜ (ℂ × PontryaginDual n.ker), ∀ c,
       (∀ t : ℝ≥0ˣ, c (σ t) = (((t : ℝ≥0) : ℝ) : ℂ) ^ (e c).1) ∧
         ∀ u : n.ker, ((e c).2 u : ℂ) = c u.val := by
-  sorry
+  let n : w.Completionˣ →* ℝ≥0ˣ := infiniteNorm(w)
+  have hi := InfinitePlace.Completion.isometry_extensionEmbedding w
+  let : ProperSpace w.Completion :=
+    LipschitzWith.properSpace hi.isClosedEmbedding.isProperMap hi.lipschitzWith
+  have hker (u : w.Completionˣ) : u ∈ n.ker ↔ ‖(u : w.Completion)‖ = 1 := by
+    rw [MonoidHom.mem_ker, ← Units.val_inj, ← NNReal.coe_inj]
+    exact pow_eq_one_iff_of_nonneg (norm_nonneg _) w.mult_ne_zero
+  let : CompactSpace n.ker := by
+    apply isCompact_iff_compactSpace.mp
+    apply Units.isEmbedding_val₀.isInducing.isCompact_iff.mpr
+    have himage : Units.val '' (n.ker : Set w.Completionˣ) = Metric.sphere 0 1 := by
+      ext x
+      rw [mem_sphere_zero_iff_norm]
+      constructor
+      · rintro ⟨u, hu, rfl⟩
+        exact (hker u).mp hu
+      · intro hx
+        have hne : x ≠ 0 := norm_ne_zero_iff.mp (hx.trans_ne one_ne_zero)
+        exact ⟨Units.mk0 x hne, (hker _).mpr hx, rfl⟩
+    rw [himage]
+    exact isCompact_sphere _ _
+  exact quasiCharacterParametrization_of_split n
+    ((continuous_nnNorm.units_map nnNormHom.toMonoidHom).pow w.mult) σ hσ
 
 /-- Paper: Equation (3.1.2.3), p. 121. At an infinite place the normalized absolute value
 gives complex exponent charts. Its multiplicity is one at real places and two at complex places. -/
