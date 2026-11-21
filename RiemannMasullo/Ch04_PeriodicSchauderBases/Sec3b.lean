@@ -194,7 +194,16 @@ theorem compactActionAverage_range : LinearMap.range P.toLinearMap = actionIsoty
 Dividing the average by the total mass gives an idempotent. -/
 theorem compactActionAverage_idempotent :
     let Q : E →L[ℂ] E := (μ.real univ)⁻¹ • P
-    Q.comp Q = Q := by sorry
+    Q.comp Q = Q := by
+  ext u
+  let c : ℝ := μ.real univ
+  have hc : c ≠ 0 := (measureReal_univ_pos (μ := μ)).ne'
+  change (↑c⁻¹ : ℂ) • P ((↑c⁻¹ : ℂ) • P u) = (↑c⁻¹ : ℂ) • P u
+  rw [map_smul, compactActionAverage_apply_isotype μ ρ ω P hP
+    (compactActionAverage_mem_isotype μ ρ ω P hP u)]
+  change (↑c⁻¹ : ℂ) • ((↑c⁻¹ : ℂ) • (c : ℂ) • P u) = _
+  rw [smul_smul (↑c⁻¹ : ℂ) (c : ℂ), ← Complex.ofReal_mul, inv_mul_cancel₀ hc,
+    Complex.ofReal_one, one_smul]
 
 /-- Paper: (4.3.3.2), p. 181 and (4.3.3.9), p. 183. The averaging operator
 induces the norm isomorphism from the quotient by its kernel to the
