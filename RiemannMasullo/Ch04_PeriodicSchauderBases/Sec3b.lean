@@ -152,12 +152,51 @@ theorem compactActionAverage_quotient_equiv :
     ∃ e : (E ⧸ P.ker) ≃L[ℂ] actionIsotype ρ ω,
       ∀ u : E, (e (P.ker.mkQ u) : E) = P u := by sorry
 
+omit hρ [CompactSpace G] [T2Space G] in
+/-- Applying the average after an action multiplies the average by the character. -/
+private theorem compactActionAverage_apply_action (g : G) (u : E) :
+    P (ρ g u) = (ω g : ℂ) • P u := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  apply (SeparatingDual.eq_iff_forall_dual_eq (R := ℂ)).2
+  intro φ
+  rw [map_smul, compactActionAverage_dual_apply μ ρ ω P hP (ρ g u) φ,
+    compactActionAverage_dual_apply μ ρ ω P hP u φ, smul_eq_mul, ← integral_const_mul,
+    ← integral_mul_right_eq_self (μ := μ) (fun a ↦ (ω g : ℂ) * (star (ω a : ℂ) * φ (ρ a u))) g]
+  apply integral_congr_ae (ae_of_all _ fun a ↦ ?_)
+  simp only [map_mul, Circle.coe_mul, star_mul', mul_apply_eq_comp]
+  rw [mul_assoc (star (ω a : ℂ)), mul_left_comm (ω g : ℂ) (star (ω a : ℂ)),
+    ← mul_assoc (ω g : ℂ)]
+  simp [← Circle.coe_inv_eq_conj]
+
 /-- Paper: Lemma 4.3.3.1(3), p. 181 and Corollary 4.3.3.3(3), p. 183.
 The kernel of the averaging operator is the closed span of the differences
 for the character-twisted action. -/
 theorem compactActionAverage_ker :
     P.ker = (Submodule.span ℂ
-      (range fun p : G × E ↦ p.2 - star (ω p.1 : ℂ) • ρ p.1 p.2)).topologicalClosure := by sorry
+      (range fun p : G × E ↦ p.2 - star (ω p.1 : ℂ) • ρ p.1 p.2)).topologicalClosure := by
+  let D := range fun p : G × E ↦ p.2 - star (ω p.1 : ℂ) • ρ p.1 p.2
+  let S := (Submodule.span ℂ D).topologicalClosure
+  have hdiff (g : G) (u : E) : u - star (ω g : ℂ) • ρ g u ∈ S :=
+    Submodule.le_topologicalClosure _ (Submodule.subset_span ⟨(g, u), rfl⟩)
+  apply le_antisymm
+  · intro u hu
+    change u ∈ S
+    by_contra h
+    obtain ⟨φ, hφ, hS⟩ := exists_dual_eq_zero_on_submodule_of_notMem S
+      (Submodule.isClosed_topologicalClosure _) h
+    have horbit (g : G) : φ u = star (ω g : ℂ) * φ (ρ g u) := by
+      simpa only [map_sub, map_smul, smul_eq_mul, sub_eq_zero] using hS _ (hdiff g u)
+    have hv := compactActionAverage_dual_apply μ ρ ω P hP u φ
+    change P u = 0 at hu
+    simp only [hu, map_zero, ← horbit, integral_const, Complex.real_smul] at hv
+    exact hφ ((mul_eq_zero.mp hv.symm).resolve_left
+      (by exact_mod_cast (measureReal_univ_pos (μ := μ)).ne'))
+  · apply Submodule.topologicalClosure_minimal _ _ P.isClosed_ker
+    apply Submodule.span_le.mpr
+    rintro _ ⟨⟨g, u⟩, rfl⟩
+    change P (u - star (ω g : ℂ) • ρ g u) = 0
+    rw [map_sub, map_smul, compactActionAverage_apply_action μ ρ ω P hP, smul_smul]
+    simp [← Circle.coe_inv_eq_conj]
 
 end CompactAverageProperties
 
