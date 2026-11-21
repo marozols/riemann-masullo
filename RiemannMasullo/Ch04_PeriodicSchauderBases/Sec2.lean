@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec1
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
+import Mathlib.Analysis.InnerProductSpace.ProdL2
 
 /-!
 # Periodization and Schauder bases on the positive real axis
@@ -186,7 +187,19 @@ theorem quotientDual_strongEmbedding_of_nuclear (M : Submodule ℂ X) (hM : IsCl
 embeds the strong dual, with image the annihilator of the closed subspace. -/
 theorem quotientDual_strongEmbedding_of_hilbert {H : Type*} [NormedAddCommGroup H]
     [InnerProductSpace ℂ H] [CompleteSpace H] (M : Submodule ℂ H) (hM : IsClosed (M : Set H)) :
-    IsEmbedding (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) := by sorry
+    IsEmbedding (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL) := by
+  have : CompleteSpace M := hM.completeSpace_coe
+  let s : (H ⧸ M) →L[ℂ] H :=
+    Mᗮ.subtypeL.comp M.quotientEquivOrthogonal.toLinearIsometry.toContinuousLinearMap
+  let r := ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ s
+  apply Topology.IsEmbedding.of_leftInverse (f := r) _ r.continuous
+    (ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ M.mkQL).continuous
+  intro φ
+  ext x
+  change φ (M.mkQ ((M.quotientEquivOrthogonal x : Mᗮ) : H)) = φ x
+  congr 1
+  exact (M.quotientEquivOrthogonal_symm_eq_mk _ (M.quotientEquivOrthogonal x).property).symm.trans
+    (M.quotientEquivOrthogonal.symm_apply_apply x)
 
 /-- Paper: Remark 4.2.1.4, p. 164. In a totally reflexive Fréchet space, a
 strong embedding of the quotient adjoint implies bounded lifting for the quotient. -/
