@@ -240,7 +240,15 @@ def regularIsotypicIntegral (ω : PontryaginDual K) : RegularL2 ν →L[ℂ] Reg
 the integral using positive translation and the unconjugated character. -/
 theorem regularIsotypicIntegral_ae_eq (ω : PontryaginDual K) (f : RegularL2 ν) :
     (regularIsotypicIntegral m hm ν ν₁ ω f : G → ℂ) =ᵐ[ν]
-      fun x ↦ ∫ k : K, (ω k : ℂ) * f ((k : G) * x) ∂ν₁ := by sorry
+      fun x ↦ ∫ k : K, (ω k : ℂ) * f ((k : G) * x) ∂ν₁ := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp
+    (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  refine ((existsUnique_regularIsotypicIntegral m hm ν ν₁ ω).exists.choose_spec f).trans ?_
+  apply ae_of_all
+  intro x
+  symm
+  simpa [← Circle.coe_inv_eq_conj] using (integral_inv_eq_self
+    (fun k : K ↦ star (ω k : ℂ) * f ((k : G)⁻¹ * x)) ν₁)
 
 variable (τ : ℝ≥0ˣ →ₜ* G) (hτ : RightInverse τ m)
 
