@@ -730,7 +730,10 @@ theorem continuous_ideleClass_ofAdicCompletion (v : Primes(F)) :
 into the idele class group is continuous. -/
 theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
     Continuous (IdeleClassGroup.ofCompletion (𝓞 F) F w) := by
-  sorry
+  classical
+  apply QuotientGroup.continuous_mk.comp
+  apply Continuous.units_map
+  exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
 
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
