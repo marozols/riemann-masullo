@@ -150,7 +150,9 @@ theorem regularL2Action_section (m : G →ₜ* ℝ≥0ˣ) (_hm : IsModulation m)
     (τ : ℝ≥0ˣ →ₜ* G) (_hτ : RightInverse τ m) :
     (∀ f : RegularL2 ν, Continuous fun t ↦ ((regularL2Action ν).comp τ.toMonoidHom) t f) ∧
     ∀ (t : ℝ≥0ˣ) (f h : RegularL2 ν),
-      ⟪regularL2Action ν (τ t) f, regularL2Action ν (τ t) h⟫_ℂ = ⟪f, h⟫_ℂ := by sorry
+      ⟪regularL2Action ν (τ t) f, regularL2Action ν (τ t) h⟫_ℂ = ⟪f, h⟫_ℂ := by
+  exact ⟨fun f ↦ ((existsUnique_regularL2_action ν).exists.choose_spec.1 f).comp τ.continuous,
+    fun t ↦ regularL2Action_inner ν (τ t)⟩
 
 end Regular
 
