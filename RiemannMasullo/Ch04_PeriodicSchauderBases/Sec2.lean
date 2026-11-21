@@ -214,7 +214,11 @@ section Fourier
 /-- Paper: (4.2.1.3), p. 162. The circle Fourier monomial is smooth and
 belongs to the elementary Schwartz space. -/
 theorem cyclicExponential_mem (m : ℤ) :
-    (fun g : G ↦ fourier m (g.2.1 0)) ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by sorry
+    (fun g : G ↦ fourier m (g.2.1 0)) ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by
+  apply mem_elementarySchwartz_circle_of_contDiff
+  have hcoe : ContDiff ℝ ∞ ((↑) : ℝ → ℂ) := Complex.ofRealCLM.contDiff
+  simp only [fourier_coe_apply]
+  fun_prop
 
 /-- Paper: (4.2.1.3), p. 162. The exponential system consists of the usual
 Fourier monomials in the normalized circle coordinate. -/
