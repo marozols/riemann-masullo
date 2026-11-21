@@ -9,13 +9,13 @@ public import Mathlib.MeasureTheory.Group.Integral
 public import Mathlib.Algebra.MvPolynomial.Eval
 public import Mathlib.Topology.Algebra.PontryaginDual
 public import Mathlib.Topology.ContinuousMap.ZeroAtInfty
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SmoothFamily
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Separation
 import Mathlib.Topology.Algebra.IsUniformGroup.Basic
 import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
 import Mathlib.Analysis.Calculus.ContDiff.Comp
 import Mathlib.Analysis.Calculus.ContDiff.Operations
-import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SmoothFamily
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
