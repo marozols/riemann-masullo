@@ -5,6 +5,7 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
+import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
 
 /-!
 # Periodization and Schauder bases on the positive real axis
@@ -70,11 +71,64 @@ theorem cyclicPeriodizationValue_hasSum (f : 𝓢(ℝ, ℂ)) (x : ℝ) :
       ring
     _ = ∑' k : ℤ, a k := (Equiv.subRight ⌊x / L⌋).tsum_eq a
 
+/-- A smooth periodic lift gives an elementary Schwartz function on the circle. -/
+private theorem mem_elementarySchwartz_circle_of_contDiff {h : T → ℂ}
+    (hs : ContDiff ℝ ∞ (fun x : ℝ ↦ h (x : T))) :
+    (fun g : G ↦ h (g.2.1 0)) ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by
+  let X := EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1)
+  let φ : G → ℂ := fun g ↦ h (g.2.1 0)
+  let L : X →L[ℝ] ℝ := (EuclideanSpace.proj 0).comp (ContinuousLinearMap.snd ℝ _ _)
+  have hφ (a : Fin 0 → ℤ) (b : PUnit) :
+      ContDiff ℝ ∞ (fun xt ↦ φ (elementaryCover xt a b)) := hs.comp L.contDiff
+  refine ⟨hφ, fun i ↦ ?_⟩
+  let s (x : ℝ) : X := (0, x • EuclideanSpace.single 0 1)
+  have hsc : Continuous s := continuous_const.prodMk (continuous_id.smul continuous_const)
+  let D := elementaryPartial φ i.2.1 i.2.2.1
+  have hD := elementaryPartial_descends φ i.2.1 i.2.2.1 0 PUnit.unit (hφ 0 PUnit.unit)
+  obtain ⟨C, hC⟩ := (isCompact_Icc (a := (0 : ℝ)) (b := 1)).exists_bound_of_continuousOn
+    (hD.1.continuous.comp hsc).continuousOn
+  apply lt_of_le_of_lt (b := ENNReal.ofReal C) _ ENNReal.ofReal_lt_top
+  refine iSup_le fun xt ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_
+  have ha : a = 0 := Subsingleton.elim _ _
+  have hb : b = PUnit.unit := Subsingleton.elim _ _
+  subst a b
+  let r := (AddCircle.equivIco (1 : ℝ) 0) (xt.2 0 : T)
+  have hr : (r : ℝ) ∈ Icc 0 1 := Ico_subset_Icc_self (by simpa using r.property)
+  have he : elementaryCover (s r) (0 : Fin 0 → ℤ) PUnit.unit =
+      elementaryCover xt 0 PUnit.unit := by
+    refine Prod.ext (Subsingleton.elim _ _) (Prod.ext ?_ rfl)
+    funext j
+    have hj : j = 0 := Subsingleton.elim _ _
+    subst j
+    change (↑((r.val • EuclideanSpace.single (0 : Fin 1) (1 : ℝ)) 0) : T) = _
+    trans (r.val : T)
+    · simp [PiLp.smul_apply]
+    · exact AddCircle.coe_equivIco
+  have hbound : ‖D xt 0 PUnit.unit‖ ≤ C := by
+    dsimp only [D]
+    rw [← hD.2 (s r) xt he]
+    exact hC r hr
+  simp only [Fin.prod_univ_zero, one_mul, ENNReal.coe_nnreal_eq, coe_nnNorm]
+  exact ENNReal.ofReal_le_ofReal hbound
+
 /-- Paper: Lemma 4.2.1.5(1), p. 165. The orbit sum gives a smooth function
 on the circle.
 Deviation: Smoothness also holds on the ordinary Schwartz source. -/
 theorem cyclicPeriodizationValue_mem (f : 𝓢(ℝ, ℂ)) :
-    cyclicPeriodizationValue γ hγ f ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by sorry
+    cyclicPeriodizationValue γ hγ f ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by
+  let h (z : T) := cyclicPeriodizationValue γ hγ f (point z)
+  change (fun g : G ↦ h (g.2.1 0)) ∈ _
+  apply mem_elementarySchwartz_circle_of_contDiff
+  let L := Real.log γ
+  have hL : L ≠ 0 := (Real.log_pos hγ).ne'
+  let e := ContinuousLinearEquiv.unitsEquivAut ℝ (Units.mk0 L hL)
+  let F := SchwartzMap.compCLMOfContinuousLinearEquiv ℂ e f
+  have he : (fun x : ℝ ↦ h (x : T)) = fun x : ℝ ↦ ∑' n : ℤ, F (x + n) := by
+    funext x
+    simpa [h, F, e, L, hL, (Real.log_pos hγ).ne', add_mul] using
+      (cyclicPeriodizationValue_hasSum γ hγ f (x * L)).tsum_eq.symm
+  rw [he]
+  exact schwartz_contDiff_periodization F
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. The orbit sum is linear and continuous
 in the Schwartz profile.
