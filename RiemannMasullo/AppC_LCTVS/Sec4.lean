@@ -62,7 +62,8 @@ theorem isEmbedding_toPettisWeakCompletion :
 /-- Paper: Lemma C.4.1.1(1), p. 709. The canonical map into the weak
 completion is also continuous for the given topology on the source. -/
 theorem continuous_toPettisWeakCompletion :
-    Continuous (toPettisWeakCompletion E) := by sorry
+    Continuous (toPettisWeakCompletion E) := by
+  exact WeakBilin.continuous_of_continuous_eval _ fun φ ↦ φ.continuous
 
 variable [IsTopologicalAddGroup F] [ContinuousSMul ℂ F] [PolynormableSpace ℂ F] [T2Space F]
 
