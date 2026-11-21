@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch03_IdelicZeta.Sec3
 public import RiemannMasullo.AppB_AnalyticNT.Sec2
 public import RiemannMasullo.AppC_LCTVS.Sec5b
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 
 /-!
 # Partial Euler products and local zeta residues
@@ -74,7 +75,11 @@ local notation "unramified[" v "," c "]" => (∀ u : (HeightOneSpectrum.adicComp
 unique complex radial exponent and sign parity for its Euler factor. -/
 theorem realLocalEulerParameters (w : InfinitePlace F) (hw : w.IsReal)
     (c : QuasiCharacter w.Completionˣ) :
-    ∃! p : ℂ × Fin 2, realShape[hw, c, p.1, p.2] := by sorry
+    ∃! p : ℂ × Fin 2, realShape[hw, c, p.1, p.2] := by
+  let e := (realModel(hw)).symm
+  let i : ℝˣ →ₜ* w.Completionˣ := ⟨Units.map e.toMonoidHom,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal hw).symm.continuous.units_map _⟩
+  exact existsUnique_realUnits_quasiCharacter_parameters (c.comp i)
 
 /-- Paper: Equation (3.3.1.25), p. 134. A complex local quasi-character has a
 unique exponent for the squared absolute value and a unique angular weight. -/

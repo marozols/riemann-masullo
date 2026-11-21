@@ -77,22 +77,21 @@ theorem existsUnique_unitaryComplexPower (c : ℝ≥0ˣ →ₜ* ℂ) (hc : ∀ t
   change (2 : ℝ) ^ z.re = 1 at h
   simpa using h
 
-/-- A unitary character of the real units is uniquely specified by an imaginary exponent
-of the absolute value and a parity on the sign. -/
-theorem existsUnique_realUnits_character_parameters (c : ℝˣ →ₜ* ℂ) (hc : ∀ x, ‖c x‖ = 1) :
-    ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ, c x =
+/-- The continuous complex characters of the real units are classified by their radial exponent and sign parity. -/
+theorem existsUnique_realUnits_quasiCharacter_parameters (c : ℝˣ →ₜ* ℂ) :
+    ∃! a : ℂ × Fin 2, ∀ x : ℝˣ, c x =
       (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
   classical
   let i : ℝ≥0ˣ →ₜ* ℝˣ := ⟨Units.map NNReal.toRealHom.toMonoidHom,
     NNReal.continuous_coe.units_map _⟩
-  obtain ⟨z, ⟨hz₀, hz⟩, huniq⟩ := existsUnique_unitaryComplexPower (c.comp i) (fun t ↦ hc (i t))
+  obtain ⟨z, hz, huniq⟩ := existsUnique_complexPower (c.comp i)
   let k : Fin 2 := if c (-1) = 1 then 0 else 1
   have hk : c (-1) = (-1 : ℂ) ^ k.val := by
     have hsq : c (-1) ^ 2 = 1 := by rw [← map_pow]; norm_num
     rcases sq_eq_one_iff.mp hsq with h | h
     · norm_num [k, h]
     · norm_num [k, h]
-  refine ⟨(z, k), ⟨hz₀, ?_⟩, ?_⟩
+  refine ⟨(z, k), ?_, ?_⟩
   · intro x
     let t := Units.map nnNormHom.toMonoidHom x
     have hp : c (i t) = (‖(x : ℝ)‖ : ℂ) ^ z := hz t
@@ -107,10 +106,10 @@ theorem existsUnique_realUnits_character_parameters (c : ℝˣ →ₜ* ℂ) (hc 
       rw [ite_eq_right hx]
       change c x = (‖(x : ℝ)‖ : ℂ) ^ z * (-1 : ℂ) ^ k.val
       exact (congrArg c he).trans ((map_mul c _ _).trans (congrArg₂ (· * ·) hp hk))
-  · rintro ⟨a, b⟩ ⟨ha₀, hab⟩
+  · rintro ⟨a, b⟩ hab
     apply Prod.ext
     · apply huniq a
-      refine ⟨ha₀, fun t ↦ ?_⟩
+      intro t
       have hpos : 0 < (i t : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt t)
       change c (i t) = ((i t : ℝ) : ℂ) ^ a
       simpa [ite_eq_left hpos, Real.norm_eq_abs, abs_of_pos hpos] using hab (i t)
@@ -122,6 +121,23 @@ theorem existsUnique_realUnits_character_parameters (c : ℝˣ →ₜ* ℂ) (hc 
         intro j l h
         fin_cases j <;> fin_cases l <;> norm_num at *
       exact hinj (hneg.symm.trans hk)
+
+/-- A unitary character of the real units is uniquely specified by an imaginary exponent
+of the absolute value and a parity on the sign. -/
+theorem existsUnique_realUnits_character_parameters (c : ℝˣ →ₜ* ℂ) (hc : ∀ x, ‖c x‖ = 1) :
+    ∃! a : ℂ × Fin 2, a.1.re = 0 ∧ ∀ x : ℝˣ, c x =
+      (‖(x : ℝ)‖ : ℂ) ^ a.1 * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ a.2.val := by
+  obtain ⟨p, hp, huniq⟩ := existsUnique_realUnits_quasiCharacter_parameters c
+  refine ⟨p, ⟨?_, hp⟩, fun q hq ↦ huniq q hq.2⟩
+  let x := Units.mk0 (2 : ℝ) (by norm_num)
+  have h := hc x
+  rw [hp x] at h
+  have hpow : ‖(2 : ℂ) ^ p.1‖ = 1 := by
+    simpa [x, Real.norm_eq_abs] using h
+  have hb : 0 < (2 : ℝ) := by norm_num
+  change ‖((2 : ℝ) : ℂ) ^ p.1‖ = 1 at hpow
+  rw [Complex.norm_cpow_eq_rpow_re_of_pos hb] at hpow
+  exact (Real.rpow_right_inj hb (by norm_num)).mp (hpow.trans (Real.rpow_zero _).symm)
 
 /-- The continuous complex characters of the unit circle are exactly the integer powers. -/
 theorem existsUnique_circleCharacter_zpow (c : Circle →ₜ* ℂ) :
