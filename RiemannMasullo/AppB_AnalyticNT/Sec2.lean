@@ -7,6 +7,7 @@ public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.MeasureTheory.Function.LpSeminorm.LpNorm
 import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
 import Mathlib.Analysis.MellinInversion
+import RiemannMasullo.ForMathlib.Analysis.Complex.PhragmenLindelof
 
 /-!
 # Mellin transforms and asymptotic Cauchy integrals
@@ -425,6 +426,17 @@ private theorem mellin_logProfile_eq (g : ℝ → ℂ) (s : ℂ) :
   congr 2
   ring
 
+/-- Multiplication by the boundary polynomial preserves the Schwartz class. -/
+private theorem weightedBoundaryBound (c : ℝ) (n : ℕ) (g : 𝓢(ℝ, ℂ)) :
+    ∃ M : ℝ, ∀ y : ℝ, ‖((c : ℂ) + y * Complex.I) ^ n * g y‖ ≤ M := by
+  let W (y : ℝ) := ((c : ℂ) + y * Complex.I) ^ n
+  have hW : W.HasTemperateGrowth := by
+    dsimp [W]
+    fun_prop
+  let h := SchwartzMap.smulLeftCLM ℂ W g
+  refine ⟨SchwartzMap.seminorm ℂ 0 0 h, fun y ↦ ?_⟩
+  simpa only [h, SchwartzMap.smulLeftCLM_apply_apply hW, smul_eq_mul, W] using h.norm_le_seminorm ℂ y
+
 section UniformRiemannLebesgue
 
 variable (f : 𝓢(ℝ, ℂ)) (a b : ℝ) (hab : a < b)
@@ -526,7 +538,41 @@ theorem differentiableOn_mellin_of_weighted_schwartz :
 /-- Paper: Proposition B.2.2.3(2), p. 601. The rapid decay bound holds
 uniformly across the full closed strip, including the two boundary lines. -/
 theorem mellin_eventualHeightBound_of_weighted_schwartz (N : ℕ) (hN : 1 ≤ N) :
-    eventualHeightBound (mellin (fromLog f)) (Icc a b) N := by sorry
+    eventualHeightBound (mellin (fromLog f)) (Icc a b) N := by
+  let F := mellin (fromLog f)
+  have hd : DiffContOnCl ℂ F (Complex.re ⁻¹' Ioo a b) := by
+    refine ⟨differentiableOn_mellin_of_weighted_schwartz f a b hab hWeighted, ?_⟩
+    rw [Complex.closure_preimage_re, closure_Ioo hab.ne]
+    exact continuousOn_mellin_of_weighted_schwartz f a b hab hWeighted
+  obtain ⟨B, hB, hbound⟩ := mellin_logProfile_dominated f a b hab hWeighted
+  have hM (z : ℂ) (hz : z.re ∈ Icc a b) : ‖F z‖ ≤ ∫ x, B x := by
+    rw [show F z = _ from mellin_logProfile_eq f z]
+    exact norm_integral_le_of_norm_le hB (Eventually.of_forall (hbound z hz))
+  have edge (c : ℝ) (hc : c ∈ Icc a b) : ∃ C : ℝ, ∀ z : ℂ, z.re = c → ‖z ^ N * F z‖ ≤ C := by
+    obtain ⟨g, hg⟩ := exists_schwartz_verticalTrace_mellin_of_weighted_schwartz f a b hab hWeighted c hc
+    obtain ⟨C, hC⟩ := weightedBoundaryBound c N g
+    refine ⟨C, fun z hz ↦ ?_⟩
+    have hy : (c : ℂ) + z.im * Complex.I = z := hz ▸ Complex.re_add_im z
+    have hg' : g z.im = F ((c : ℂ) + z.im * Complex.I) := congrFun hg z.im
+    simpa only [hg', hy] using hC z.im
+  obtain ⟨A, hA⟩ := edge a (left_mem_Icc.mpr hab.le)
+  obtain ⟨C, hC⟩ := edge b (right_mem_Icc.mpr hab.le)
+  let D := max (max A C) 1
+  refine ⟨D, zero_lt_one.trans_le (le_max_right _ _), ?_⟩
+  have hy : ∀ᶠ y : ℝ in atAbsInfty, 0 < |y| := tendsto_comap.eventually (eventually_gt_atTop 0)
+  filter_upwards [hy] with y hy σ hσ
+  let z : ℂ := (σ : ℂ) + y * Complex.I
+  have h := norm_pow_mul_le_on_verticalStrip hab hd hM N
+    (fun w hw ↦ (hA w hw).trans (le_max_left A C))
+    (fun w hw ↦ (hC w hw).trans (le_max_right A C)) z (by simpa [z] using hσ)
+  change ‖F z‖ ≤ D / |y| ^ N
+  rw [le_div_iff₀ (pow_pos hy N), mul_comm]
+  have him : |y| ≤ ‖z‖ := by simpa [z] using Complex.abs_im_le_norm z
+  calc
+    |y| ^ N * ‖F z‖ ≤ ‖z‖ ^ N * ‖F z‖ :=
+      mul_le_mul_of_nonneg_right (pow_le_pow_left₀ (abs_nonneg _) him N) (norm_nonneg _)
+    _ = ‖z ^ N * F z‖ := by rw [norm_mul, norm_pow]
+    _ ≤ D := h.trans (le_max_left _ _)
 
 end UniformRiemannLebesgue
 
