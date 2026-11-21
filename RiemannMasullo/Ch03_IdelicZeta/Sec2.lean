@@ -9,6 +9,8 @@ public import RiemannMasullo.ForMathlib.NumberTheory.NumberField.DedekindZeta
 
 import Mathlib.Topology.Algebra.InfiniteSum.TsumUniformlyOn
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
+import RiemannMasullo.ForMathlib.NumberTheory.LSeries.Convergence
 
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
@@ -294,10 +296,70 @@ theorem finiteHeckeL_seriesSummable (χ : U[F]) (s : halfPlane) :
   exact LSeriesSummable_heckeLFunction _ s.property fun v _ ↦
     (norm_ideleClassNormTwist_zero_localValue χ v).le
 
+/-- Each formal local Euler factor has a geometric Dirichlet series with the stated analytic
+value in the half-plane of absolute convergence. -/
+private theorem LSeriesHasSum_finiteHeckeEulerFactor (χ : U[F])
+    (v : HeightOneSpectrum (𝓞 F)) {s : ℂ} (hs : 1 < s.re) :
+    LSeriesHasSum (χ₀(χ).localEulerFactor v) s (finiteHeckeEulerFactor χ v s) := by
+  classical
+  let a := if χ₀(χ).IsUnramifiedAt v then χ₀(χ).localValue v else 0
+  let q := v.asIdeal.absNorm
+  let z := a * (q : ℂ) ^ (-s)
+  have hq : 1 < q := NumberField.HeightOneSpectrum.one_lt_absNorm v
+  have hq' : (1 : ℝ) < q := by exact_mod_cast hq
+  have ha : ‖a‖ ≤ 1 := by
+    by_cases h : χ₀(χ).IsUnramifiedAt v <;> simp [a, h, norm_ideleClassNormTwist_zero_localValue]
+  have hz : ‖z‖ < 1 := by
+    change ‖a * ((q : ℝ) : ℂ) ^ (-s)‖ < 1
+    rw [norm_mul, Complex.norm_cpow_eq_rpow_re_of_pos (by linarith : 0 < (q : ℝ)) _,
+      Complex.neg_re]
+    exact (mul_le_of_le_one_left (Real.rpow_nonneg (Nat.cast_nonneg _) _) ha).trans_lt
+      (Real.rpow_lt_one_of_one_lt_of_neg hq' (by linarith))
+  have hval : finiteHeckeEulerFactor χ v s = (1 - z)⁻¹ := by
+    by_cases h : χ₀(χ).IsUnramifiedAt v <;> simp [finiteHeckeEulerFactor, z, a, q, h]
+  rw [hval, HeckeCharacter.localEulerFactor, card_residueField_adicCompletion,
+    hecke_localPowerSeries_eq_mk]
+  obtain ⟨hpow, hout⟩ := LSeries_term_geometric_ofPowerSeries hq a s
+  apply (Nat.pow_right_injective hq).hasSum_iff hout |>.mp
+  exact (hasSum_geometric_of_norm_lt_one hz).congr_fun hpow
+
+/-- Paper: Definition 3.2.1.4, pp. 123–124. The partial Hecke Euler products converge
+uniformly to the Hecke Dirichlet series on every closed half-plane to the right of one. -/
+theorem finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane (χ : U[F]) {a : ℝ} (ha : 1 < a) :
+    TendstoUniformlyOn
+      (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦ fun s ↦ ∏ v ∈ S, finiteHeckeEulerFactor χ v s)
+      χ₀(χ).LSeries atTop {s : ℂ | a ≤ s.re} := by
+  obtain ⟨r, hr, hra⟩ := exists_between ha
+  let Places := HeightOneSpectrum (𝓞 F)
+  let ψ := χ₀(χ)
+  let f := ψ.localEulerFactor
+  let u (v : Places) := 2 * (v.asIdeal.absNorm : ℝ) ^ (-r)
+  have hu : Summable u := ((summable_absNorm_rpow F hr).comp_injective
+    (fun v w (h : (v : Places).asIdeal = w.asIdeal) ↦ HeightOneSpectrum.ext h)).mul_left 2
+  have hlocal (v : Places) := LSeries_heckeLocalEulerFactor_bound ψ v (s := (r : ℂ)) hr
+    (fun _ ↦ (norm_ideleClassNormTwist_zero_localValue χ v).le)
+  have hp := LSeries_finset_prod_bound f (r : ℂ) (u := u)
+    (fun v ↦ (hlocal v).1) (fun v ↦ (hlocal v).2)
+  have hu₀ (v : Places) : 0 ≤ u v :=
+    mul_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+  have hC (S : Finset Places) :
+      (∑' n, ‖LSeries.term ⇑(∏ v ∈ S, f v) (r : ℂ) n‖) ≤ Real.exp (∑' v, u v) :=
+    (hp S).2.trans (Real.exp_le_exp.mpr (hu.sum_le_tsum S (fun v _ ↦ hu₀ v)))
+  have h := tendstoUniformlyOn_LSeries_of_eventuallyEq
+    (fun S : Finset Places ↦ ⇑(∏ v ∈ S, f v)) ψ.LFunction hra (Real.exp_pos _).le
+    (fun S ↦ (hp S).1) (finiteHeckeL_seriesSummable χ ⟨(r : ℂ), hr⟩) hC
+    (heckeLocalEulerFactor_eventually_prod_eq ψ)
+  apply h.congr
+  exact Filter.Eventually.of_forall fun S s hs ↦
+    (LSeriesHasSum_finset_prod f _ s (fun v ↦ LSeriesHasSum_finiteHeckeEulerFactor χ v
+      (ha.trans_le hs)) S).LSeries_eq
+
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Hecke L-function
 is the value of the convergent Euler product with the ramified factors omitted. -/
 theorem finiteHeckeL_hasProd (χ : U[F]) (s : halfPlane) :
-    HasProd (fun v ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ s) := by sorry
+    HasProd (fun v ↦ finiteHeckeEulerFactor χ v s) (finiteHeckeL χ s) := by
+  have h := finiteHeckeEulerProduct_tendstoUniformlyOn_halfPlane χ (a := s.val.re) s.property
+  exact h.tendsto_at (x := s.val) (Set.mem_ofPred.mpr (le_refl s.val.re))
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
