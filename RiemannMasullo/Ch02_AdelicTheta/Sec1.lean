@@ -1,7 +1,7 @@
 module
 
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec1c
-public import Mathlib.Analysis.Distribution.TestFunction
+public import RiemannMasullo.ForMathlib.Analysis.Distribution.TestFunction
 public import Mathlib.LinearAlgebra.PiTensorProduct.Basic
 
 /-!
@@ -36,7 +36,8 @@ The ordinary distribution space in the example is the strong dual of this Mathli
 theorem realTestFunction_stage_isEmbedding (K : Compacts ℝ) :
     IsEmbedding (TestFunction.ofSupportedInCLM ℂ
       (show (K : Set ℝ) ⊆ (⊤ : Opens ℝ) from Set.subset_univ _) :
-        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by sorry
+        𝓓_{K}(ℝ, ℂ) →L[ℂ] 𝓓(⊤, ℂ)) := by
+  exact isEmbedding_testFunction_ofSupportedIn (Set.subset_univ _)
 
 /-- Paper: (2.1.1.1)–(2.1.1.4), p. 60. The weighted magnitude is the norm
 of the mixed partial derivative times one plus the absolute coordinate monomial.
