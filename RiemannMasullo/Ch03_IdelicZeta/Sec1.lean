@@ -730,7 +730,10 @@ theorem isProperMap_ideleClassNorm : IsProperMap (ideleClassNorm F) := by
 /-- Paper: §3.1.2, p. 120. The global idelic module supplies complex exponent charts on
 the space of Hecke characters. -/
 theorem ideleClass_hasNormTwistCharts : HasNormTwistCharts (ideleClassNorm F) := by
-  sorry
+  obtain ⟨_, _, _, _, _, hT, hLC, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+  obtain ⟨g, rfl⟩ := hsurj t
+  exact hasNormTwistCharts_of_proper _ (isProperMap_ideleClassNorm F) ⟨g, ht⟩
 
 /-- Paper: Equation (3.1.2.4), p. 121. Inserting the multiplicative group of a finite completion and
 passing to idele classes is continuous. -/
