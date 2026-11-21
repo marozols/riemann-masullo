@@ -708,7 +708,13 @@ theorem cyclicFourierCoeff_bounded :
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals are
 equicontinuous as maps on the circle Schwartz space. -/
 theorem cyclicFourierCoeff_equicontinuous :
-    Equicontinuous (fun m : ℤ ↦ (cyclicFourierCoeff m : S → ℂ)) := by sorry
+    Equicontinuous (fun m : ℤ ↦ (cyclicFourierCoeff m : S → ℂ)) := by
+  let L (m : ℤ) := (cyclicFourierCoeff m).toLinearMap
+  have h := (norm_withSeminorms ℂ ℂ).uniformEquicontinuous_iff_exists_continuous_seminorm L
+  apply (h.mpr ?_).equicontinuous
+  intro _
+  refine ⟨elementarySchwartzSeminorm (jetIndex 0), (withGeneratingSeminorms_spec _ _).continuous_seminorm _, ?_⟩
+  exact fun m f ↦ norm_cyclicFourierCoeff_le m f
 
 -- TODO(paper-gap): The proof on p. 169 gives the positive Mellin frequency
 -- and drops the Haar normalization factor. Formula (4.2.1.5) fixes both.
