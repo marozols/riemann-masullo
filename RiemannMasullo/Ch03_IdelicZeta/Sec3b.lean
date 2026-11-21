@@ -142,8 +142,43 @@ factors is trivial. -/
 theorem sLocal_character_extension (χ : PontryaginDual Jₛ) :
     ∃ (χ' : PontryaginDual C𝔽) (h : ideleClassNormTwist χ' 0 ∈ unramifiedOutside F S),
       sIdeleRestriction F S ⟨ideleClassNormTwist χ' 0, h⟩ = chartₛ(χ) 0 ∧
-      ∃ T : Finset Primes, S ⊆ T ∧ Subsingleton (CommRing.Pic ((T : Set Primes).integer F)) :=
-  by sorry
+      ∃ T : Finset Primes, S ⊆ T ∧ Subsingleton (CommRing.Pic ((T : Set Primes).integer F)) := by
+  let ψ := (circleToComplex).comp χ
+  obtain ⟨c, hc⟩ := sIdeleRestriction_surjective F S ψ
+  have hn (x : C𝔽) : c.val x ≠ 0 := ((Group.isUnit x).map c.val).ne_zero
+  let e : PontryaginDual C𝔽 :=
+    { toFun x := ⟨c.val x / (‖c.val x‖ : ℂ), mem_sphere_zero_iff_norm.mpr (by
+        rw [norm_div, Complex.norm_of_nonneg (norm_nonneg _), div_self (norm_ne_zero_iff.mpr (hn x))])⟩
+      map_one' := Subtype.ext (by simp)
+      map_mul' x y := Subtype.ext (by
+        change c.val (x * y) / (‖c.val (x * y)‖ : ℂ) =
+          (c.val x / (‖c.val x‖ : ℂ)) * (c.val y / (‖c.val y‖ : ℂ))
+        rw [map_mul, norm_mul, Complex.ofReal_mul, div_mul_div_comm])
+      continuous_toFun := (c.val.continuous.div (Complex.continuous_ofReal.comp c.val.continuous.norm)
+        (fun x ↦ Complex.ofReal_ne_zero.mpr (norm_ne_zero_iff.mpr (hn x)))).subtype_mk _ }
+  have he (x : C𝔽) : ideleClassNormTwist e 0 x = c.val x / (‖c.val x‖ : ℂ) := by
+    change (e x : ℂ) * (((ideleClassNorm F x : ℝ≥0) : ℝ) : ℂ) ^ (0 : ℂ) = _
+    rw [Complex.cpow_zero, mul_one]
+    rfl
+  have hu : ideleClassNormTwist e 0 ∈ unramifiedOutside F S := by
+    apply (mem_unramifiedOutside_iff F S _).mpr
+    intro v hv u
+    let y := Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom u
+    let x := IdeleClassGroup.ofAdicCompletion (𝓞 F) F v y
+    have hx : c.val x = 1 := (mem_unramifiedOutside_iff F S c.val).mp c.property v hv u
+    change ideleClassNormTwist e 0 x = 1
+    simp [he, hx]
+  refine ⟨e, hu, ?_, (picard_uniformization F S).1⟩
+  ext1 x
+  obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective x
+  let y := QuotientGroup.mk (s := IdeleGroup.principalSubgroup (𝓞 F) F) (sIdeleInsertion F S g)
+  have hval : c.val y = (χ (QuotientGroup.mk g) : ℂ) := by
+    have h := DFunLike.congr_fun hc (QuotientGroup.mk g)
+    rw [sIdeleRestriction_mk] at h
+    exact h
+  rw [sIdeleRestriction_mk]
+  change ideleClassNormTwist e 0 y = (χ (QuotientGroup.mk g) : ℂ) * _ ^ (0 : ℂ)
+  simp [he, hval]
 
 /-- Paper: Remark 3.3.1.6, p. 135. Along the component of any such lift,
 the S-local product matches the selected Euler factors of the global L-function. -/
