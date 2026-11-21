@@ -392,10 +392,30 @@ def compactLogProfileInclusion (K : Compacts ℝ) : D[K] →L[ℂ] E where
   map_smul' _ _ := rfl
   cont := compactLogProfile_continuous K
 
+/-- Forgetting the exponential weights is the continuous projection to the zero twist. -/
+private def unweightedLogProfile : E →L[ℂ] 𝓢(ℝ, ℂ) :=
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  ⟨logExponentialDecayTwist univ a, (continuous_apply a).comp
+    (positiveRealExponentialDecay_isEmbedding univ univ_nonempty).continuous⟩
+
+private theorem unweightedLogProfile_apply (f : E) (x : ℝ) : unweightedLogProfile f x = f.val x := by
+  let a : (univ : Set ℝ) := ⟨0, mem_univ _⟩
+  change logExponentialDecayTwist univ a (show logExponentialDecaySubmodule univ from f) x = _
+  rw [logExponentialDecayTwist_apply]
+  simp [a]
+
 /-- Paper: §4.2.2, p. 170. A decay profile lies in the image of the test
 space precisely when its topological support is contained in the designated compact set. -/
 theorem compactLogProfileInclusion_range (K : Compacts ℝ) (f : E) :
-    f ∈ range (compactLogProfileInclusion K) ↔ tsupport f.val ⊆ (K : Set ℝ) := by sorry
+    f ∈ range (compactLogProfileInclusion K) ↔ tsupport f.val ⊆ (K : Set ℝ) := by
+  constructor
+  · rintro ⟨g, rfl⟩
+    exact g.tsupport_subset
+  · intro h
+    have hs : ContDiff ℝ ∞ f.val := by
+      simpa only [show (unweightedLogProfile f : ℝ → ℂ) = f.val from funext (unweightedLogProfile_apply f)] using
+        (unweightedLogProfile f).smooth (⊤ : ℕ∞)
+    exact ⟨⟨f.val, hs, support_subset_iff'.mp ((subset_tsupport _).trans h)⟩, rfl⟩
 
 /-- Paper: Theorem 4.2.2.1, p. 170. An entire function is a Fourier integral
 of an L² function supported on the indicated interval exactly when it has
