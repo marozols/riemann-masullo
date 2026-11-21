@@ -809,7 +809,8 @@ theorem elementarySchwartzSeminorm_zero (f : ElementarySchwartz m n r F) :
 /-- Paper: Definition D.1.3.1, p. 750. The canonical seminorm family generates
 the topology of the space. -/
 theorem elementarySchwartz_withSeminorms :
-    WithSeminorms (E := ElementarySchwartz m n r F) elementarySchwartzSeminorm := by sorry
+    WithSeminorms (E := ElementarySchwartz m n r F) elementarySchwartzSeminorm := by
+  exact withGeneratingSeminorms_spec _ _
 
 /-- Paper: Remark D.1.3.2, p. 750. The Schwartz topology is Hausdorff. -/
 theorem elementarySchwartz_t2 : T2Space (ElementarySchwartz m n r F) := by sorry
