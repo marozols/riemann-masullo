@@ -1067,7 +1067,30 @@ theorem sIdeleQuotientCharacter_eq_prod_restrictions (c : QuasiCharacter (SIdele
       (∀ w u, a w u = c (QuotientGroup.mk (e.symm (eArch.symm (Pi.mulSingle w u), 1)))) ∧
       (∀ v u, b v u = c (QuotientGroup.mk (e.symm (1, eS.symm (Pi.mulSingle v u))))) ∧
       ∀ g : (SAdeleRing F S)ˣ, c (QuotientGroup.mk g) =
-        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by sorry
+        (∏ w, a w (eArch (e g).1 w)) * ∏ v, b v (eS (e g).2 v) := by
+  classical
+  let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F) ((v : S) → v.val.adicCompletion F)
+  let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+  let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+  let q : (SAdeleRing F S)ˣ →ₜ* SIdeleQuotient F S :=
+    ⟨QuotientGroup.mk' _, QuotientGroup.continuous_mk⟩
+  let f := (c.comp q).comp ⟨e.symm.toMonoidHom, e.symm.continuous⟩
+  let a := f.toMonoidHom.comp ((MonoidHom.inl _ _).comp eArch.symm.toMonoidHom)
+  let b := f.toMonoidHom.comp ((MonoidHom.inr _ _).comp eS.symm.toMonoidHom)
+  have ha : Continuous a := f.continuous.comp (eArch.symm.continuous.prodMk continuous_const)
+  have hb : Continuous b := f.continuous.comp (continuous_const.prodMk eS.symm.continuous)
+  let A (w : InfinitePlace F) := w.Completionˣ
+  let B (v : S) := (v.val.adicCompletion F)ˣ
+  refine ⟨fun w ↦ ⟨a.comp (MonoidHom.mulSingle A w), ha.comp (continuous_mulSingle (A := A) w)⟩,
+    fun v ↦ ⟨b.comp (MonoidHom.mulSingle B v), hb.comp (continuous_mulSingle (A := B) v)⟩,
+    fun _ _ ↦ rfl, fun _ _ ↦ rfl, fun g ↦ ?_⟩
+  change c (q g) =
+    (∏ w, a (Pi.mulSingle w (eArch (e g).1 w))) * ∏ v, b (Pi.mulSingle v (eS (e g).2 v))
+  rw [← map_prod, ← map_prod, Finset.univ_prod_mulSingle, Finset.univ_prod_mulSingle]
+  change c (q g) = f (eArch.symm (eArch (e g).1), 1) * f (1, eS.symm (eS (e g).2))
+  rw [eArch.symm_apply_apply, eS.symm_apply_apply, ← map_mul]
+  change c (q g) = c (q (e.symm (((e g).1, 1) * (1, (e g).2))))
+  simp
 
 local notation "finiteNorm" => Units.map nnNormHom.toMonoidHom
 local notation "infiniteNorm(" w ")" => (Units.map nnNormHom.toMonoidHom) ^ InfinitePlace.mult w
@@ -1211,12 +1234,27 @@ theorem sIdeleQuotient_quasiCharacterParametrization (σ : ℝ≥0ˣ →ₜ* SId
     ∃ e : QuasiCharacter (SIdeleQuotient F S) ≃ₜ (ℂ × PontryaginDual n.ker), ∀ c,
       (∀ t : ℝ≥0ˣ, c (σ t) = (((t : ℝ≥0) : ℝ) : ℂ) ^ (e c).1) ∧
         ∀ u : n.ker, ((e c).2 u : ℂ) = c u.val := by
-  sorry
+  let n := sIdeleQuotientNorm F S
+  have : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  have hp : IsProperMap n := isProperMap_sIdeleQuotientNorm F S
+  have : CompactSpace n.ker :=
+    isCompact_iff_compactSpace.mp (hp.isCompact_preimage (isCompact_singleton (x := 1)))
+  exact quasiCharacterParametrization_of_split (G := SIdeleQuotient F S) n hp.continuous σ hσ
 
 /-- Paper: Equation (3.1.2.5), p. 121. The S-idelic module gives complex exponent
 charts on the space of quasi-characters of J_{F,S}. -/
 theorem sIdeleQuotient_hasNormTwistCharts : HasNormTwistCharts (sIdeleQuotientNorm F S) := by
-  sorry
+  let p := (adeleProjection F S).comp (integralAdelesOutside F S).subtype
+  let d := p.comp (integralAdeleDiagonal F S)
+  obtain ⟨hd, hc, _⟩ := sAdele_additive_quotient F S
+  have : IsClosed (projectedDiagonal : Set (SAdeleRing F S)ˣ) := by
+    rw [MonoidHom.map_range]
+    exact isClosed_range_unitsMap d.toMonoidHom hd hc
+  have : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section F S
+  obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+  exact hasNormTwistCharts_of_proper _ (isProperMap_sIdeleQuotientNorm F S)
+    ⟨σ t, (hσ t).trans_ne ht⟩
 
 local notation "LocalIntegers(" v ")" => HeightOneSpectrum.adicCompletionIntegers F v
 local notation "LocalUnits(" v ")" => (HeightOneSpectrum.adicCompletionIntegers F v)ˣ

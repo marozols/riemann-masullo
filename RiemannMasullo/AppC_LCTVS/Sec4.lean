@@ -10,7 +10,9 @@ public import Mathlib.MeasureTheory.Integral.Prod
 public import Mathlib.MeasureTheory.Measure.Complex
 public import Mathlib.MeasureTheory.VectorMeasure.Integral
 public import Mathlib.Topology.Algebra.Group.Quotient
+import Mathlib.Analysis.Normed.Operator.Banach
 import Mathlib.LinearAlgebra.Dual.Lemmas
+import Mathlib.MeasureTheory.Function.ConvergenceInMeasure
 import Mathlib.Topology.Algebra.LinearMapCompletion
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
 
@@ -49,7 +51,8 @@ def toPettisWeakCompletion : E →ₗ[ℂ] PettisWeakCompletion E :=
 /-- Paper: (C.4.1.1), p. 709. Evaluating the image of a vector at a
 continuous functional returns that functional's value on the vector. -/
 theorem toPettisWeakCompletion_apply (x : E) (φ : StrongDual ℂ E) :
-    (show Module.Dual ℂ (StrongDual ℂ E) from toPettisWeakCompletion E x) φ = φ x := by sorry
+    (show Module.Dual ℂ (StrongDual ℂ E) from toPettisWeakCompletion E x) φ = φ x := by
+  rfl
 
 variable {E}
 variable [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ E] [T2Space E]
@@ -426,7 +429,42 @@ theorem pettisIntegrable_of_continuous_hasCompactSupport
     (μ : ComplexMeasure X) [IsFiniteMeasure μ.variation] [μ.variation.Regular]
     (f : X → E) (hf : Continuous f) (hc : HasCompactSupport f) :
     letI := IsTopologicalAddGroup.rightUniformSpace E
-    QuasiCompleteSpace ℂ E → PettisIntegrable (.complex μ) f := by sorry
+    QuasiCompleteSpace ℂ E → PettisIntegrable (.complex μ) f := by
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  intro hE
+  have : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
+  have : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
+  let L := toPettisWeakCompletion E
+  have hL : Continuous L := continuous_toPettisWeakCompletion (E := E)
+  have : T2Space (PettisWeakCompletion E) :=
+    (WeakBilin.isEmbedding (B := (LinearMap.id : Module.Dual ℂ (StrongDual ℂ E) →ₗ[ℂ] _))
+      Function.injective_id).t2Space
+  have hi : PettisWeaklyIntegrable (.complex μ) f := fun φ ↦
+    show Integrable (fun x ↦ φ (f x)) μ.variation from
+    (φ.continuous.comp hf).integrable_of_hasCompactSupport (hc.comp_left φ.map_zero)
+  let K := Metric.closedBall (0 : ℂ) 1 • insert 0 (range f)
+  let H := closure (convexHull ℝ K)
+  have hK : IsCompact K := (isCompact_closedBall (0 : ℂ) 1).smul_set ((hc.isCompact_range hf).insert 0)
+  have hH : IsCompact H := isCompact_closure_of_totallyBounded_quasiComplete (𝕜 := ℂ)
+    hK.totallyBounded.convexHull
+  have hconv : Convex ℝ (L '' H) := (convex_convexHull ℝ K).closure.linear_image (L.restrictScalars ℝ)
+  have hsub : closure (convexHull ℝ (balancedHull ℂ (insert 0 (range (L ∘ f))))) ⊆ L '' H := by
+    apply closure_minimal _ (hH.image hL).isClosed
+    apply convexHull_min _ hconv
+    intro z hz
+    obtain ⟨r, hr, a, ha, rfl⟩ := mem_balancedHull_iff.mp hz
+    have hA : insert 0 (range (L ∘ f)) ⊆ L '' insert 0 (range f) := by
+      rintro _ (rfl | ⟨x, rfl⟩)
+      · exact ⟨0, mem_insert _ _, L.map_zero⟩
+      · exact ⟨f x, mem_insert_of_mem _ ⟨x, rfl⟩, rfl⟩
+    obtain ⟨b, hb, rfl⟩ := hA ha
+    refine ⟨r • b, subset_closure (subset_convexHull _ _ ?_), L.map_smul _ _⟩
+    exact ⟨r, by simpa using hr, b, hb, rfl⟩
+  obtain ⟨v, hv, he⟩ := pettisWeakIntegral_mem_smul_closedAbsConvexHull μ f hf hi
+  obtain ⟨u, _, rfl⟩ := hsub hv
+  refine ⟨(μ.variation univ).toReal • u, hi, ?_⟩
+  exact ((L.restrictScalars ℝ).map_smul _ _).trans he
 
 /-- Paper: Lemma C.4.3.7, p. 714. A weakly integrable function with values
 in a reflexive Banach space is Pettis integrable. -/
@@ -435,7 +473,34 @@ theorem pettisIntegrable_of_reflexive
     (hB : Surjective (NormedSpace.inclusionInDoubleDual ℂ B))
     (μ : ComplexMeasure X) [IsFiniteMeasure μ.variation] [μ.variation.Regular]
     (f : X → B) (hf : PettisWeaklyIntegrable (.complex μ) f) :
-    PettisIntegrable (.complex μ) f := by sorry
+    PettisIntegrable (.complex μ) f := by
+  -- Test each functional against f as an element of L¹ of the variation measure.
+  let T : StrongDual ℂ B →ₗ[ℂ] Lp ℂ 1 μ.variation :=
+    { toFun := fun φ ↦ (hf φ).toL1 _
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hrep (φ : StrongDual ℂ B) : ⇑(T φ) =ᵐ[μ.variation] fun x ↦ φ (f x) :=
+    (hf φ).coeFn_toL1
+  have hT : Continuous T := by
+    apply T.continuous_of_seq_closed_graph
+    intro u φ y hu hy
+    apply Lp.ext
+    -- Pointwise convergence and L¹ convergence must yield the same limit in measure.
+    have hpoint : TendstoInMeasure μ.variation (fun n x ↦ u n (f x)) atTop (fun x ↦ φ (f x)) := by
+      apply tendstoInMeasure_of_tendsto_ae (μ := μ.variation)
+        (fun n ↦ (hf (u n)).aestronglyMeasurable)
+      exact Eventually.of_forall fun x ↦
+        ((NormedSpace.inclusionInDoubleDual ℂ B (f x)).continuous.tendsto φ).comp hu
+    have hlim := (tendstoInMeasure_of_tendsto_Lp hy).congr_left (fun n ↦ hrep (u n))
+    exact (tendstoInMeasure_ae_unique hlim hpoint).trans (hrep φ).symm
+  let L : Module.Dual ℂ (StrongDual ℂ B) := pettisWeakIntegral (.complex μ) f hf
+  have hL : Continuous L := by
+    apply ((VectorMeasure.continuous_integral (μ := μ)
+      (B := ContinuousLinearMap.mul ℝ ℂ)).comp hT).congr
+    intro φ
+    exact VectorMeasure.integral_congr_ae (hrep φ)
+  obtain ⟨b, hb⟩ := hB (⟨L, hL⟩ : StrongDual ℂ (StrongDual ℂ B))
+  exact ⟨b, hf, congrArg ContinuousLinearMap.toLinearMap hb⟩
 
 variable {F : Type*} [AddCommGroup F] [Module ℂ F] [TopologicalSpace F]
   [IsTopologicalAddGroup F] [ContinuousSMul ℂ F] [PolynormableSpace ℂ F] [T2Space F]

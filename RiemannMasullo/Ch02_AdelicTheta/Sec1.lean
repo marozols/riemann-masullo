@@ -194,7 +194,36 @@ theorem schwartzMap_euclidean_tendsto_iff {m : ℕ} {ι : Type*} (l : Filter ι)
     (f : ι → SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ)
     (g : SchwartzMap (EuclideanSpace ℝ (Fin m)) ℂ) :
     Tendsto f l (𝓝 g) ↔ ∀ (α β : Fin m → ℕ) (ε : ℝ), 0 < ε →
-      ∀ᶠ i in l, ∀ x, euclideanSchwartzWeightedDeriv α β (f i - g) x < ε := by sorry
+      ∀ᶠ i in l, ∀ x, euclideanSchwartzWeightedDeriv α β (f i - g) x < ε := by
+  classical
+  rw [(schwartz_withSeminorms ℝ _ _).tendsto_nhds]
+  constructor
+  · intro h α β ε hε
+    let n := ((List.finRange m).flatMap fun j ↦ List.replicate (β j) j).length
+    filter_upwards [h (0, n) (ε / 2) (half_pos hε),
+      h (∑ j, α j, n) (ε / 2) (half_pos hε)] with i hi₀ hi x
+    exact (weighted_partial_le_schwartz_seminorms (f i - g) α β x).trans_lt
+      ((add_lt_add hi₀ hi).trans_eq (add_halves ε))
+  · rintro h ⟨k, n⟩ ε hε
+    let C : ℝ := ((m : ℝ) + 1) ^ k * Fintype.card (Fin n → Fin m)
+    have hC : 0 ≤ C := by positivity
+    let δ := ε / (C + 1)
+    have hδ : 0 < δ := div_pos hε (by positivity)
+    have hsmall : C * δ < ε := by
+      calc
+        C * δ < (C + 1) * δ := mul_lt_mul_of_pos_right (lt_add_one C) hδ
+        _ = ε := by
+          dsimp only [δ]
+          field_simp
+    have hfinite : ∀ᶠ i in l, ∀ (j : Option (Fin m)) (t : Fin n → Fin m),
+        ∀ x, euclideanSchwartzWeightedDeriv (coordinateWeightIndex k j) (coordinateMultiplicity t)
+          (f i - g) x < δ := Filter.eventually_all.mpr fun j ↦ Filter.eventually_all.mpr
+            fun t ↦ h _ _ _ hδ
+    filter_upwards [hfinite] with i hi
+    apply lt_of_le_of_lt (SchwartzMap.seminorm_le_bound ℝ k n (f i - g)
+      (mul_nonneg hC hδ.le) _) hsmall
+    exact fun x ↦ schwartz_norm_bound_of_coordinates k n ((f i - g).smooth ⊤) x
+      fun j t ↦ (hi j t x).le
 
 /-- Paper: Proposition 2.1.1.6, p. 61. The Euclidean Schwartz space is nuclear. -/
 theorem euclideanSchwartz_nuclear (m : ℕ) :

@@ -194,7 +194,24 @@ variable {X : Type*} [AddCommGroup X] [Module ℂ X] [TopologicalSpace X]
 and has image the continuous functionals vanishing on the closed subspace. -/
 theorem quotientDual_weakEmbedding (M : Submodule ℂ X) (hM : IsClosed (M : Set X)) :
     let pull := fun l : WeakDual ℂ (X ⧸ M) ↦ StrongDual.toWeakDual (l.toStrongDual.comp M.mkQL)
-    IsEmbedding pull ∧ range pull = {l | ∀ x ∈ M, l x = 0} := by sorry
+    IsEmbedding pull ∧ range pull = {l | ∀ x ∈ M, l x = 0} := by
+  dsimp only
+  constructor
+  · have he : IsEmbedding (fun l : WeakDual ℂ (X ⧸ M) ↦ (l : (X ⧸ M) → ℂ)) :=
+      WeakBilin.isEmbedding (B := topDualPairing ℂ (X ⧸ M)) ContinuousLinearMap.coe_injective
+    have hπ := M.mkQ_surjective.isEmbedding_comp (X := ℂ) M.mkQ
+    apply Topology.IsEmbedding.of_comp (g := fun l : WeakDual ℂ X ↦ (l : X → ℂ))
+      (WeakDual.continuous_of_continuous_eval fun x ↦ WeakDual.eval_continuous (M.mkQ x))
+      WeakDual.coeFn_continuous
+    exact hπ.comp he
+  · ext l
+    constructor
+    · rintro ⟨v, rfl⟩ x hx
+      change v (Submodule.Quotient.mk x) = 0
+      rw [(Submodule.Quotient.mk_eq_zero M).mpr hx, map_zero]
+    · intro h
+      refine ⟨StrongDual.toWeakDual (M.liftQL l.toStrongDual (fun x hx ↦ h x hx)), ?_⟩
+      exact DFunLike.ext _ _ fun _ ↦ rfl
 
 /-- Paper: Lemma 4.2.1.3, p. 163. The image of the quotient adjoint in the
 strong dual consists precisely of the functionals vanishing on the subspace. -/

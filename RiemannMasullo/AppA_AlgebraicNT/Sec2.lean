@@ -331,7 +331,10 @@ theorem ratAdeleFundamentalDomain_unique_translate (a : 𝔸[ℚ]) :
 has compact closure. -/
 theorem ratAdeleFundamentalDomain_precompact_translate (q : ℚ) :
     IsCompact (closure (algebraMap ℚ 𝔸[ℚ] q +ᵥ ratAdeleFundamentalDomain)) := by
-  sorry
+  let b := (Module.Basis.singleton Unit ℤ).map Rat.ringOfIntegersEquiv.symm.toAddEquiv.toIntLinearEquiv
+  have hb : (b () : ℚ) = 1 := by simp [b, Module.Basis.singleton_apply]
+  rw [ratAdeleFundamentalDomain_eq b hb, closure_vadd]
+  exact (adeleFundamentalDomain_precompact ℚ b).vadd _
 
 end Additive
 
