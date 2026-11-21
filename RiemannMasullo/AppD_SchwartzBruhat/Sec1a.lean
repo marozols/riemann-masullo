@@ -674,7 +674,15 @@ def elementarySchwartzBound (f : ElementaryLieGroup m n r F → ℂ)
 of the absolute value of the original function. -/
 theorem elementarySchwartzBound_zero (f : ElementaryLieGroup m n r F → ℂ) :
     elementarySchwartzBound f (0, 0, 0, 0) =
-      ⨆ g, (‖f g‖₊ : ℝ≥0∞) := by sorry
+      ⨆ g, (‖f g‖₊ : ℝ≥0∞) := by
+  simp only [elementarySchwartzBound, Pi.zero_apply, pow_zero, Finset.prod_const_one, one_mul,
+    elementaryPartial_zero]
+  apply le_antisymm
+  · exact iSup_le fun xt ↦ iSup_le fun a ↦ iSup_le fun b ↦ le_iSup (fun g ↦ (‖f g‖₊ : ℝ≥0∞)) (elementaryCover xt a b)
+  · refine iSup_le fun ⟨x, z, a, b⟩ ↦ ?_
+    obtain ⟨t, ht⟩ := elementaryCover_surjective a b x z
+    rw [← ht]
+    exact le_iSup_of_le (x, t) (le_iSup_of_le a (le_iSup_of_le b le_rfl))
 
 section
 
