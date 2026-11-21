@@ -410,7 +410,25 @@ Deviation: The interval and quotient map are in logarithmic coordinates. -/
 theorem cyclicQuotient_surjOn_interval (a b : ℝ) (ha : 1 < a) (hb : 0 < b)
     (hwide : Real.log γ < 2 * Real.log a) :
     SurjOn (fun x : ℝ ↦ ((x / Real.log γ : ℝ) : T))
-      (symmInterval[a, b] : Set ℝ) univ := by sorry
+      (symmInterval[a, b] : Set ℝ) univ := by
+  intro z _
+  let L := Real.log γ
+  let A := Real.log (b / a)
+  have hL : 0 < L := Real.log_pos hγ
+  have hA : A = Real.log b - Real.log a := Real.log_div hb.ne' (lt_trans zero_lt_one ha).ne'
+  let r := (AddCircle.equivIco (1 : ℝ) (A / L)) z
+  have hr : (r : ℝ) ∈ Ico (A / L) (A / L + 1) := r.property
+  refine ⟨(r : ℝ) * L, ⟨?_, ?_⟩, ?_⟩
+  · rw [← hA]
+    exact (div_le_iff₀ hL).mp hr.1
+  · have hu := mul_lt_mul_of_pos_right hr.2 hL
+    rw [add_mul, div_mul_cancel₀ _ hL.ne', one_mul] at hu
+    change _ ≤ Real.log b + Real.log a
+    dsimp only [L] at hu
+    linarith [hA]
+  · change ((↑((r : ℝ) * L / L) : T)) = z
+    rw [mul_div_cancel_right₀ _ hL.ne']
+    exact AddCircle.coe_equivIco
 
 /-- Paper: Proposition 4.2.2.2(1), p. 171. Periodization gives a continuous
 linear isomorphism from the fixed-support interval quotient to the smooth circle space.
