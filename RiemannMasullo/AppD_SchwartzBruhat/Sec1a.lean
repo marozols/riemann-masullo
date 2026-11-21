@@ -783,8 +783,9 @@ omit [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F]
 
 /-- Paper: Definition D.1.3.1, p. 750. Every weighted bound vanishes on the zero function. -/
 theorem elementarySchwartzSeminorm_map_zero (i : ElementarySchwartzIndex m n r) :
-    (elementarySchwartzBound (0 : elementarySchwartzSubmodule m n r F).val i).toReal = 0 :=
-  by sorry
+    (elementarySchwartzBound (0 : elementarySchwartzSubmodule m n r F).val i).toReal = 0 := by
+  change (elementarySchwartzBound (0 : ElementaryLieGroup m n r F → ℂ) i).toReal = 0
+  simp [elementarySchwartzBound, elementaryPartial]
 
 /-- Paper: Definition D.1.3.1, p. 750. Each real-valued weighted bound is subadditive
 on the Schwartz submodule. -/
