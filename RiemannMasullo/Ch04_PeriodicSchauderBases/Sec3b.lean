@@ -201,7 +201,30 @@ induces the norm isomorphism from the quotient by its kernel to the
 isotypic subspace with its inherited topology. -/
 theorem compactActionAverage_quotient_equiv :
     ∃ e : (E ⧸ P.ker) ≃L[ℂ] actionIsotype ρ ω,
-      ∀ u : E, (e (P.ker.mkQ u) : E) = P u := by sorry
+      ∀ u : E, (e (P.ker.mkQ u) : E) = P u := by
+  let S := actionIsotype ρ ω
+  let c : ℂ := μ.real univ
+  have hc : c ≠ 0 := by
+    dsimp [c]
+    exact_mod_cast (measureReal_univ_pos (μ := μ)).ne'
+  have hmem (u : E) : P u ∈ S := compactActionAverage_mem_isotype μ ρ ω P hP u
+  let A := P.codRestrict S hmem
+  let F := P.ker.liftQL A (by
+    intro u hu
+    exact Subtype.ext (show P u = 0 from hu))
+  let J := P.ker.mkQL.comp (c⁻¹ • S.subtypeL)
+  have hfix {u : E} (hu : u ∈ S) : P (c⁻¹ • u) = u := by
+    rw [map_smul, compactActionAverage_apply_isotype μ ρ ω P hP hu]
+    change c⁻¹ • c • u = u
+    rw [smul_smul, inv_mul_cancel₀ hc, one_smul]
+  have hleft : LeftInverse J F := by
+    intro q
+    obtain ⟨u, rfl⟩ := P.ker.mkQ_surjective q
+    apply (Submodule.Quotient.eq P.ker).mpr
+    change P (c⁻¹ • P u - u) = 0
+    rw [map_sub, hfix (hmem u), sub_self]
+  have hright : RightInverse J F := fun y ↦ Subtype.ext (hfix y.property)
+  exact ⟨ContinuousLinearEquiv.equivOfInverse F J hleft hright, fun _ ↦ rfl⟩
 
 /-- Paper: Lemma 4.3.3.1(3), p. 181 and Corollary 4.3.3.3(3), p. 183.
 The kernel of the averaging operator is the closed span of the differences
