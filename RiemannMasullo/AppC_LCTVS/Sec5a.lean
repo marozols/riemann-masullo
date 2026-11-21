@@ -288,16 +288,6 @@ theorem compactSupportLCTopology_polynormable :
         Continuous (p ∘ (compactSupportStage (E := E) K).subtype)} := Subtype.val
   exact (show WithSeminorms P from ⟨rfl⟩).toPolynormableSpace
 
-/-- Paper: Lemma C.5.1.3(3), p. 721. For a paracompact domain and quasi-complete
-target, the inductive limit of compact support stages is quasi-complete. -/
-theorem compactSupport_quasiComplete [ParacompactSpace X] :
-    letI := IsTopologicalAddGroup.rightUniformSpace E
-    letI := compactSupportLCTopology X E
-    letI := compactSupportLCTopology_polynormable (X := X) (E := E)
-    letI := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
-    letI := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
-    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C_c(X, E) := by sorry
-
 omit [T2Space X] [LocallyCompactSpace X] [T2Space E] [PolynormableSpace ℂ E] in
 /-- Along a sequence visiting each compact set finitely often, a single continuous seminorm
 dominates any prescribed sequence of continuous evaluation seminorms. -/
@@ -398,6 +388,72 @@ theorem continuousMap_quasiComplete :
   intro hE
   refine ⟨fun {s} hb hs ↦ isComplete_continuousMap_of_isComplete_eval hs fun x ↦ ?_⟩
   exact hE.quasiComplete (hb.image (ContinuousMap.evalCLM ℂ x)).closure isClosed_closure
+
+private theorem isClosed_range_compactSupportStage_toContinuousMap (K : Compacts X) :
+    IsClosed (range fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) := by
+  have hrange : (range fun f : compactSupportStage (E := E) K ↦ f.val.toContinuousMap) =
+      {f : C(X, E) | MapsTo f (K : Set X)ᶜ {0}} := by
+    ext f
+    constructor
+    · rintro ⟨g, rfl⟩ x hx
+      have hs := (mem_compactSupportStage_iff K g.val).mp g.property
+      exact image_eq_zero_of_notMem_tsupport fun h ↦ hx (hs h)
+    · intro hf
+      have hs : tsupport f ⊆ (K : Set X) := by
+        rw [tsupport, K.isCompact.isClosed.closure_subset_iff, Function.support_subset_iff']
+        exact fun x hx ↦ hf hx
+      let g : C_c(X, E) := ⟨f, K.isCompact.of_isClosed_subset (isClosed_tsupport f) hs⟩
+      exact ⟨⟨g, (mem_compactSupportStage_iff K g).mpr hs⟩, rfl⟩
+  rw [hrange]
+  exact ContinuousMap.isClosed_setOfPred_mapsTo isClosed_singleton _
+
+/-- Paper: Lemma C.5.1.3(3), p. 721. For a paracompact domain and quasi-complete
+target, the inductive limit of compact support stages is quasi-complete. -/
+theorem compactSupport_quasiComplete [ParacompactSpace X] :
+    letI := IsTopologicalAddGroup.rightUniformSpace E
+    letI := compactSupportLCTopology X E
+    letI := compactSupportLCTopology_polynormable (X := X) (E := E)
+    letI := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
+    letI := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
+    QuasiCompleteSpace ℂ E → QuasiCompleteSpace ℂ C_c(X, E) := by
+  let := IsTopologicalAddGroup.rightUniformSpace E
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have := isUniformAddGroup_continuousMap X E
+  let := compactSupportLCTopology X E
+  let := compactSupportLCTopology_polynormable (X := X) (E := E)
+  let := PolynormableSpace.isTopologicalAddGroup ℂ C_c(X, E)
+  let := IsTopologicalAddGroup.rightUniformSpace C_c(X, E)
+  have : IsUniformAddGroup C_c(X, E) := isUniformAddGroup_of_addCommGroup
+  intro hE
+  refine ⟨fun {B} hb hclosed ↦ ?_⟩
+  obtain ⟨K, hK⟩ := compactSupport_bounded_subset_stage B hb
+  let inclusion : C_c(X, E) →L[ℂ] C(X, E) :=
+    { toFun := CompactlySupportedContinuousMap.toContinuousMap
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl
+      cont := continuous_compactSupport_toContinuousMap }
+  let stage := compactSupportStage (E := E) K
+  have : IsUniformAddGroup stage := .comap stage.subtype
+  let j := inclusion.toLinearMap.comp stage.subtype
+  have hj : IsClosedEmbedding j := by
+    refine ⟨?_, isClosed_range_compactSupportStage_toContinuousMap K⟩
+    change @IsEmbedding _ _ (induced stage.subtype (compactSupportLCTopology X E)) _ j
+    have ht : compactSupportStageTopology (E := E) K =
+        induced stage.subtype (compactSupportLCTopology X E) := by
+      let := compactSupportStageTopology (E := E) K
+      exact (isEmbedding_compactSupportStage (E := E) K).isInducing.eq_induced
+    rw [← ht]
+    exact isEmbedding_compactSupportStage_toContinuousMap K
+  let S : Set stage := Subtype.val ⁻¹' B
+  have hS : Subtype.val '' S = B := Subtype.coe_image_of_subset hK
+  have hjS : j '' S = inclusion '' B := by
+    rw [← hS, image_image]
+    rfl
+  have complete : IsComplete (j '' S) := (continuousMap_quasiComplete hE).quasiComplete
+    (hjS ▸ hb.image inclusion) (hj.isClosedMap _ (hclosed.preimage continuous_subtype_val))
+  rw [← hS]
+  exact Subtype.isComplete_iff.mp ((AddMonoidHom.isUniformInducing_of_isInducing
+    (f := j) hj.isInducing).isComplete_iff.mp complete)
 
 /-- Paper: Example C.5.1.5, p. 722. Positive integer translates of a nonzero continuous
 map supported in the unit interval converge to zero in the compact-open topology.
