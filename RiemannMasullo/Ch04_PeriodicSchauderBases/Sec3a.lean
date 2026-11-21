@@ -68,7 +68,8 @@ def regularTranslate (g : G) (f : RegularL2 ν) : RegularL2 ν :=
 /-- Paper: (4.3.1.4), p. 175. Left translation has the stated representative
 almost everywhere. -/
 theorem regularTranslate_ae_eq (g : G) (f : RegularL2 ν) :
-    (regularTranslate ν g f : G → ℂ) =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by sorry
+    (regularTranslate ν g f : G → ℂ) =ᵐ[ν] fun x ↦ f (g⁻¹ * x) := by
+  exact DomMulAct.smul_Lp_ae_eq (DomMulAct.mk g⁻¹) f
 
 /-- Paper: Lemma 4.3.1.5(2), p. 176. Translation extends to a unique strongly
 continuous linear action on Haar L². Its values on compactly supported
