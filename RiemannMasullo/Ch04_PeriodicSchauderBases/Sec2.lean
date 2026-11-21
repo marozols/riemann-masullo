@@ -697,7 +697,16 @@ theorem cyclicPeriodization_quotient_equiv (γ : ℝ) (hγ : 1 < γ) :
 /-- Paper: Remark 4.2.1.8, p. 170. The exponential system is regular in
 the smooth topology. -/
 theorem cyclicExponential_regular :
-    SchauderBasis.IsRegular (cyclicExponential ∘ freq) := by sorry
+    SchauderBasis.IsRegular (cyclicExponential ∘ freq) := by
+  let p : Seminorm ℂ S := elementarySchwartzSeminorm (jetIndex 0)
+  have hp : Continuous p := (withGeneratingSeminorms_spec _ _).continuous_seminorm _
+  refine ⟨p.ball 0 1, p.ball_mem_nhds hp zero_lt_one, fun n hn ↦ ?_⟩
+  have h := p.mem_ball_zero.mp hn
+  have he : p (cyclicExponential (freq n)) = 1 := by
+    calc
+      _ = ‖circleJetLM 0 (cyclicExponential (freq n))‖ := circleSeminorm_eq_jetNorm (jetIndex 0) (cyclicExponential (freq n))
+      _ = 1 := by rw [circleJetLM_exponential]; simp [fourier_norm]
+  exact (lt_irrefl 1) (he ▸ h)
 
 /-- Paper: Remark 4.2.1.8, p. 170. The exponential system is unbounded
 in the smooth topology. -/
