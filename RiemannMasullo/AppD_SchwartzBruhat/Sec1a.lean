@@ -15,6 +15,7 @@ import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
 import Mathlib.Analysis.Calculus.ContDiff.Comp
 import Mathlib.Analysis.Calculus.ContDiff.Operations
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SmoothFamily
 
 /-!
 # Fourier analysis and Schwartz spaces of elementary abelian Lie groups
@@ -845,6 +846,49 @@ abbrev ElementarySchwartz (m n r : ℕ) (F : Type*) :=
 
 instance : CoeFun (ElementarySchwartz m n r F) (fun _ ↦ ElementaryLieGroup m n r F → ℂ) where
   coe f := (show elementarySchwartzSubmodule m n r F from f).val
+
+/-- A linear family of elementary Schwartz functions on a barrelled space is continuous
+if its point evaluations are continuous linear functionals. -/
+theorem continuous_toElementarySchwartz_of_eval
+    {U F : Type*} [AddCommGroup U] [Module ℂ U] [UniformSpace U]
+    [IsUniformAddGroup U] [ContinuousSMul ℂ U] [BarrelledSpace ℂ U]
+    {m n r : ℕ} (A : U →ₗ[ℂ] ElementarySchwartz m n r F)
+    (he : ∀ g, ∃ L : U →L[ℂ] ℂ, ∀ u, L u = A u g) : Continuous A := by
+  choose ev hev using he
+  refine (withGeneratingSeminorms_spec _ _).continuous_of_continuous_comp A fun i ↦ ?_
+  let p := (elementarySchwartzSeminorm i).comp A
+  apply p.continuous_of_lowerSemicontinuous
+  rw [lowerSemicontinuous_iff_isClosed_preimage]
+  intro R
+  by_cases hR : 0 ≤ R
+  · let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+    let D (xt : X) (a : Fin r → ℤ) (b : F) (u : U) :=
+      elementaryPartial (A u).val i.2.1 i.2.2.1 xt a b
+    have hD (xt : X) (a : Fin r → ℤ) (b : F) : Continuous (D xt a b) := by
+      let V (x : X) := ev (elementaryCover x a b)
+      have hV (u : U) : ContDiff ℝ ∞ (fun x ↦ V x u) := by
+        simpa only [V, hev] using ((A u).property.1 a b)
+      have hdiff (k : ℕ) (v : Fin k → X) :
+          Continuous (fun u ↦ iteratedFDeriv ℝ k (fun x ↦ A u (elementaryCover x a b)) xt v) := by
+        obtain ⟨L, hL⟩ := exists_clm_iteratedFDeriv_apply V hV k xt v
+        simpa only [funext hL, V, hev] using L.continuous
+      exact hdiff _ _
+    let w (xt : X) (a : Fin r → ℤ) : ℂ :=
+      (∏ k, (xt.1 k : ℂ) ^ i.1 k) * (∏ k, (a k : ℂ) ^ i.2.2.2 k)
+    have hset : p ⁻¹' Iic R = ⋂ xt, ⋂ a, ⋂ b, {u | ‖w xt a * D xt a b u‖ ≤ R} := by
+      ext u
+      change (elementarySchwartzBound (A u).val i).toReal ≤ R ↔ _
+      rw [← ENNReal.ofReal_le_ofReal_iff hR, ENNReal.ofReal_toReal ((A u).property.2 i).ne]
+      simp only [elementarySchwartzBound, iSup_le_iff, mem_iInter, mem_ofPred_eq, X, w, D,
+        ENNReal.coe_nnreal_eq, coe_nnNorm, ENNReal.ofReal_le_ofReal_iff hR]
+    rw [hset]
+    exact isClosed_iInter fun xt ↦ isClosed_iInter fun a ↦ isClosed_iInter fun b ↦
+      isClosed_le (continuous_const.mul (hD xt a b)).norm continuous_const
+  · have hset : p ⁻¹' Iic R = ∅ := by
+      ext u
+      exact ⟨fun h ↦ (hR ((apply_nonneg p u).trans h)).elim, False.elim⟩
+    rw [hset]
+    exact isClosed_empty
 
 /-- Paper: Definition D.1.3.1, p. 750. At zero multi-indices the seminorm is the
 uniform norm of the underlying function. -/
