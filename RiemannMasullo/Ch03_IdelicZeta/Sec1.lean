@@ -586,7 +586,18 @@ theorem continuous_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g
 /-- Paper: Equation (3.1.1.2), p. 119. Every real number occurs as an abscissa. -/
 theorem surjective_quasiCharacterAbscissa (hm : IsProperMap m) (hne : ∃ g, m g ≠ 1) :
     Surjective (quasiCharacterAbscissa m hm hne) := by
-  sorry
+  intro r
+  let n := (Units.coeHom ℝ≥0).comp m
+  let f := Complex.ofRealHom.toMonoidHom.comp
+    (NNReal.toRealHom.toMonoidHom.comp ((NNReal.rpowMonoidHom r).comp n))
+  have hc : Continuous f := Complex.continuous_ofReal.comp
+    ((NNReal.continuous_coe.comp (Units.continuous_val.comp hm.continuous)).rpow continuous_const
+      (fun g ↦ Or.inl (NNReal.coe_ne_zero.mpr (m g).ne_zero)))
+  let c : QuasiCharacter G := ⟨f, hc⟩
+  refine ⟨c, quasiCharacterAbscissa_of_unitary_twist m hm hne c 1 (r : ℂ) ?_⟩
+  intro g
+  rw [PontryaginDual.one_apply, Circle.coe_one, one_mul]
+  exact Complex.ofReal_cpow (NNReal.coe_nonneg _) r
 
 /-- Paper: Definition 3.1.1.2(1), p. 119. The relative vertical strip over an interval is
 the inverse image under the abscissa, with the topology inherited on its subtype.
