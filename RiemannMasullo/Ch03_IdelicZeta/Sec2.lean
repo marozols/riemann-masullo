@@ -6,6 +6,8 @@ public import Mathlib.Analysis.Meromorphic.NormalForm
 public import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 public import Mathlib.NumberTheory.NumberField.DedekindZeta
 
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
+
 /-!
 # Global idelic zeta functions
 
@@ -88,7 +90,19 @@ theorem finiteHeckeEulerFactor_inv_uniformizer (χ : U[F])
     (hπ : Valued.v.IsUniformizer (π : v.adicCompletion F)) (hχ : χ₀(χ).IsUnramifiedAt v)
     {s : ℂ} (hs : s ∈ halfPlane) :
     (finiteHeckeEulerFactor χ v s)⁻¹ =
-      1 - finitePlaceRestriction F v (ideleClassNormTwist χ s) π := by sorry
+      1 - finitePlaceRestriction F v (ideleClassNormTwist χ s) π := by
+  classical
+  rw [finiteHeckeEulerFactor, ite_eq_left hχ, inv_inv, hχ.localValue_eq _ hπ,
+    HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+  let g := IdeleClassGroup.ofAdicCompletion (𝓞 F) F v π
+  change 1 - ((χ g : ℂ) * (classNormℝ g : ℂ) ^ (0 : ℂ)) * _ =
+    1 - (χ g : ℂ) * (classNormℝ g : ℂ) ^ s
+  have hn : classNormℝ g = (v.asIdeal.absNorm : ℝ)⁻¹ := by
+    change ((ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v π) : ℝ≥0) : ℝ) = _
+    rw [ideleClassNorm_ofAdicCompletion]
+    exact norm_uniformizer_adicCompletion v _ hπ
+  rw [Complex.cpow_zero, mul_one, hn, Complex.ofReal_inv, Complex.inv_cpow_ofReal_nonneg
+    (Nat.cast_nonneg _) s, Complex.cpow_neg, Complex.ofReal_natCast]
 
 /-- Paper: Equation (3.2.1.4), p. 123. A real local unitary character has a
 unique imaginary radial exponent and a unique sign parity. -/

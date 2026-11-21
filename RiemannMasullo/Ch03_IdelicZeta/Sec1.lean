@@ -758,6 +758,25 @@ theorem continuous_ideleClass_ofCompletion (w : InfinitePlace F) :
   apply Continuous.units_map
   exact (continuous_mulSingle (A := InfinitePlace.Completion) w).prodMk continuous_const
 
+/-- Paper: §3.1.2, p. 120. The idele class norm on one finite completion is its normalized
+local norm. -/
+theorem ideleClassNorm_ofAdicCompletion (v : HeightOneSpectrum (𝓞 F)) (x : (v.adicCompletion F)ˣ) :
+    ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v x) =
+      Units.map nnNormHom.toMonoidHom x := by
+  classical
+  let g := IdeleGroup.ofAdicCompletion (𝓞 F) F v x
+  apply Units.ext
+  apply NNReal.coe_injective
+  change ((ideleNorm F g : ℝ≥0) : ℝ) = ‖x.val‖
+  rw [((ideleNorm_spec F).1 g).2]
+  change (∏ w : InfinitePlace F, ‖(1 : w.Completion)‖ ^ w.mult) *
+    ∏ᶠ w, ‖RestrictedProduct.mulSingle (fun w : Primes(F) ↦ w.adicCompletionIntegers F) v x.val w‖ = _
+  simp only [norm_one, one_pow, Finset.prod_const_one, one_mul]
+  rw [finprod_eq_single _ v]
+  · rw [RestrictedProduct.mulSingle_eq_same]
+  · intro w hw
+    rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, norm_one]
+
 /-- Paper: Equation (3.1.2.4), p. 121. Restriction at a finite place is precomposition
 with insertion in that coordinate followed by passage to idele classes. -/
 def finitePlaceRestriction (v : Primes(F)) (c : HeckeCharacter (𝓞 F) F) :
