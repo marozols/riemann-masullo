@@ -210,7 +210,10 @@ include hf
 /-- Paper: Proposition B.2.1.5, p. 594. The Mellin integral converges
 absolutely in the open right half-plane. -/
 theorem mellinConvergent_of_forwardSemiExponentialDecay (s : ℂ) (hs : 0 < s.re) :
-    MellinConvergent (fromLog f) s := by sorry
+    MellinConvergent (fromLog f) s := by
+  obtain ⟨g, hg⟩ := (forwardSemiExponentialDecay_iff_weighted_schwartz f).mp hf s.re hs.le
+  exact mellinConvergent_of_integrable_logWeight f s
+    ((g.integrable (μ := volume)).congr (Eventually.of_forall hg))
 
 /-- Paper: Proposition B.2.1.5(1), p. 594. The Mellin transform is
 holomorphic in the open right half-plane. -/
