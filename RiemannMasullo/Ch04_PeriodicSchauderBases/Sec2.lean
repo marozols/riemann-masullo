@@ -5,6 +5,7 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
+import Mathlib.Analysis.Real.Pi.Bounds
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
@@ -702,7 +703,17 @@ theorem cyclicExponential_regular :
 /-- Paper: Remark 4.2.1.8, p. 170. The exponential system is unbounded
 in the smooth topology. -/
 theorem cyclicExponential_not_bounded :
-    ¬ IsVonNBounded ℂ (range cyclicExponential) := by sorry
+    ¬ IsVonNBounded ℂ (range cyclicExponential) := by
+  intro h
+  obtain ⟨C, _, hC⟩ := (withGeneratingSeminorms_spec _ _).isVonNBounded_iff_seminorm_bounded.mp h (jetIndex 1)
+  obtain ⟨n, hn⟩ := exists_nat_gt C
+  have hb := hC (cyclicExponential n) (mem_range_self (n : ℤ))
+  have he : elementarySchwartzSeminorm (jetIndex 1) (cyclicExponential n) = 2 * Real.pi * n := by
+    calc
+      _ = ‖circleJetLM 1 (cyclicExponential n)‖ := circleSeminorm_eq_jetNorm (jetIndex 1) (cyclicExponential (n : ℤ))
+      _ = _ := by rw [circleJetLM_exponential]; simp [unitCircleFrequency, norm_smul, fourier_norm, abs_of_pos Real.pi_pos]
+  have hh := he ▸ hb
+  nlinarith [mul_nonneg (show 0 ≤ 2 * Real.pi - 1 by linarith [Real.pi_gt_three]) (Nat.cast_nonneg (α := ℝ) n)]
 
 section CompactSupport
 
