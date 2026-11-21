@@ -5,6 +5,7 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec3a
 public import Mathlib.Analysis.Distribution.ContDiffMapSupportedIn
 import Mathlib.Analysis.InnerProductSpace.ProdL2
 import Mathlib.Analysis.PSeries
+import Mathlib.Analysis.SpecialFunctions.SmoothTransition
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
@@ -375,9 +376,106 @@ theorem cyclicPeriodization_continuous : Continuous (cyclicPeriodization γ hγ)
     continuous_pi_iff.mp (positiveRealExponentialDecay_isEmbedding (univ : Set ℝ) univ_nonempty).continuous a
   exact (cyclicSchwartzPeriodization γ hγ).continuous.comp h
 
+private def circularLift (f : S) (x : ℝ) : ℂ := f (point (x : T))
+
+private theorem circularLift_smooth (f : S) : ContDiff ℝ ∞ (circularLift f) := by
+  let s (x : ℝ) := ((0, x • EuclideanSpace.single (0 : Fin 1) (1 : ℝ)) :
+    EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1))
+  have he (x : ℝ) : elementaryCover (s x) (0 : Fin 0 → ℤ) PUnit.unit = point (x : T) := by
+    refine Prod.ext rfl (Prod.ext ?_ rfl)
+    funext j
+    have hj : j = 0 := Subsingleton.elim _ _
+    subst j
+    simp [elementaryCover, s, PiLp.smul_apply]
+  have hs : ContDiff ℝ ∞ s := contDiff_const.prodMk (contDiff_id.smul contDiff_const)
+  change ContDiff ℝ ∞ (fun x : ℝ ↦ f (point (x : T)))
+  simpa only [Function.comp_def, he] using ((f.property.1 0 PUnit.unit).comp hs)
+
+/-- Multiply the periodic lift by a smooth window whose integer translates sum to one. -/
+private def cyclicLiftValue (γ : ℝ) (f : S) (x : ℝ) : ℂ :=
+  (↑(Real.smoothTransition (x / Real.log γ + 1) - Real.smoothTransition (x / Real.log γ)) : ℂ) *
+    f (point ((x / Real.log γ : ℝ) : T))
+
+include hγ in
+/-- The windowed lift is smooth and vanishes outside a fixed compact interval. -/
+private theorem cyclicLiftValue_spec (f : S) : ContDiff ℝ ∞ (cyclicLiftValue γ f) ∧
+    ∀ x ∉ Icc (-Real.log γ) (Real.log γ), cyclicLiftValue γ f x = 0 := by
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let u := circularLift f
+  have hu := circularLift_smooth f
+  let w (x : ℝ) := Real.smoothTransition (x + 1) - Real.smoothTransition x
+  have hw : ContDiff ℝ ∞ w :=
+    (Real.smoothTransition.contDiff.comp (contDiff_id.add contDiff_const)).sub Real.smoothTransition.contDiff
+  let g (x : ℝ) : ℂ := (w (x / L) : ℂ) * u (x / L)
+  have hg : ContDiff ℝ ∞ g :=
+    ((Complex.ofRealCLM.contDiff.comp hw).comp (contDiff_id.div_const L)).mul
+      (hu.comp (contDiff_id.div_const L))
+  refine ⟨hg, fun x hx ↦ ?_⟩
+  change g x = 0
+  have h : x < -L ∨ L < x := by simpa only [mem_Icc, not_and_or, not_le] using hx
+  rcases h with h | h
+  · have hx : x / L ≤ -1 := (div_le_iff₀ hL).2 (by linarith)
+    simp [g, w, Real.smoothTransition.zero_of_nonpos (show x / L + 1 ≤ 0 by linarith),
+      Real.smoothTransition.zero_of_nonpos (show x / L ≤ 0 by linarith)]
+  · have hx : 1 ≤ x / L := (le_div_iff₀ hL).2 (by linarith)
+    simp [g, w, Real.smoothTransition.one_of_one_le hx,
+      Real.smoothTransition.one_of_one_le (show 1 ≤ x / L + 1 by linarith)]
+
+/-- Only the translates at zero and minus one contribute on the fundamental interval. -/
+private theorem cyclicPeriodization_lift (f : S) (F : E) (hF : ∀ x, F.val x = cyclicLiftValue γ f x) :
+    cyclicPeriodization γ hγ F = f := by
+  let L := Real.log γ
+  have hL : 0 < L := Real.log_pos hγ
+  let w (x : ℝ) := Real.smoothTransition (x + 1) - Real.smoothTransition x
+  let u (x : ℝ) := f (point (x : T))
+  refine Subtype.ext (funext fun z ↦ ?_)
+  let r := (AddCircle.equivIco (1 : ℝ) 0) (z.2.1 0)
+  have hr : (r : ℝ) ∈ Ico 0 1 := by simpa using r.property
+  have heq : (point ((r : ℝ) : T)) = z := by
+    refine Prod.ext (Subsingleton.elim _ _) (Prod.ext ?_ (Subsingleton.elim _ _))
+    funext j
+    have hj : j = 0 := Subsingleton.elim _ _
+    subst j
+    exact AddCircle.coe_equivIco
+  have hper (k : ℤ) : u ((r : ℝ) + k) = f z := by
+    have hk : ((k : ℝ) : T) = 0 := (AddCircle.coe_eq_zero_iff (p := (1 : ℝ))).mpr ⟨k, by simp [zsmul_eq_mul]⟩
+    simp only [u, AddCircle.coe_add, hk, add_zero, heq]
+  have hgk (k : ℤ) : F.val ((r : ℝ) * L + k * L) = (w ((r : ℝ) + k) : ℂ) * f z := by
+    rw [hF]
+    change (w _ : ℂ) * u _ = _
+    rw [← add_mul, mul_div_cancel_right₀ _ hL.ne', hper]
+  have hsum := (cyclicPeriodization_hasSum γ hγ F ((r : ℝ) * L)).tsum_eq.symm
+  change (cyclicPeriodization γ hγ F) z = f z
+  change (cyclicPeriodization γ hγ F) (point ((↑((r : ℝ) * L / L) : T))) =
+    ∑' k : ℤ, F.val ((r : ℝ) * L + k * L) at hsum
+  rw [mul_div_cancel_right₀ _ hL.ne', heq] at hsum
+  rw [hsum]
+  simp_rw [hgk]
+  rw [tsum_eq_sum (s := ({-1, 0} : Finset ℤ))]
+  · simp [w, Real.smoothTransition.zero_of_nonpos (show (r : ℝ) + -1 ≤ 0 by linarith [hr.2]),
+      Real.smoothTransition.one_of_one_le (show 1 ≤ (r : ℝ) + 1 by linarith [hr.1])]
+    ring
+  · intro k hk
+    have hk' : k ≤ -2 ∨ 1 ≤ k := by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+      omega
+    rcases hk' with hk | hk
+    · have h : (r : ℝ) + k + 1 ≤ 0 := by linarith [hr.2, (show (k : ℝ) ≤ -2 by exact_mod_cast hk)]
+      simp [w, Real.smoothTransition.zero_of_nonpos h,
+        Real.smoothTransition.zero_of_nonpos (show (r : ℝ) + k ≤ 0 by linarith)]
+    · have h : 1 ≤ (r : ℝ) + k := by linarith [hr.1, (show (1 : ℝ) ≤ k by exact_mod_cast hk)]
+      simp [w, Real.smoothTransition.one_of_one_le h,
+        Real.smoothTransition.one_of_one_le (show 1 ≤ (r : ℝ) + k + 1 by linarith)]
+
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Every smooth quotient function has an
 exponentially decaying lift under periodization. -/
-theorem cyclicPeriodization_surjective : Surjective (cyclicPeriodization γ hγ) := by sorry
+theorem cyclicPeriodization_surjective : Surjective (cyclicPeriodization γ hγ) := by
+  intro f
+  obtain ⟨hs, hK⟩ := cyclicLiftValue_spec γ hγ f
+  have hc := HasCompactSupport.intro isCompact_Icc hK
+  let F : E := ⟨cyclicLiftValue γ f, mem_logExponentialDecaySubmodule_of_hasCompactSupport univ hc hs⟩
+  exact ⟨F, cyclicPeriodization_lift γ hγ f F (fun _ ↦ rfl)⟩
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Periodization sends open sets to open sets. -/
 theorem cyclicPeriodization_isOpenMap : IsOpenMap (cyclicPeriodization γ hγ) := by sorry
