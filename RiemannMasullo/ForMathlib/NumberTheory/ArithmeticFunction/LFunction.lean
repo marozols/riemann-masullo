@@ -104,4 +104,19 @@ theorem hasSum_norm_LSeries_term_ofPowerSeries {q : ℕ} (hq : 1 < q) {a s : ℂ
   intro k
   simp [Function.comp_apply, hpow]
 
+/-- A finite Dirichlet convolution product sums to the product of the local series. -/
+theorem LSeriesHasSum_finset_prod {ι : Type*} (f : ι → ArithmeticFunction ℂ)
+    (a : ι → ℂ) (s : ℂ) (h : ∀ i, LSeriesHasSum (f i) s (a i)) (S : Finset ι) :
+    LSeriesHasSum ⇑(∏ i ∈ S, f i) s (∏ i ∈ S, a i) := by
+  classical
+  induction S using Finset.induction_on with
+  | empty =>
+    simp only [Finset.prod_empty]
+    have hone (n : ℕ) : LSeries.term ⇑(1 : ArithmeticFunction ℂ) s n = if n = 1 then 1 else 0 := by
+      by_cases hn : n = 1 <;> simp [LSeries.term, hn]
+    simpa only [LSeriesHasSum, funext hone] using hasSum_ite_eq (1 : ℕ) (1 : ℂ)
+  | @insert i S hi ih =>
+    rw [Finset.prod_insert hi, Finset.prod_insert hi]
+    exact ArithmeticFunction.LSeriesHasSum_mul (h i) ih
+
 end RiemannMasullo

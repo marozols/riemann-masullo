@@ -220,7 +220,14 @@ theorem existsUnique_compactActionIsotypicAverage [CompactSpace G]
     (hseq : ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
       TendstoUniformly (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop)
     (ω : PontryaginDual G) :
-    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ ω P := by sorry
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ univ ρ ω P := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  let A (g : G) := star (ω g : ℂ) • ρ g
+  have hA : Continuous (fun p : G × E ↦ A p.1 p.2) :=
+    (show Continuous (fun p : G × E ↦ star (ω p.1 : ℂ)) from by fun_prop).smul hρ
+  simpa [IsPettisIsotypicAverageOn, A] using
+    existsUnique_pettisIntegral_continuousFamily μ (K := univ) isCompact_univ
+      (ae_of_all _ fun _ ↦ mem_univ _) A hA
 
 /-- Paper: Lemma 4.3.3.7(1), p. 186. On a relatively compact locally
 closed subset with nonempty interior, averaging the action gives a unique
@@ -236,11 +243,33 @@ theorem existsUnique_relativelyCompactActionAverage
         ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
           ∀ K : Set G, IsCompact K →
             TendstoUniformlyOn (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop K)) :
-    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ X ρ 1 P := by sorry
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ X ρ 1 P := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  have : IsFiniteMeasure (μ.restrict X) := isFiniteMeasure_restrict.2
+    ((measure_mono subset_closure).trans_lt (hX.measure_lt_top (μ := μ))).ne
+  have hμX : ∀ᵐ x ∂μ.restrict X, x ∈ closure X :=
+    (ae_restrict_iff isClosed_closure.measurableSet).2 (ae_of_all _ fun _ hx ↦ subset_closure hx)
+  simpa [IsPettisIsotypicAverageOn] using
+    existsUnique_pettisIntegral_continuousFamily (μ.restrict X) hX hμX (fun g ↦ ρ g) hρ
 
 -- TODO(paper-gap): Lemma 4.3.3.7(2) and (3) fail for a relatively compact
 -- locally closed subset. On the circle take X to be a proper open arc
 -- around 1 and take the standard one-dimensional character action.
+
+/-- Paper: Corollary 4.3.3.8(1), p. 188. The character-weighted Pettis integrals
+over the relatively compact subset determine a unique continuous linear operator.
+Deviation: The subset is assumed locally closed so that it is measurable. -/
+theorem existsUnique_relativelyCompactActionIsotypicAverage
+    (X : Set G) (hX : IsCompact (closure X)) (hlc : IsLocallyClosed X)
+    (hint : (interior X).Nonempty)
+    (hborn : ∀ p : Seminorm ℂ E, (∀ B : Set E, IsVonNBounded ℂ B → BddAbove (p '' B)) →
+      Continuous p)
+    (hseq : ∀ (u : ℕ → E) (v : E), Tendsto u atTop (𝓝 v) →
+      ∀ K : Set G, IsCompact K →
+        TendstoUniformlyOn (fun n g ↦ ρ g (u n)) (fun g ↦ ρ g v) atTop K)
+    (ω : PontryaginDual G) :
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ X ρ ω P := by sorry
+
 -- TODO(paper-gap): Corollary 4.3.3.8(1) allows nonmeasurable X.
 -- Parts (2) and (3) fail even for an open arc and the trivial weight.
 
