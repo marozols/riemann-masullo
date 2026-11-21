@@ -169,22 +169,22 @@ theorem existsUnique_circleCharacter_zpow (c : Circle →ₜ* ℂ) :
         ← Complex.ofReal_log (Real.exp_pos r).le, Real.log_exp]
     exact_mod_cast mul_right_cancel₀ Complex.I_ne_zero (hmz.trans hz')
 
-/-- A unitary character of the complex units is a power of the squared radius
-times an integer power of the angular component. Both parameters are unique. -/
-theorem existsUnique_complexUnits_character_parameters (c : ℂˣ →ₜ* ℂ) (hc : ∀ x, ‖c x‖ = 1) :
-    ∃! a : ℂ × ℤ, a.1.re = 0 ∧ ∀ x : ℂˣ, c x =
+/-- The continuous complex characters of the complex units are classified by their radial exponent
+and angular weight, using the squared absolute value. -/
+theorem existsUnique_complexUnits_quasiCharacter_parameters (c : ℂˣ →ₜ* ℂ) :
+    ∃! a : ℂ × ℤ, ∀ x : ℂˣ, c x =
       ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by
   let incl := Complex.ofRealHom.toMonoidHom.comp NNReal.toRealHom.toMonoidHom
   let i : ℝ≥0ˣ →ₜ* ℂˣ := ⟨Units.map incl,
     (Complex.continuous_ofReal.comp NNReal.continuous_coe).units_map _⟩
   let j : Circle →ₜ* ℂˣ := ⟨Circle.toUnits, Units.isEmbedding_val₀.continuous_iff.mpr
     continuous_subtype_val⟩
-  obtain ⟨z, ⟨hz₀, hz⟩, huniq⟩ := existsUnique_unitaryComplexPower (c.comp i) (fun t ↦ hc (i t))
+  obtain ⟨z, hz, huniq⟩ := existsUnique_complexPower (c.comp i)
   obtain ⟨n, hn, hun⟩ := existsUnique_circleCharacter_zpow (c.comp j)
   have hsquare (r : ℝ) (hr : 0 ≤ r) (a : ℂ) :
       ((r ^ 2 : ℝ) : ℂ) ^ a = (r : ℂ) ^ (2 * a) := by
     simpa using (Complex.cpow_mul_ofReal_nonneg hr (2 : ℝ) a).symm
-  refine ⟨(z / 2, n), ⟨by simp [hz₀], ?_⟩, ?_⟩
+  refine ⟨(z / 2, n), ?_, ?_⟩
   · intro x
     let t := Units.map nnNormHom.toMonoidHom x
     have hr : ‖(x : ℂ)‖ ≠ 0 := norm_ne_zero_iff.mpr x.ne_zero
@@ -199,12 +199,11 @@ theorem existsUnique_complexUnits_character_parameters (c : ℂˣ →ₜ* ℂ) (
     change c x = ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ (z / 2) * (u : ℂ) ^ n
     rw [hsquare _ (norm_nonneg _), show (2 : ℂ) * (z / 2) = z by ring, ← hrad, ← hang,
       ← map_mul, ← he]
-  · rintro ⟨a, k⟩ ⟨ha, hak⟩
-    change a.re = 0 at ha
+  · rintro ⟨a, k⟩ hak
     apply Prod.ext
     · have h : 2 * a = z := by
         apply huniq
-        refine ⟨by simp [Complex.mul_re, ha], fun t ↦ ?_⟩
+        intro t
         have hr := NNReal.coe_pos.mpr (Units.zero_lt t)
         have he := hak (i t)
         change c (i t) = ((‖(valℝ t : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a *
@@ -219,5 +218,23 @@ theorem existsUnique_complexUnits_character_parameters (c : ℂˣ →ₜ* ℂ) (
       change c (j u) = ((‖(u : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a *
         ((u : ℂ) / (‖(u : ℂ)‖ : ℂ)) ^ k at he
       simpa using he
+
+/-- A unitary character of the complex units is a power of the squared radius
+times an integer power of the angular component. Both parameters are unique. -/
+theorem existsUnique_complexUnits_character_parameters (c : ℂˣ →ₜ* ℂ) (hc : ∀ x, ‖c x‖ = 1) :
+    ∃! a : ℂ × ℤ, a.1.re = 0 ∧ ∀ x : ℂˣ, c x =
+      ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ a.1 * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ a.2 := by
+  obtain ⟨p, hp, huniq⟩ := existsUnique_complexUnits_quasiCharacter_parameters c
+  refine ⟨p, ⟨?_, hp⟩, fun q hq ↦ huniq q hq.2⟩
+  let x := Units.mk0 (2 : ℂ) (by norm_num)
+  have h := hc x
+  rw [hp x] at h
+  have hpow : ‖(4 : ℂ) ^ p.1‖ = 1 := by
+    norm_num [x] at h
+    exact h
+  have hb : 0 < (4 : ℝ) := by norm_num
+  change ‖((4 : ℝ) : ℂ) ^ p.1‖ = 1 at hpow
+  rw [Complex.norm_cpow_eq_rpow_re_of_pos hb] at hpow
+  exact (Real.rpow_right_inj hb (by norm_num)).mp (hpow.trans (Real.rpow_zero _).symm)
 
 end RiemannMasullo
