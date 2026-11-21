@@ -5,6 +5,8 @@ public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec3a
 public import Mathlib.Analysis.InnerProductSpace.Projection.Basic
 public import Mathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
 
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
+
 /-! # Pettis averaging, invariants and isotypes -/
 
 @[expose] public noncomputable section
@@ -134,10 +136,59 @@ variable {G E : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
 
 include hμ hρ hP
 
+omit hμ hρ [IsTopologicalGroup G] [CompactSpace G] [T2Space G] [BorelSpace G]
+  [T2Space E] [ContinuousSMul ℂ E] [LocallyConvexSpace ℝ E] in
+/-- Testing the average against a continuous functional gives its scalar integral. -/
+private theorem compactActionAverage_dual_apply (u : E) (φ : StrongDual ℂ E) :
+    φ (P u) = ∫ g, star (ω g : ℂ) * φ (ρ g u) ∂μ := by
+  obtain ⟨hi, he⟩ := hP u
+  have h := congrArg (fun z : PettisWeakCompletion E ↦
+    (show Module.Dual ℂ (StrongDual ℂ E) from z) φ) he
+  change φ (P u) = ∫ g, φ (star (ω g : ℂ) • ρ g u) ∂μ.restrict univ at h
+  simpa only [Measure.restrict_univ, map_smul, smul_eq_mul] using h
+
+omit hρ [CompactSpace G] [T2Space G] in
+/-- Translating a twisted orbit integral multiplies it by the character. -/
+private theorem compactActionAverage_mem_isotype (u : E) : P u ∈ actionIsotype ρ ω := by
+  apply (mem_actionIsotype ..).2
+  intro k
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  apply (SeparatingDual.eq_iff_forall_dual_eq (R := ℂ)).2
+  intro φ
+  have h := compactActionAverage_dual_apply μ ρ ω P hP u (φ.comp (ρ k))
+  rw [map_smul, compactActionAverage_dual_apply μ ρ ω P hP u φ, smul_eq_mul,
+    ← integral_const_mul, ← integral_mul_left_eq_self (μ := μ)
+      (fun g ↦ (ω k : ℂ) * (star (ω g : ℂ) * φ (ρ g u))) k]
+  refine h.trans (integral_congr_ae (ae_of_all _ fun g ↦ ?_))
+  simp only [ContinuousLinearMap.comp_apply, map_mul, Circle.coe_mul, star_mul',
+    mul_apply_eq_comp]
+  rw [mul_assoc (star (ω k : ℂ)), ← mul_assoc (ω k : ℂ)]
+  simp [← Circle.coe_inv_eq_conj]
+
+omit hρ hμ [IsTopologicalGroup G] [CompactSpace G] [T2Space G] [BorelSpace G] in
+/-- On the isotype the average acts by the total mass of the group. -/
+private theorem compactActionAverage_apply_isotype {u : E} (hu : u ∈ actionIsotype ρ ω) :
+    P u = (μ.real univ : ℂ) • u := by
+  have : SeparatingDual ℂ E := locallyConvexSpace_separatingDual ℂ E
+  apply (SeparatingDual.eq_iff_forall_dual_eq (R := ℂ)).2
+  intro φ
+  rw [compactActionAverage_dual_apply μ ρ ω P hP u φ]
+  simp [((mem_actionIsotype ..).1 hu), ← Circle.coe_inv_eq_conj,
+    Complex.real_smul]
+
 /-- Paper: Lemma 4.3.3.1(2), p. 181 and Corollary 4.3.3.3(2), p. 183.
 The average surjects onto the isotype, including the fixed subspace
 when the character is trivial. -/
-theorem compactActionAverage_range : LinearMap.range P.toLinearMap = actionIsotype ρ ω := by sorry
+theorem compactActionAverage_range : LinearMap.range P.toLinearMap = actionIsotype ρ ω := by
+  apply le_antisymm
+  · rintro _ ⟨u, rfl⟩
+    exact compactActionAverage_mem_isotype μ ρ ω P hP u
+  · intro u hu
+    refine ⟨(μ.real univ : ℂ)⁻¹ • u, ?_⟩
+    have hmass : (μ.real univ : ℂ) ≠ 0 := by exact_mod_cast measureReal_univ_pos.ne'
+    change P ((μ.real univ : ℂ)⁻¹ • u) = u
+    rw [map_smul, compactActionAverage_apply_isotype μ ρ ω P hP hu, smul_smul,
+      inv_mul_cancel₀ hmass, one_smul]
 
 /-- Paper: Lemma 4.3.3.1(2), p. 181 and Corollary 4.3.3.3(2), p. 183.
 Dividing the average by the total mass gives an idempotent. -/
