@@ -6,6 +6,8 @@ public import Mathlib.MeasureTheory.Function.L2Space
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 public import Mathlib.Topology.ContinuousMap.CompactlySupported
 
+import Mathlib.MeasureTheory.Measure.SeparableMeasure
+
 /-! # Strong continuity and the Hilbert-space isotypic transform -/
 
 @[expose] public noncomputable section
@@ -58,7 +60,9 @@ theorem regularL2_compactlySupported_dense :
     DenseRange (fun f : G →C_c ℂ ↦ (regularL2_memLp_compactlySupported ν f).toLp f) := by sorry
 
 /-- Paper: Lemma 4.3.1.5(1), p. 176. The Haar L² space is separable. -/
-theorem regularL2_separable : SeparableSpace (RegularL2 ν) := by sorry
+theorem regularL2_separable : SeparableSpace (RegularL2 ν) := by
+  have : Fact ((2 : ℝ≥0∞) ≠ ∞) := ⟨by simp⟩
+  infer_instance
 
 /-- Paper: (4.3.1.4), p. 175. Left translation on Haar L² precomposes with
 multiplication by the inverse group element. -/
