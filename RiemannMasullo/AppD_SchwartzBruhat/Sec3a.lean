@@ -416,7 +416,19 @@ theorem positiveRealExponentialDecay_strongDual_montel (hInt : OrdConnected I) (
 /-- Paper: Lemma D.3.2.3(3), p. 801. If zero lies in I, the zero-weight
 profile is a continuous linear inclusion into the ordinary Schwartz space. -/
 theorem positiveRealExponentialDecay_continuous_inclusion (h0 : 0 ∈ I) :
-    ∃ T : E →L[ℂ] 𝓢(ℝ, ℂ), Injective T ∧ ∀ f x, T f x = f.val x := by sorry
+    ∃ T : E →L[ℂ] 𝓢(ℝ, ℂ), Injective T ∧ ∀ f x, T f x = f.val x := by
+  let a : I := ⟨0, h0⟩
+  have hc := (continuous_apply a).comp (positiveRealExponentialDecay_isEmbedding I ⟨0, h0⟩).continuous
+  let T : E →L[ℂ] 𝓢(ℝ, ℂ) := ⟨logExponentialDecayTwist I a, hc⟩
+  have hT (f : E) (x : ℝ) : T f x = f.val x := by
+    change logExponentialDecayTwist I a f x = _
+    rw [logExponentialDecayTwist_apply I a f x]
+    simp [a]
+  refine ⟨T, ?_, hT⟩
+  intro f g h
+  apply Subtype.ext
+  funext x
+  rw [← hT f x, ← hT g x, h]
 
 -- TODO(prerequisite): Lemma D.3.2.3(4–6) needs the three independently defined
 -- subspaces from §B.2.1.1, Definition B.2.1.1.
