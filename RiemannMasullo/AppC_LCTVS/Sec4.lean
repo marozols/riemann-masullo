@@ -267,6 +267,7 @@ variable {X : Type*} [TopologicalSpace X] [T2Space X] [LocallyCompactSpace X]
 variable {E : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
   [IsTopologicalAddGroup E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ E] [T2Space E]
 
+open scoped ComplexOrder in
 /-- Paper: Lemma C.4.3.1, p. 711. The weak integral lies in the closed
 absolutely convex hull of the image, scaled by the total variation mass.
 Deviation: The hull includes zero for the empty domain, as in the bipolar convention. -/
@@ -275,7 +276,51 @@ theorem pettisWeakIntegral_mem_smul_closedAbsConvexHull
     (f : X → E) (hf : Continuous f) (hi : PettisWeaklyIntegrable (.complex μ) f) :
     pettisWeakIntegral (.complex μ) f hi ∈
       (μ.variation univ).toReal •
-        closure (convexHull ℝ (balancedHull ℂ (insert 0 (range (toPettisWeakCompletion E ∘ f))))) := by sorry
+        closure (convexHull ℝ (balancedHull ℂ (insert 0 (range (toPettisWeakCompletion E ∘ f))))) := by
+  let D := StrongDual ℂ E
+  let B : Module.Dual ℂ D →ₗ[ℂ] D →ₗ[ℂ] ℂ := .id
+  let S := range (toPettisWeakCompletion E ∘ f)
+  let C := closure (convexHull ℝ (balancedHull ℂ (insert 0 S)))
+  let v := pettisWeakIntegral (.complex μ) f hi
+  let d := (μ.variation univ).toReal
+  have hB : B.Nondegenerate := LinearMap.Nondegenerate.id
+  have hbip : B.flip.polar (B.polar S) = C := by
+    -- Give both sides of the algebraic duality their weak topologies.
+    let : TopologicalSpace (Module.Dual ℂ D) := inferInstanceAs (TopologicalSpace (WeakBilin B))
+    let : TopologicalSpace D := inferInstanceAs (TopologicalSpace (WeakBilin B.flip))
+    have : PolynormableSpace ℂ (Module.Dual ℂ D) := B.weakBilin_withSeminorms.toPolynormableSpace
+    have : PolynormableSpace ℂ D := B.flip.weakBilin_withSeminorms.toPolynormableSpace
+    have : T2Space (Module.Dual ℂ D) := (WeakBilin.isEmbedding (B := B) Function.injective_id).t2Space
+    have : T2Space D := (WeakBilin.isEmbedding (LinearMap.ker_eq_bot.mp
+      (LinearMap.separatingLeft_iff_ker_eq_bot.mp (LinearMap.flip_separatingLeft.mpr hB.2)))).t2Space
+    rw [bipolar_eq_weakClosure_absConvexHull B hB S]
+    congr 1
+    refine (absConvexHull_eq_convexHull_balancedHull ℂ (s := insert 0 S)).trans ?_
+    exact le_antisymm
+      (convexHull_min (subset_convexHull ..) (convex_RCLike_iff_convex_real.2 (convex_convexHull ..)))
+      (convexHull_min (subset_convexHull ..) ((convex_convexHull ℂ _).lift ℝ))
+  have hzero : (0 : PettisWeakCompletion E) ∈ C :=
+    subset_closure (subset_convexHull _ _ (subset_balancedHull _ (mem_insert _ _)))
+  by_cases hz : μ.variation univ = 0
+  · have hμ : μ = 0 := VectorMeasure.variation_eq_zero.mp (Measure.measure_univ_eq_zero.mp hz)
+    subst μ
+    have hv : v = 0 := by
+      apply LinearMap.ext
+      intro φ
+      change (0 : ComplexMeasure X).integral (fun x ↦ φ (f x)) (ContinuousLinearMap.mul ℝ ℂ) = 0
+      simp
+    exact ⟨0, hzero, (smul_zero _).trans hv.symm⟩
+  have hd : 0 < d := ENNReal.toReal_pos hz (measure_ne_top _ _)
+  refine ⟨d⁻¹ • v, ?_, smul_inv_smul₀ hd.ne' _⟩
+  change d⁻¹ • v ∈ C
+  rw [← hbip]
+  intro φ hφ
+  change ‖d⁻¹ • μ.integral (fun x ↦ φ (f x)) (ContinuousLinearMap.mul ℝ ℂ)‖ ≤ 1
+  rw [norm_smul, Real.norm_eq_abs, abs_of_pos (inv_pos.mpr hd), inv_mul_le_iff₀ hd, mul_one]
+  have h := VectorMeasure.norm_integral_le_of_norm_le_const (μ := μ)
+    (B := ContinuousLinearMap.mul ℝ ℂ) (f := fun x ↦ φ (f x))
+    (ae_of_all _ fun x ↦ show ‖φ (f x)‖ ≤ 1 from hφ _ ⟨x, rfl⟩)
+  simpa [d, Measure.real] using h
 
 /-- Paper: Theorem C.4.3.2(1), p. 712. The closed convex hull of the image in
 the weak completion consists of the weak integrals against Radon probability measures. -/
