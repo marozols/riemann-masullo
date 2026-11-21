@@ -9,6 +9,8 @@ import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
 import Mathlib.Analysis.MellinInversion
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 import Mathlib.MeasureTheory.Integral.Asymptotics
+import Mathlib.Analysis.Complex.CauchyIntegral
+import Mathlib.MeasureTheory.Integral.IntegralEqImproper
 import RiemannMasullo.ForMathlib.Analysis.MellinTransform
 
 /-!
@@ -626,6 +628,59 @@ theorem UniformlySchwartzOnStrip.verticalIntegrable {Φ : ℂ → ℂ} {a b : �
       simpa using hσ
   · exact h.mono fun y hy ↦ hy σ ⟨hleft.le, hright.le⟩
 
+section ContourShift
+
+open scoped Interval
+
+/-- The horizontal Cauchy integrals vanish when the numerator decays uniformly in height. -/
+private theorem horizontalKernel_tendsto_zero {Φ : ℂ → ℂ} {c d : ℝ} (hcd : c ≤ d) {C : ℝ}
+    (hd : ∀ᶠ y : ℝ in atAbsInfty, ∀ x ∈ Icc c d, ‖Φ (verticalPoint x y)‖ ≤ C / |y|) (N : ℕ) (z : ℂ) :
+    Tendsto (fun y : ℝ ↦ ∫ x in c..d, Φ (verticalPoint x y) / (verticalPoint x y - z) ^ (N + 1))
+      atAbsInfty (𝓝 0) := by
+  have hy : Tendsto (abs : ℝ → ℝ) atAbsInfty atTop := tendsto_comap
+  apply squeeze_zero_norm'
+  · filter_upwards [hd, hy.eventually (eventually_ge_atTop (|z.im| + 1))] with y hφ hlarge
+    apply intervalIntegral.norm_integral_le_of_norm_le_const
+    intro x hx
+    have im := Complex.abs_im_le_norm (verticalPoint x y - z)
+    simp only [Complex.sub_im, Complex.add_im, Complex.ofReal_im, Complex.mul_I_im,
+      Complex.ofReal_re, zero_add] at im
+    have hsep : 1 ≤ ‖verticalPoint x y - z‖ := by linarith [abs_sub_abs_le_abs_sub y z.im]
+    rw [norm_div, norm_pow]
+    exact (div_le_self (norm_nonneg _) (one_le_pow₀ hsep)).trans
+      (hφ x (Ioc_subset_Icc_self ((uIoc_of_le hcd) ▸ hx)))
+  · simpa using ((tendsto_const_nhds (x := C)).div_atTop hy).mul_const |d - c|
+
+/-- Cauchy–Goursat on expanding rectangles allows a vertical contour to be shifted
+across a strip of holomorphy when its horizontal boundary integrals tend to zero. -/
+private theorem verticalIntegral_eq_of_contour_shift {K : ℂ → ℂ} {c d : ℝ} (hcd : c ≤ d)
+    (hK : DifferentiableOn ℂ K (Complex.re ⁻¹' Icc c d))
+    (hc : Complex.VerticalIntegrable K c) (hd : Complex.VerticalIntegrable K d)
+    (hh : Tendsto (fun y : ℝ ↦ ∫ x in c..d, K (verticalPoint x y)) atAbsInfty (𝓝 0)) :
+    verticalLineIntegral K d = verticalLineIntegral K c := by
+  have hrect (t : ℝ) :
+      (∫ x in c..d, K (verticalPoint x (-t))) - (∫ x in c..d, K (verticalPoint x t)) +
+      Complex.I • (∫ y in -t..t, K (verticalPoint d y)) -
+      Complex.I • (∫ y in -t..t, K (verticalPoint c y)) = 0 := by
+    apply Complex.integral_boundary_rect_eq_zero_of_differentiableOn K (⟨c, -t⟩ : ℂ) (⟨d, t⟩ : ℂ)
+    apply hK.mono
+    intro w hw
+    simpa only [uIcc_of_le hcd] using hw.1
+  have ht : Tendsto (fun t : ℝ ↦ t) atTop atAbsInfty := by
+    apply tendsto_comap_iff.mpr
+    exact tendsto_abs_atTop_atTop
+  have hn : Tendsto (fun t : ℝ ↦ -t) atTop atAbsInfty := by
+    apply tendsto_comap_iff.mpr
+    simpa [Function.comp_def] using tendsto_abs_atTop_atTop
+  have hv (x : ℝ) (hi : Complex.VerticalIntegrable K x) :=
+    intervalIntegral_tendsto_integral hi tendsto_neg_atTop_atBot (tendsto_id : Tendsto id atTop (atTop : Filter ℝ))
+  have hlim := (((hh.comp hn).sub (hh.comp ht)).add ((hv d hd).const_smul Complex.I)).sub
+    ((hv c hc).const_smul Complex.I)
+  have heq := tendsto_nhds_unique hlim (tendsto_const_nhds.congr fun t ↦ (hrect t).symm)
+  simpa [verticalLineIntegral, sub_eq_zero] using heq
+
+end ContourShift
+
 section CauchyStrip
 
 variable {Φ : ℂ → ℂ} {a b : ℝ} (hΦ : UniformlySchwartzOnStrip Φ a b)
@@ -653,7 +708,28 @@ theorem asymptoticCauchy_eq_iteratedDeriv (hz : z.re ∈ Ioo (a + ε) (b - ε)) 
 agree when the evaluation point is outside the closed strip they bound. -/
 theorem asymptoticCauchy_eq_zero (hz : z.re ∉ Icc (a + ε) (b - ε)) :
     normalizedCauchyIntegral Φ N (b - ε) z - normalizedCauchyIntegral Φ N (a + ε) z =
-      0 := by sorry
+      0 := by
+  let c := a + ε
+  let d := b - ε
+  have ha : a < c := by dsimp [c]; linarith
+  have hb : d < b := by dsimp [d]; linarith
+  have hcd : c < d := hWidth
+  have hzc : z.re ≠ c := fun h ↦ hz (h ▸ left_mem_Icc.mpr hcd.le)
+  have hzd : z.re ≠ d := fun h ↦ hz (h ▸ right_mem_Icc.mpr hcd.le)
+  let K := cauchyKernel Φ N z
+  have hdiff : DifferentiableOn ℂ K (Complex.re ⁻¹' Icc c d) := by
+    apply (hΦ.2.1.mono (preimage_mono (Icc_subset_Ioo ha hb))).div
+      ((differentiable_id.sub_const z).pow _).differentiableOn
+    intro w hw
+    exact pow_ne_zero _ (sub_ne_zero.mpr fun h ↦ hz (h ▸ hw))
+  obtain ⟨C, _, hC⟩ := hΦ.2.2 ε hε hWidth 1 le_rfl
+  have hh := horizontalKernel_tendsto_zero (Φ := Φ) hcd.le (C := C)
+    (by simpa only [pow_one] using hC) N z
+  have hv := verticalIntegral_eq_of_contour_shift hcd.le hdiff
+    (cauchyKernel_verticalIntegrable_on_strip hΦ c ⟨ha, hcd.trans hb⟩ N z hzc)
+    (cauchyKernel_verticalIntegrable_on_strip hΦ d ⟨ha.trans hcd, hb⟩ N z hzd) hh
+  change _ * verticalLineIntegral K d - _ * verticalLineIntegral K c = 0
+  rw [hv, sub_self]
 
 end CauchyStrip
 
