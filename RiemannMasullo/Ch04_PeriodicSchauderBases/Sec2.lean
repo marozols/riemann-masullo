@@ -10,6 +10,7 @@ import Mathlib.Analysis.SpecialFunctions.SmoothTransition
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
+import RiemannMasullo.ForMathlib.Analysis.Fourier.UnitCircle
 
 /-!
 # Periodization and Schauder bases on the positive real axis
@@ -226,7 +227,11 @@ section Fourier
 /-- Paper: (4.2.1.3), p. 162. The circle Fourier monomial is smooth and
 belongs to the elementary Schwartz space. -/
 theorem cyclicExponential_mem (m : ℤ) :
-    (fun g : G ↦ fourier m (g.2.1 0)) ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by sorry
+    (fun g : G ↦ fourier m (g.2.1 0)) ∈ elementarySchwartzSubmodule 0 1 0 PUnit.{1} := by
+  apply mem_elementarySchwartz_circle_of_contDiff
+  have hcoe : ContDiff ℝ ∞ ((↑) : ℝ → ℂ) := Complex.ofRealCLM.contDiff
+  simp only [fourier_coe_apply]
+  fun_prop
 
 /-- Paper: (4.2.1.3), p. 162. The exponential system consists of the usual
 Fourier monomials in the normalized circle coordinate. -/
@@ -247,7 +252,44 @@ theorem cyclicFourierCoeff_spec (m : ℤ) :
       fourierCoeff (fun z : T ↦ f (point z)) m + fourierCoeff (fun z : T ↦ g (point z)) m) ∧
     (∀ (c : ℂ) (f : S), fourierCoeff (fun z : T ↦ (c • f) (point z)) m =
       c * fourierCoeff (fun z : T ↦ f (point z)) m) ∧
-    Continuous (fun f : S ↦ fourierCoeff (fun z : T ↦ f (point z)) m) := by sorry
+    Continuous (fun f : S ↦ fourierCoeff (fun z : T ↦ f (point z)) m) := by
+  let ev (f : S) (z : T) := f (point z)
+  have hc (f : S) : Continuous (ev f) := by
+    apply (QuotientAddGroup.isQuotientMap_mk (AddSubgroup.zmultiples (1 : ℝ))).continuous_iff.mpr
+    let s (x : ℝ) := ((0, x • EuclideanSpace.single (0 : Fin 1) (1 : ℝ)) :
+      EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1))
+    have hs : Continuous s := continuous_const.prodMk (continuous_id.smul continuous_const)
+    have he (x : ℝ) : elementaryCover (s x) (0 : Fin 0 → ℤ) PUnit.unit = point (x : T) := by
+      refine Prod.ext rfl (Prod.ext ?_ rfl)
+      funext j
+      have hj : j = 0 := Subsingleton.elim _ _
+      subst j
+      simp [elementaryCover, s, PiLp.smul_apply]
+    simpa only [Function.comp_def, ev, he] using ((f.property.1 0 PUnit.unit).continuous.comp hs)
+  have hInt (f : S) : Integrable (ev f) AddCircle.haarAddCircle :=
+    (hc f).integrable_of_hasCompactSupport (HasCompactSupport.of_compactSpace _)
+  have hadd (f g : S) : fourierCoeff (ev (f + g)) m = fourierCoeff (ev f) m + fourierCoeff (ev g) m :=
+    congrFun (fourierCoeff.add (hInt f) (hInt g)) m
+  have hsmul (c : ℂ) (f : S) : fourierCoeff (ev (c • f)) m = c * fourierCoeff (ev f) m :=
+    fourierCoeff.const_mul (ev f) c m
+  let L : S →ₗ[ℂ] ℂ := { toFun f := fourierCoeff (ev f) m, map_add' := hadd, map_smul' := hsmul }
+  let i : ElementarySchwartzIndex 0 1 0 := (0, 0, 0, 0)
+  have hp : Continuous (fun f : S ↦ elementarySchwartzSeminorm i f) :=
+    (withGeneratingSeminorms_spec _ _).continuous_seminorm i
+  refine ⟨hadd, hsmul, (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp L fun _ ↦
+    Seminorm.continuous_of_le (q := (elementarySchwartzSeminorm i : Seminorm ℂ S)) hp ?_⟩
+  intro f
+  have hb (z : T) : ‖ev f z‖ ≤ elementarySchwartzSeminorm i f := by
+    change (‖ev f z‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val i).toReal
+    apply ENNReal.toReal_mono (f.property.2 i).ne
+    rw [show i = (0, 0, 0, 0) from rfl, elementarySchwartzBound_zero]
+    exact le_iSup (fun g ↦ (‖f g‖₊ : ENNReal)) (point z)
+  have h := norm_integral_le_of_norm_le_const (μ := (AddCircle.haarAddCircle : Measure T))
+    (f := fun z : T ↦ fourier (-m) z • ev f z)
+    (ae_of_all _ fun z ↦ by simpa only [norm_smul, fourier_apply, Circle.norm_coe, one_mul] using hb z)
+  change ‖fourierCoeff (ev f) m‖ ≤ elementarySchwartzSeminorm i f
+  rw [fourierCoeff]
+  simpa only [Measure.real, measure_univ, ENNReal.toReal_one, mul_one] using h
 
 /-- Paper: (4.2.1.4), p. 162. The coefficient uses Mathlib's Fourier integral
 with probability Haar measure, which absorbs the factor (1 / log γ). -/
@@ -260,7 +302,204 @@ def cyclicFourierCoeff (m : ℤ) : StrongDual ℂ S where
 /-- Paper: Lemma 4.2.1.2, p. 162. A monomial has its own coefficient equal to
 one and every other coefficient zero. -/
 theorem cyclicFourierCoeff_exponential (m n : ℤ) :
-    cyclicFourierCoeff m (cyclicExponential n) = if m = n then 1 else 0 := by sorry
+    cyclicFourierCoeff m (cyclicExponential n) = if m = n then 1 else 0 := by
+  change fourierCoeff (fourier n : C(T, ℂ)) m = _
+  rw [fourierCoeff_fourier]
+  by_cases h : m = n <;> simp [h]
+
+local notation "CoverSpace" => EuclideanSpace ℝ (Fin 0) × EuclideanSpace ℝ (Fin 1)
+private def circleRestriction (f : S) (z : T) := f (point z)
+private def circleCoverLine : ℝ →L[ℝ] CoverSpace :=
+  (ContinuousLinearMap.id ℝ ℝ).smulRight (0, EuclideanSpace.single 0 1)
+
+private theorem circleCoverLine_proj (xt : CoverSpace) : circleCoverLine (xt.2 0) = xt := by
+  refine Prod.ext (Subsingleton.elim _ _) ?_
+  ext j
+  have hj : j = 0 := Subsingleton.elim _ _
+  subst j
+  simp [circleCoverLine, PiLp.smul_apply]
+
+private theorem circleCoverLine_cover (x : ℝ) : elementaryCover (circleCoverLine x) (0 : Fin 0 → ℤ) PUnit.unit =
+    point (x : T) := by
+  refine Prod.ext (Subsingleton.elim _ _) (Prod.ext ?_ rfl)
+  funext j
+  have hj : j = 0 := Subsingleton.elim _ _
+  subst j
+  simp [elementaryCover, circleCoverLine, PiLp.smul_apply]
+
+private theorem circleRestriction_comp (f : S) :
+    (fun x : ℝ ↦ circleRestriction f x) = (fun xt ↦ f (elementaryCover xt 0 PUnit.unit)) ∘ circleCoverLine := by
+  funext x
+  simp only [comp_apply, circleCoverLine_cover, circleRestriction]
+
+private theorem circleRestriction_smooth (f : S) : ContDiff ℝ ∞ (fun x : ℝ ↦ circleRestriction f x) := by
+  rw [circleRestriction_comp]
+  exact (f.property.1 0 PUnit.unit).comp circleCoverLine.contDiff
+
+/-- The single torus coordinate identifies the mixed partial on the cover with an ordinary real derivative. -/
+private theorem elementaryPartial_circle (f : S) (β : Fin 0 → ℕ) (γ : Fin 1 → ℕ)
+    (xt : CoverSpace) (a : Fin 0 → ℤ) (b : PUnit) :
+    elementaryPartial f.val β γ xt a b = iteratedDeriv (γ 0) (fun x : ℝ ↦ circleRestriction f x) (xt.2 0) := by
+  let v : CoverSpace := (0, EuclideanSpace.single (0 : Fin 1) (1 : ℝ))
+  let k := γ 0
+  let D : List CoverSpace := (List.ofFn (fun i : Fin 0 ↦ List.replicate (β i) (EuclideanSpace.single i 1, 0))).flatten ++
+    (List.ofFn (fun i : Fin 1 ↦ List.replicate (γ i) (0, EuclideanSpace.single i 1))).flatten
+  have hD : D = List.replicate k v := by
+    change [] ++ (List.replicate k v ++ []) = _
+    simp
+  have ha : a = 0 := Subsingleton.elim _ _
+  have hb : b = PUnit.unit := Subsingleton.elim _ _
+  subst a b
+  let p (xt : CoverSpace) := f (elementaryCover xt (0 : Fin 0 → ℤ) PUnit.unit)
+  have haux (n : ℕ) (hn : n = k) (d : Fin n → CoverSpace) (hd : ∀ j, d j = v) :
+      (iteratedFDeriv ℝ n p xt) d = (iteratedFDeriv ℝ k p xt) (fun _ ↦ v) := by
+    subst n
+    rw [show d = fun _ ↦ v from funext hd]
+  change (iteratedFDeriv ℝ D.length p xt) D.get = _
+  rw [haux D.length (by simp [hD]) D.get (by intro j; simp [hD, List.get_eq_getElem]),
+    circleRestriction_comp, iteratedDeriv_eq_iteratedFDeriv,
+    circleCoverLine.iteratedFDeriv_comp_right (f.property.1 0 PUnit.unit) (xt.2 0) (by simp),
+    circleCoverLine_proj]
+  simp [circleCoverLine, p, v, k]
+
+private def circleJetLM (k : ℕ) : S →ₗ[ℂ] C(T, ℂ) where
+  toFun f := unitCircleJet (circleRestriction f) (circleRestriction_smooth f) k
+  map_add' f g := by
+    ext z
+    obtain ⟨x, rfl⟩ := QuotientAddGroup.mk_surjective z
+    simp only [unitCircleJet_coe, ContinuousMap.add_apply]
+    change iteratedDeriv k ((fun y : ℝ ↦ circleRestriction f y) + (fun y : ℝ ↦ circleRestriction g y)) x = _
+    exact iteratedDeriv_add ((circleRestriction_smooth f).of_le (by simp)).contDiffAt
+      ((circleRestriction_smooth g).of_le (by simp)).contDiffAt
+  map_smul' c f := by
+    ext z
+    obtain ⟨x, rfl⟩ := QuotientAddGroup.mk_surjective z
+    simp only [unitCircleJet_coe, ContinuousMap.smul_apply, RingHom.id_apply]
+    change iteratedDeriv k (c • (fun y : ℝ ↦ circleRestriction f y)) x = _
+    exact iteratedDeriv_const_smul_field c _
+
+private theorem circleSeminorm_eq_jetNorm (i : ElementarySchwartzIndex 0 1 0) (f : S) :
+    elementarySchwartzSeminorm i f = ‖circleJetLM (i.2.2.1 0) f‖ := by
+  let k := i.2.2.1 0
+  let J := circleJetLM k f
+  have he (x : ℝ) : J (x : T) = iteratedDeriv k (fun y : ℝ ↦ circleRestriction f y) x :=
+    unitCircleJet_coe (circleRestriction f) (circleRestriction_smooth f) k x
+  apply le_antisymm
+  · have hb : elementarySchwartzBound f.val i ≤ ENNReal.ofReal ‖J‖ := by
+      refine iSup_le fun xt ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_
+      simp only [Fin.prod_univ_zero, one_mul, elementaryPartial_circle,
+        ENNReal.coe_nnreal_eq, coe_nnNorm]
+      apply ENNReal.ofReal_le_ofReal
+      simpa only [he] using J.norm_coe_le_norm ((xt.2 0 : ℝ) : T)
+    exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hb).trans_eq (ENNReal.toReal_ofReal (norm_nonneg J))
+  · apply (ContinuousMap.norm_le J (apply_nonneg _ _)).2
+    intro z
+    obtain ⟨x, rfl⟩ := QuotientAddGroup.mk_surjective z
+    change (‖J (↑x : T)‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val i).toReal
+    apply ENNReal.toReal_mono (f.property.2 i).ne
+    unfold elementarySchwartzBound
+    refine le_iSup_of_le (circleCoverLine x) (le_iSup_of_le (0 : Fin 0 → ℤ) (le_iSup_of_le PUnit.unit ?_))
+    simp [elementaryPartial_circle, he, k, circleCoverLine, PiLp.smul_apply]
+
+
+open scoped NNReal
+
+private theorem circleJetLM_exponential (k : ℕ) (m : ℤ) :
+    circleJetLM k (cyclicExponential m) = unitCircleFrequency m ^ k • fourier m := by
+  ext z
+  obtain ⟨x, rfl⟩ := QuotientAddGroup.mk_surjective z
+  exact iteratedDeriv_unitCircle_fourier m k x
+
+private theorem circleJetLM_term (f : S) (k : ℕ) (m : ℤ) :
+    circleJetLM k (cyclicFourierCoeff m f • cyclicExponential m) =
+      (unitCircleFrequency m ^ k * fourierCoeff (circleRestriction f) m) • fourier m := by
+  rw [map_smul, circleJetLM_exponential, smul_smul, mul_comm]
+  rfl
+
+private theorem hasSum_circleFourier (f : S) :
+    HasSum (fun m : ℤ ↦ cyclicFourierCoeff m f • cyclicExponential m) f := by
+  apply ((withGeneratingSeminorms_spec _ _).tendsto_nhds _ f).2
+  intro i ε hε
+  let k := i.2.2.1 0
+  have h := hasSum_unitCircleJet_fourier (circleRestriction f) (circleRestriction_smooth f) k
+  filter_upwards [Metric.tendsto_nhds.mp h ε hε] with s hs
+  let F : S := ∑ m ∈ s, cyclicFourierCoeff m f • cyclicExponential m
+  calc
+    _ = ‖circleJetLM k (F - f)‖ := circleSeminorm_eq_jetNorm i (F - f)
+    _ < ε := by
+      dsimp only [F]
+      rw [map_sub, map_sum, show circleJetLM k f = unitCircleJet (circleRestriction f) (circleRestriction_smooth f) k from rfl]
+      simpa only [dist_eq_norm, circleJetLM_term] using hs
+
+private def jetIndex (k : ℕ) : ElementarySchwartzIndex 0 1 0 := (0, 0, fun _ ↦ k, 0)
+
+private theorem circleFourier_term_le (i : ElementarySchwartzIndex 0 1 0) (m : ℤ) (f : S) :
+    elementarySchwartzSeminorm i (cyclicFourierCoeff m f • cyclicExponential m) ≤
+      unitCircleFourierWeight m * ((elementarySchwartzSeminorm i +
+        elementarySchwartzSeminorm (jetIndex (i.2.2.1 0 + 2)) : Seminorm ℂ S) f) := by
+  let k := i.2.2.1 0
+  calc
+    _ = ‖circleJetLM k (cyclicFourierCoeff m f • cyclicExponential m)‖ := circleSeminorm_eq_jetNorm i _
+    _ = ‖fourierCoeff (unitCircleJet (circleRestriction f) (circleRestriction_smooth f) k) m‖ := by
+      rw [circleJetLM_term, norm_smul, fourier_norm, mul_one, unitCircleJet_fourierCoeff]
+    _ ≤ unitCircleFourierWeight m * (‖circleJetLM k f‖ + ‖circleJetLM (k+2) f‖) :=
+      norm_unitCircleJet_fourierCoeff_le (circleRestriction f) (circleRestriction_smooth f) k m
+    _ = _ := congrArg (fun v ↦ unitCircleFourierWeight m * v) (congrArg₂ (· + ·)
+      (circleSeminorm_eq_jetNorm i f).symm (circleSeminorm_eq_jetNorm (jetIndex (k+2)) f).symm)
+
+
+/-- The Fourier term in any continuous seminorm is bounded by one summable weight times
+a continuous seminorm of the original function. -/
+private theorem exists_circleFourier_term_bound (q : Seminorm ℂ S) (hq : Continuous q) :
+    ∃ Q : Seminorm ℂ S, Continuous Q ∧ ∀ (f : S) (m : ℤ),
+      q (cyclicFourierCoeff m f • cyclicExponential m) ≤ unitCircleFourierWeight m * Q f := by
+  classical
+  have hp := withGeneratingSeminorms_spec (elementarySchwartzSubmodule 0 1 0 PUnit.{1}) elementarySchwartzSeminorm
+  obtain ⟨s, C, _, hC⟩ := Seminorm.bound_sum_of_continuous hp q hq
+  let r (i : ElementarySchwartzIndex 0 1 0) : Seminorm ℂ S :=
+    elementarySchwartzSeminorm i + elementarySchwartzSeminorm (jetIndex (i.2.2.1 0 + 2))
+  let Q : Seminorm ℂ S := C • ∑ i ∈ s, r i
+  have hQ : Continuous Q := (Seminorm.continuous_finsetSum (s := s) fun i _ ↦
+    (hp.continuous_seminorm i).add (hp.continuous_seminorm (jetIndex (i.2.2.1 0 + 2)))).const_smul C
+  refine ⟨Q, hQ, fun f m ↦ ?_⟩
+  let t (m : ℤ) := cyclicFourierCoeff m f • cyclicExponential m
+  have evalSum (v : Finset (ElementarySchwartzIndex 0 1 0)) (p : ElementarySchwartzIndex 0 1 0 → Seminorm ℂ S)
+      (u : S) : (∑ i ∈ v, p i) u = ∑ i ∈ v, p i u := by
+    induction v using Finset.induction_on with
+    | empty => simp
+    | insert i v hi ih => rw [Finset.sum_insert hi, Finset.sum_insert hi, add_apply, ih]
+  refine (hC (t m)).trans ?_
+  change (C : ℝ) * (∑ i ∈ s, (elementarySchwartzSeminorm i : Seminorm ℂ S)) (t m) ≤
+    unitCircleFourierWeight m * ((C : ℝ) * (∑ i ∈ s, r i) f)
+  rw [evalSum s r f]
+  calc
+    _ = (C : ℝ) * ∑ i ∈ s, elementarySchwartzSeminorm i (t m) := congrArg ((C : ℝ) * ·)
+      (evalSum s (fun i ↦ (elementarySchwartzSeminorm i : Seminorm ℂ S)) (t m))
+    _ ≤ (C : ℝ) * ∑ i ∈ s, unitCircleFourierWeight m * r i f := by
+      exact mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun i _ ↦ circleFourier_term_le i m f) C.coe_nonneg
+    _ = _ := by rw [← Finset.mul_sum]; ring
+
+private theorem absolute_circleFourier : SchauderBasis.IsAbsolute
+    (cyclicExponential ∘ Equiv.intEquivNat.symm) (cyclicFourierCoeff ∘ Equiv.intEquivNat.symm) := by
+  classical
+  intro q hq
+  obtain ⟨Q, hQ, hbound⟩ := exists_circleFourier_term_bound q hq
+  let W : ℝ≥0 := Real.toNNReal (∑' m : ℤ, unitCircleFourierWeight m)
+  have hW : (W : ℝ) = ∑' m : ℤ, unitCircleFourierWeight m :=
+    Real.coe_toNNReal _ (tsum_nonneg unitCircleFourierWeight_nonneg)
+  refine ⟨W • Q, hQ.const_smul W, fun f ↦ ?_⟩
+  let t (m : ℤ) := cyclicFourierCoeff m f • cyclicExponential m
+  have ht (m : ℤ) : q (t m) ≤ unitCircleFourierWeight m * Q f := hbound f m
+  let e := Equiv.intEquivNat.symm
+  have hs := summable_unitCircleFourierWeight.mul_right (Q f)
+  have htS : Summable fun m : ℤ ↦ q (t m) := .of_nonneg_of_le (fun m ↦ apply_nonneg q (t m)) ht hs
+  refine ⟨e.summable_iff.mpr htS, ?_⟩
+  change (∑' n : ℕ, q (t (e n))) ≤ (W • Q) f
+  rw [e.tsum_eq (fun m ↦ q (t m))]
+  refine (htS.tsum_le_tsum ht hs).trans_eq ?_
+  rw [tsum_mul_right]
+  change _ = (W : ℝ) * Q f
+  rw [hW]
 
 /-- Paper: Lemma 4.2.1.2(1), p. 162. The circle exponentials form an absolute
 Schauder basis with the Fourier coefficient functionals.
@@ -268,7 +507,47 @@ Deviation: The Schauder basis predicates of §4.1 use the natural-number
 enumeration of the integer frequencies. -/
 theorem cyclicExponential_absoluteBasis :
     IsSchauderBasis (cyclicExponential ∘ freq) (cyclicFourierCoeff ∘ freq) ∧
-      SchauderBasis.IsAbsolute (cyclicExponential ∘ freq) (cyclicFourierCoeff ∘ freq) := by sorry
+      SchauderBasis.IsAbsolute (cyclicExponential ∘ freq) (cyclicFourierCoeff ∘ freq) := by
+  refine ⟨⟨?_, ?_⟩, absolute_circleFourier⟩
+  · intro m n
+    simpa only [comp_apply, ContinuousLinearMap.coe_coe, Equiv.apply_eq_iff_eq]
+      using cyclicFourierCoeff_exponential (Equiv.intEquivNat.symm m) (Equiv.intEquivNat.symm n)
+  · intro f
+    have h := Equiv.intEquivNat.symm.hasSum_iff.mpr (hasSum_circleFourier f)
+    exact h.mono_left (SummationFilter.conditional ℕ).le_atTop
+
+/-- A distribution's Fourier series converges uniformly on every bounded set of smooth
+functions, by the summable envelope for the primal Fourier terms. -/
+private theorem hasSum_circleFourier_dual (l : StrongDual ℂ S) :
+    HasSum (fun m : ℤ ↦ l (cyclicExponential m) • cyclicFourierCoeff m) l := by
+  let q := (normSeminorm ℂ ℂ).comp l.toLinearMap
+  have hq : Continuous q := continuous_norm.comp l.continuous
+  obtain ⟨Q, hQ, h⟩ := exists_circleFourier_term_bound q hq
+  apply (UniformConvergenceCLM.tendsto_iff_tendstoUniformlyOn (RingHom.id ℂ) ℂ {B : Set S | IsVonNBounded ℂ B}).2
+  intro B hB
+  obtain ⟨R, _, hR⟩ := (PolynormableSpace.withSeminorms ℂ S).isVonNBounded_iff_seminorm_bounded.mp hB ⟨Q, hQ⟩
+  let t (m : ℤ) (f : S) := l (cyclicExponential m) * cyclicFourierCoeff m f
+  have hsum (f : S) : HasSum (fun m ↦ t m f) (l f) := by
+    refine ((hasSum_circleFourier f).map l l.continuous).congr_fun fun m ↦ ?_
+    simp only [t, Function.comp_apply, map_smul, smul_eq_mul, mul_comm]
+  have hb (m : ℤ) (f : S) (hf : f ∈ B) : ‖t m f‖ ≤ unitCircleFourierWeight m * R := by
+    have ht : q (cyclicFourierCoeff m f • cyclicExponential m) = ‖t m f‖ := by
+      change ‖l (cyclicFourierCoeff m f • cyclicExponential m)‖ = _
+      rw [map_smul, smul_eq_mul, mul_comm]
+    rw [← ht]
+    exact (h f m).trans (mul_le_mul_of_nonneg_left (hR f hf).le (unitCircleFourierWeight_nonneg m))
+  have hu := tendstoUniformlyOn_tsum (summable_unitCircleFourierWeight.mul_right R) hb
+  convert hu using 1
+  · funext s f
+    change (∑ m ∈ s, (l (cyclicExponential m) • cyclicFourierCoeff m : StrongDual ℂ S)) f = _
+    induction s using Finset.induction_on with
+    | empty => rfl
+    | insert m s hm ih =>
+      rw [Finset.sum_insert hm, Finset.sum_insert hm]
+      change l (cyclicExponential m) * cyclicFourierCoeff m f + _ = t m f + _
+      exact congrArg (t m f + ·) ih
+  · exact funext fun f ↦ (hsum f).tsum_eq.symm
+  · rfl
 
 /-- Paper: Lemma 4.2.1.2(2), p. 162. Fourier coefficients are an unconditional
 Schauder basis of the strong dual, with coordinates given by evaluation on the monomials.
@@ -276,7 +555,14 @@ Deviation: Frequencies are enumerated by the natural numbers. -/
 theorem cyclicFourierCoeff_unconditionalBasis :
     let ev := fun n : ℕ ↦ ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (cyclicExponential (freq n))
     IsSchauderBasis (cyclicFourierCoeff ∘ freq) ev ∧
-      SchauderBasis.IsUnconditional (cyclicFourierCoeff ∘ freq) ev := by sorry
+      SchauderBasis.IsUnconditional (cyclicFourierCoeff ∘ freq) ev := by
+  let e := Equiv.intEquivNat.symm
+  have hs (l : StrongDual ℂ S) := e.hasSum_iff.mpr (hasSum_circleFourier_dual l)
+  refine ⟨⟨?_, fun l ↦ (hs l).mono_left (SummationFilter.conditional ℕ).le_atTop⟩, hs⟩
+  intro m n
+  change cyclicFourierCoeff (e n) (cyclicExponential (e m)) = _
+  rw [cyclicFourierCoeff_exponential]
+  simp [eq_comm]
 
 /-- Paper: Lemma 4.2.1.2(3), p. 162. The quotient Fourier coefficient is the
 normalized integral of the lift over the multiplicative fundamental interval. -/
