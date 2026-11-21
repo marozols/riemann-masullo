@@ -191,7 +191,12 @@ axis is the power with exponent (2πim / log γ).
 Deviation: The argument x on the cover is the logarithm of the positive variable. -/
 theorem cyclicExponential_apply (γ : ℝ) (hγ : 1 < γ) (m : ℤ) (x : ℝ) :
     cyclicExponential m (point ((x / Real.log γ : ℝ) : T)) =
-      Complex.exp (phase[γ, m] * (x : ℂ)) := by sorry
+      Complex.exp (phase[γ, m] * (x : ℂ)) := by
+  change fourier m ((x / Real.log γ : ℝ) : T) = _
+  rw [fourier_coe_apply]
+  congr 1
+  push_cast
+  field_simp [ne_of_gt (Real.log_pos hγ)]
 
 /-- Paper: (4.2.1.4), p. 162. The normalized circle Fourier coefficient is
 linear and continuous for the smooth topology. -/
