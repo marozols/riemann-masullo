@@ -3,7 +3,8 @@ module
 public import RiemannMasullo.Ch10_TraceSpectral.Sec3
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 import RiemannMasullo.Ch13_ZerosHecke.Targets
-import all RiemannMasullo.Ch12_TraceGeometric.Sec5
+import RiemannMasullo.Ch12_TraceGeometric.Sec5
+import Mathlib.Analysis.Calculus.BumpFunction.Normed
 
 /-! # Further assertions in the proofs of §10.3 that are false as printed -/
 
@@ -246,7 +247,9 @@ private theorem spectralStripMellinJet_nonzero (τ : ℝ≥0ˣ →ₜ* C𝔽(ℚ
     have he := grh_shift_integral H hH.continuous (fun _ ↦ 1) (fun _ ↦ rfl) 0 w
     simp only [sub_zero, mul_one, Complex.ofReal_zero, mul_zero, Complex.exp_zero, one_mul] at he
     rw [he, ← integral_complex_ofReal]
-    exact integral_congr_ae (.of_forall fun x ↦ grh_bump_mul_exp _ _)
+    apply integral_congr_ae (.of_forall fun x ↦ ?_)
+    change (β x : ℂ) * Complex.exp (-(w * x)) * Complex.exp (w * x) = _
+    rw [mul_assoc, ← Complex.exp_add, neg_add_cancel, Complex.exp_zero, mul_one]
   refine ⟨φ, ?_⟩
   simp_rw [hinner]
   have rearrange (p q : ℂ) : p * (V * q) = V * (q * p) := by ring

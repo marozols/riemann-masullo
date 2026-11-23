@@ -732,7 +732,7 @@ private theorem continuous_ideleClassLogNorm : Continuous (ideleClassLogNorm F) 
   exact continuous_ofAdd.comp (hc.log fun x ↦ (nnrealUnits_coe_pos _).ne')
 
 /-- A smooth compactly supported function of the logarithm of the norm is a test function. -/
-private theorem exists_normTest (g : ℝ → ℂ) (hg : ContDiff ℝ (∞) g) (hgc : HasCompactSupport g) :
+theorem exists_normTest (g : ℝ → ℂ) (hg : ContDiff ℝ (∞) g) (hgc : HasCompactSupport g) :
     ∃ φ : BruhatCompactSupport C𝔽,
       ∀ x, φ.val x = g (Real.log ((ideleClassNorm F x : ℝ≥0) : ℝ)) := by
   have hs := isBruhatSmooth_comp_realHom (ideleClassLogNorm F)
@@ -871,7 +871,7 @@ private theorem grh_cpow_exp (x : ℝ) (w : ℂ) :
     Complex.log_exp (by simp [Real.pi_pos]) (by simp [Real.pi_pos.le]), mul_comm]
 
 /-- The shifted radial integral against `t ^ w`, in logarithmic coordinates. -/
-private theorem grh_shift_integral (H : ℝ → ℂ) (hH : Continuous H) (c : ℝ≥0ˣ → ℂ)
+theorem grh_shift_integral (H : ℝ → ℂ) (hH : Continuous H) (c : ℝ≥0ˣ → ℂ)
     (hc : ∀ t, c t = 1) (y : ℝ) (w : ℂ) :
     ∫ t, H (Real.log ((t : ℝ≥0) : ℝ) - y) * c t * (((t : ℝ≥0) : ℝ) : ℂ) ^ w
         ∂positiveRealHaar =
@@ -913,7 +913,8 @@ private theorem grh_character_eq (τ : ℝ≥0ˣ →ₜ* C𝔽) (hτ : RightInve
 
 
 
-private theorem grh_classVolume_ne_zero : classVolume ≠ 0 := by
+/-- The norm-one idele classes have nonzero Tamagawa volume. -/
+theorem grh_classVolume_ne_zero : classVolume ≠ 0 := by
   have hvol := normOneIdeleClassTamagawaMeasure_volume (F := F)
   have hc0 : normOneIdeleClassTamagawaMeasure F univ ≠ 0 := by
     rw [hvol, ne_eq, ENNReal.ofReal_eq_zero, not_le]
