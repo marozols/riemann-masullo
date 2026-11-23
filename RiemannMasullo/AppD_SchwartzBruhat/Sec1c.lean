@@ -2893,6 +2893,17 @@ theorem SchwartzBruhat.integrable {G : Type*} [CommGroup G] [TopologicalSpace G]
   obtain ⟨a,e,s,hs⟩ := (mem_schwartzBruhatSubmodule_iff f.val).mp f.property
   exact hs ▸ schwartzBruhatStage_integrable μ a e s
 
+/-- A Schwartz–Bruhat function is square-integrable for Haar measure. -/
+theorem SchwartzBruhat.memLp_two {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [MeasurableSpace G] [BorelSpace G]
+    (μ : Measure G) [μ.IsHaarMeasure] (f : SchwartzBruhat G) : MemLp f.val 2 μ := by
+  obtain ⟨b, hb⟩ := schwartzBruhat_boundedContinuous f
+  have hf := SchwartzBruhat.integrable μ f
+  apply (memLp_two_iff_integrable_sq_norm hf.aestronglyMeasurable).mpr
+  refine (hf.norm.const_mul ‖b‖).mono' (hf.aestronglyMeasurable.norm.pow 2) (.of_forall fun x ↦ ?_)
+  rw [Real.norm_of_nonneg (sq_nonneg _), sq]
+  exact mul_le_mul_of_nonneg_right ((hb x) ▸ b.norm_coe_le_norm x) (norm_nonneg _)
+
 /-- The Fourier integral is linear on the space of Schwartz tests. -/
 private theorem schwartzBruhat_fourier_linear {G : Type*} [CommGroup G] [TopologicalSpace G]
     [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [MeasurableSpace G] [BorelSpace G]

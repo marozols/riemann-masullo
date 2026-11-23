@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3b
 public import Mathlib.Algebra.Exact.Basic
 public import Mathlib.MeasureTheory.Function.L2Space
+import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import all RiemannMasullo.Ch05_ThetaZSpaces.Sec1
 
@@ -1202,13 +1203,188 @@ theorem existsUnique_sLocalDecayFourier (χ : PontryaginDual Jₛ) (I : Set ℝ)
         (∀ g : Jₛ, u.val.val g = φω(restrict₁(χ)) f g) ∧
         (∀ g : Jₛ, v.val.val g = φω(restrict₁(χ⁻¹)) (Fourierₛ f) g) := by sorry
 
+/-- On a first-countable barrelled space, pointwise-continuous representatives make a
+linear map into L² continuous. Fatou's lemma closes the sublevel sets of its norm. -/
+private theorem existsUnique_sLocalDecayToThetaL2_continuous_stage {X E : Type*} [MeasurableSpace X]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [FirstCountableTopology E] [BarrelledSpace ℂ E] (μ : Measure X)
+    (L : E →ₗ[ℂ] Lp ℂ 2 μ) (f : E → X → ℂ)
+    (hrep : ∀ x, (L x : X → ℂ) =ᵐ[μ] f x) (hev : ∀ t, Continuous fun x ↦ f x t) :
+    Continuous L := by
+  let p := (normSeminorm ℂ (Lp ℂ 2 μ)).comp L
+  refine (norm_withSeminorms ℂ (Lp ℂ 2 μ)).continuous_of_continuous_comp L (fun _ ↦ ?_)
+  apply p.continuous_of_lowerSemicontinuous
+  rw [lowerSemicontinuous_iff_isClosed_preimage]
+  intro c
+  apply IsSeqClosed.isClosed
+  intro u x hu hx
+  change ‖L x‖ ≤ c
+  have hb (n : ℕ) : ‖L (u n)‖ ≤ c := hu n
+  have hE (v : E) : ENNReal.ofReal ‖L v‖ = eLpNorm (f v) 2 μ := by
+    rw [ofReal_norm, Lp.eNorm_def, eLpNorm_congr_ae (hrep v)]
+  have hm (v : E) : AEStronglyMeasurable (f v) μ :=
+    (Lp.stronglyMeasurable (L v)).aestronglyMeasurable.congr (hrep v)
+  apply (ENNReal.ofReal_le_ofReal_iff ((norm_nonneg _).trans (hb 0))).mp
+  rw [hE]
+  refine (Lp.eLpNorm_lim_le_liminf_eLpNorm (fun n ↦ hm (u n)) _ (hm x)
+    (.of_forall fun t ↦ ((hev t).tendsto x).comp hx)).trans ?_
+  exact liminf_le_of_frequently_le (Eventually.frequently (.of_forall fun n ↦
+    (hE (u n)).symm.le.trans (ENNReal.ofReal_le_ofReal (hb n))))
+
+/-- Twisting by the half-power of the norm identifies the weighted second moment with
+the unweighted second moment of a Schwartz–Bruhat function. -/
+private theorem existsUnique_sLocalDecayToThetaL2_mem {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
+    [T2Space G] [LocallyCompactSpace G] [MeasurableSpace G] [BorelSpace G] (μ : Measure G)
+    [μ.IsHaarMeasure] (m : G →ₜ* ℝ≥0ˣ) (I : Set ℝ) (hh : (1 / 2 : ℝ) ∈ I)
+    (f : ModulatedExponentialDecay m I) :
+    Continuous f.val ∧ MemLp f.val 2 (μ.withDensity fun g ↦ ENNReal.ofReal ((m g).val : ℝ)) := by
+  let w (g : G) : ℝ := ((m g).val : ℝ)
+  have hw : Continuous w := NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous)
+  have hp (x : G) : 0 < w x := NNReal.coe_pos.mpr (Units.zero_lt (m x))
+  let a : I := ⟨1 / 2, hh⟩
+  let T := modulatedExponentialDecayTwist m I a f
+  have he (x : G) : T x = (Real.sqrt (w x) : ℂ) * f.val x := by
+    rw [Real.sqrt_eq_rpow]
+    exact modulatedExponentialDecayTwist_apply m I a f x
+  have hc : Continuous f.val := by
+    apply ((schwartzBruhat_continuous T).div (Complex.continuous_ofReal.comp hw.sqrt)
+      (fun x ↦ Complex.ofReal_ne_zero.mpr (Real.sqrt_pos.2 (hp x)).ne')).congr
+    intro x
+    change T x / (Real.sqrt (w x) : ℂ) = f.val x
+    rw [he, mul_div_cancel_left₀ _ (Complex.ofReal_ne_zero.mpr (Real.sqrt_pos.2 (hp x)).ne')]
+  refine ⟨hc, (memLp_two_iff_integrable_sq_norm hc.aestronglyMeasurable).mpr ?_⟩
+  rw [integrable_withDensity_iff hw.measurable.ennreal_ofReal (.of_forall fun _ ↦ ENNReal.ofReal_lt_top)]
+  apply ((memLp_two_iff_integrable_sq_norm (schwartzBruhat_continuous T).aestronglyMeasurable).mp
+    (SchwartzBruhat.memLp_two μ T)).congr (.of_forall fun x ↦ ?_)
+  change ‖T x‖ ^ 2 = ‖f.val x‖ ^ 2 * (ENNReal.ofReal (w x)).toReal
+  rw [he, norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.sqrt_nonneg _), mul_pow,
+    Real.sq_sqrt (hp x).le, ENNReal.toReal_ofReal (hp x).le, mul_comm]
+
+/-- The inclusion in weighted L² is continuous on every Fréchet stage, and
+positive Haar density makes equality of continuous representatives pointwise. -/
+private theorem existsUnique_sLocalDecayToThetaL2_inclusion {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [MeasurableSpace G] [BorelSpace G]
+    [SecondCountableTopology G] (μ : Measure G) [μ.IsHaarMeasure] (m : G →ₜ* ℝ≥0ˣ) (hm : IsModulation m) (hs : Surjective m)
+    (I : Set ℝ) (hI : OrdConnected I) (hh : (1 / 2 : ℝ) ∈ I) :
+    let ν := μ.withDensity fun g ↦ ENNReal.ofReal ((m g).val : ℝ)
+    ∃ j : ModulatedExponentialDecay m I →L[ℂ] Lp ℂ 2 ν, Injective j ∧
+      ∀ f, (j f : G → ℂ) =ᵐ[ν] f.val := by
+  let ν := μ.withDensity fun g ↦ ENNReal.ofReal ((m g).val : ℝ)
+  let E := ModulatedExponentialDecay m I
+  let hf (f : E) := (existsUnique_sLocalDecayToThetaL2_mem μ m I hh f).2
+  let L : E →ₗ[ℂ] Lp ℂ 2 ν :=
+    { toFun := fun f ↦ (hf f).toLp f.val
+      map_add' := fun f g ↦ MemLp.toLp_add (hf f) (hf g)
+      map_smul' := fun c f ↦ MemLp.toLp_const_smul c (hf f) }
+  have hrep (f : E) : (L f : G → ℂ) =ᵐ[ν] f.val :=
+    (existsUnique_sLocalDecayToThetaL2_mem μ m I hh f).2.coeFn_toLp
+  let P := (normSeminorm ℂ (Lp ℂ 2 ν)).comp L
+  have hP : Continuous P := by
+    let K := {k : Subgroup G // IsCompact (k : Set G) ∧ IsCompactlyGeneratedGroup (lcaAnnihilator k)}
+    let family := {p : Seminorm ℂ (modulatedExponentialDecaySubmodule m I) //
+      ∀ k : K, Continuous (p ∘ modulatedExponentialDecayStageInclusion m I k)}
+    have gen := withGeneratingSeminorms_spec _ (Subtype.val : family → _)
+    refine gen.continuous_seminorm (⟨P, fun k ↦ ?_⟩ : family)
+    let i : ModulatedExponentialDecayStage m I k →ₗ[ℂ] E := modulatedExponentialDecayStageInclusion m I k
+    have hi : Continuous i := gen.continuous_of_continuous_comp i (fun p ↦ p.property k)
+    have hf := modulatedExponentialDecayStage_frechet m hm hs I hI ⟨_, hh⟩ k
+    let : MetrizableSpace (ModulatedExponentialDecayStage m I k) := hf.choose_spec.2.1
+    let : BarrelledSpace ℂ (ModulatedExponentialDecayStage m I k) := isFrechetTVS_barrelled hf
+    have hc := existsUnique_sLocalDecayToThetaL2_continuous_stage ν (L.comp i) (fun f ↦ (i f).val) (fun f ↦ hrep (i f))
+      (fun t ↦ (continuous_modulatedExponentialDecay_eval m I ⟨_, hh⟩ t).comp hi)
+    exact hc.norm
+  have hL : Continuous L :=
+    (norm_withSeminorms ℂ (Lp ℂ 2 ν)).continuous_of_continuous_comp L (fun _ ↦ hP)
+  refine ⟨⟨L, hL⟩, ?_, hrep⟩
+  intro f g h
+  have hfg : f.val =ᵐ[ν] g.val := (hrep f).symm.trans ((show L f = L g from h) ▸ hrep g)
+  have hw := (NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous)).measurable.ennreal_ofReal
+  apply Subtype.ext
+  refine Measure.eq_of_ae_eq (μ := μ) ?_ (existsUnique_sLocalDecayToThetaL2_mem μ m I hh f).1 (existsUnique_sLocalDecayToThetaL2_mem μ m I hh g).1
+  exact ((ae_withDensity_iff hw).mp hfg).mono fun x hx ↦
+    hx (ENNReal.ofReal_ne_zero_iff.mpr (NNReal.coe_pos.mpr (Units.zero_lt (m x))))
+
+/-- Paper: Proposition 5.4.2.1, p. 275. Lift a compactly supported smooth
+function of S-idele classes to an additive S-adelic Schwartz test whose
+periodization agrees with it at every class. -/
+private theorem existsUnique_sLocalDecayToThetaL2_compact_lift (u : BruhatCompactSupport Jₛ) :
+    ∃ φ : ℬₛ, ∀ g, sLocalAdelicThetaOnClasses F S φ g = u.val g := by
+  sorry
+
+/-- An inclusion of continuous representatives into L² restricts uniquely to
+a submodule containing its image. -/
+private theorem existsUnique_sLocalDecayToThetaL2_restrict {X E : Type*} [MeasurableSpace X]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] (μ : Measure X)
+    (f : E → X → ℂ) (j : E →L[ℂ] Lp ℂ 2 μ) (hj : Injective j)
+    (hrep : ∀ x, (j x : X → ℂ) =ᵐ[μ] f x)
+    (s : Submodule ℂ (Lp ℂ 2 μ)) (hs : ∀ x, j x ∈ s) :
+    ∃! k : E →L[ℂ] s, Injective k ∧ ∀ x, ((k x).val : X → ℂ) =ᵐ[μ] f x := by
+  refine ⟨j.codRestrict s hs, ⟨fun x y h ↦ hj (congrArg Subtype.val h), hrep⟩, ?_⟩
+  intro k hk
+  exact ContinuousLinearMap.ext fun x ↦ Subtype.ext (Lp.ext ((hk.2 x).trans (hrep x).symm))
+
+/-- It suffices to realize a dense family of tests in the theta image.
+Continuity then puts the entire source in its closure. -/
+private theorem existsUnique_sLocalDecayToThetaL2_of_dense {X E T B : Type*}
+    [MeasurableSpace X] [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+    [AddCommGroup T] [Module ℂ T] (μ : Measure X) (f : E → X → ℂ)
+    (i : T →ₗ[ℂ] Lp ℂ 2 μ) (q : B → E) (hq : DenseRange q)
+    (hinc : ∃ j : E →L[ℂ] Lp ℂ 2 μ, Injective j ∧ ∀ x, (j x : X → ℂ) =ᵐ[μ] f x)
+    (ha : ∀ b, ∃ t, (i t : X → ℂ) =ᵐ[μ] f (q b)) :
+    ∃! k : E →L[ℂ] (LinearMap.range i).topologicalClosure, Injective k ∧
+      ∀ x, ((k x).val : X → ℂ) =ᵐ[μ] f x := by
+  obtain ⟨j, hj, hrep⟩ := hinc
+  apply existsUnique_sLocalDecayToThetaL2_restrict μ f j hj hrep
+  exact isClosed_property hq ((LinearMap.range i).isClosed_topologicalClosure.preimage j.continuous)
+    fun b ↦ by
+      obtain ⟨t, ht⟩ := ha b
+      exact Submodule.le_topologicalClosure _ ⟨t, Lp.ext (ht.trans (hrep (q b)).symm)⟩
+
+/-- A surjective proper norm map is a modulation because its image contains two. -/
+private theorem existsUnique_sLocalDecayToThetaL2_modulation {G : Type*} [CommGroup G]
+    [TopologicalSpace G] (m : G →ₜ* ℝ≥0ˣ) (hp : IsProperMap m) (hs : Surjective m) :
+    IsModulation m := by
+  obtain ⟨g, hg⟩ := hs (Units.mk0 2 two_ne_zero)
+  refine ⟨hp, g, ?_⟩
+  rw [hg]
+  intro h
+  have := congrArg (fun x : ℝ≥0ˣ ↦ (x.val : ℝ)) h
+  norm_num at this
+
+/-- The finite local product and the archimedean completions give a countable base
+for the S-idele class group. -/
+private theorem existsUnique_sLocalDecayToThetaL2_countable :
+    SecondCountableTopology Jₛ := by
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let : SecondCountableTopology Aₛ := inferInstanceAs (SecondCountableTopology
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : SecondCountableTopology Aₛˣ := (sIdeleGroup_description F S).1.secondCountableTopology
+  infer_instance
+
 /-- Paper: Proposition 5.4.2.1(2), p. 275.
 If the exponent interval contains one half, the weighted Schwartz–Bruhat space
 injects continuously into the theta completion by its almost-everywhere values. -/
 theorem existsUnique_sLocalDecayToThetaL2 (I : Set ℝ) (_hOpen : IsOpen I)
     (_hInt : OrdConnected I) (_hsub : I ⊆ overlapInterval) (_hhalf : (1 / 2 : ℝ) ∈ I) :
     ∃! j : Ẽ(I) →L[ℂ] SLocalThetaL2 F S, Injective j ∧ ∀ f : Ẽ(I),
-      (((j f).val : L²ₛ) : Jₛ → ℂ) =ᵐ[μweighted] f.val := by sorry
+      (((j f).val : L²ₛ) : Jₛ → ℂ) =ᵐ[μweighted] f.val := by
+  let : SecondCountableTopology Jₛ := existsUnique_sLocalDecayToThetaL2_countable
+  let : BorelSpace Jₛ := ⟨rfl⟩
+  let : (μₛ).IsHaarMeasure := (sLocalQuotientTamagawaMeasure_isWeil (F := F) (S := S)).1
+  let m : Jₛ →ₜ* ℝ≥0ˣ := ⟨mₛ, hmₛ⟩
+  have hs : Surjective m := (sIdeleQuotientNorm_exists_section F S).choose_spec.surjective
+  have hm := existsUnique_sLocalDecayToThetaL2_modulation m (isProperMap_sIdeleQuotientNorm F S) hs
+  let q := bruhatCompactSupportToModulatedExponentialDecay m I hm hs
+  have hq := bruhatCompactSupport_dense_modulatedExponentialDecay m I hm hs _hInt ⟨_, _hhalf⟩
+  have hinc := existsUnique_sLocalDecayToThetaL2_inclusion μₛ m hm hs I _hInt _hhalf
+  let Θ : Θₛ →ₗ[ℂ] L²ₛ := (weightedTheta).toLinearMap
+  have hθ := (existsUnique_sLocalThetaWeightedL2 (F := F) (S := S)).exists.choose_spec.2
+  have hlift (u : BruhatCompactSupport Jₛ) : ∃ t : Θₛ, (Θ t : Jₛ → ℂ) =ᵐ[μweighted] (q u).val := by
+    obtain ⟨φ, hφ⟩ := existsUnique_sLocalDecayToThetaL2_compact_lift (F := F) (S := S) u
+    exact ⟨Submodule.Quotient.mk φ, (hθ φ).trans (.of_forall hφ)⟩
+  exact existsUnique_sLocalDecayToThetaL2_of_dense μweighted (fun f : Ẽ(I) ↦ f.val) Θ q hq hinc hlift
 
 /-- Paper: Proposition 5.4.2.1(2), p. 275.
 The unitary Fourier extension agrees on the weighted isotype with the Fourier map
