@@ -202,7 +202,6 @@ private theorem criticalTraceFormula_false_jet {F : Type} [Field F] [NumberField
   rw [hc]
   exact (mul_assoc _ _ _).symm
 
-
 local notation "diffTest(" τ ", " t ", " q ", " η ", " x ")" =>
   (η).val ((τ (t * q ^ 2))⁻¹ * x) - 2 * (η).val ((τ (t * q))⁻¹ * x) + (η).val ((τ t)⁻¹ * x)
 
@@ -247,7 +246,6 @@ local notation "localSum[" F "](" a ", " b ")" =>
   ((∑ w : InfinitePlace F, infiniteConnesWeilPrincipalValue w (a w)) +
     ∑' v : HeightOneSpectrum (𝓞 F), (Real.log (v.asIdeal.absNorm : ℝ) : ℂ) *
       finiteConnesWeilPrincipalValue v 1 (b v))
-
 
 /-- Paper: Definition A.3.2.1, p. 560. The norm-one Gaussian idele classes have
 Tamagawa volume π/4. The discriminant is −4, the class number and regulator
@@ -467,7 +465,6 @@ private theorem criticalTraceFormula_false_smoothed_shells
     tendsto_pow_atTop_atTop_of_one_lt (by norm_num)
   have h' := (h.comp h₄).const_mul (2 : ℂ)
   simpa [Function.comp_def, a, show Nat.totient 4 = 2 by decide, ← mul_assoc] using h'
-
 
 local notation "ν(" x ")" => (((ideleClassNorm Gauss x).val : ℝ))
 local notation "radial(" w ", " x ")" => ((Real.sqrt ν(x) : ℂ) * w ν(x))
@@ -727,6 +724,8 @@ private theorem criticalTraceFormula_false_finite_pv {F : Type} [Field F] [Numbe
     linear_combination w (‖u.val‖ / (4 : ℝ) ^ n) * hsq
   · rw [hb, show w (‖u.val‖ / (4 : ℝ) ^ n) = 0 from hlo _ (le_of_not_gt hu)]
     simp [f, hlo _ (le_of_not_gt hu)]
+/-- The fiber above an odd rational prime has total logarithmic weight twice the prime
+logarithm exactly when the rational power is one modulo four. -/
 private theorem criticalTraceFormula_false_odd_shell (p k : ℕ) (hp : p.Prime) (hodd : ¬ p ∣ 4) :
     let P : Ideal ℤ := Ideal.span {(p : ℤ)}
     (∑' Q : P.primesOver (𝓞 Gauss),
@@ -805,7 +804,7 @@ private theorem criticalTraceFormula_false_odd_weight (m : ℕ) :
       split_ifs <;> ring
   · simp [hm]
 
-/-- A single ramified prime contributes a vanishing error after normalization.
+/-- Any fixed prime contributes a vanishing error after normalization.
 Only linearly many powers can occur below the translated support. -/
 private theorem criticalTraceFormula_false_prime_powers (q : ℝ) (hq : 2 ≤ q) (w : ℝ → ℂ) (hw : Continuous w)
     (hs : HasCompactSupport w) :
@@ -845,9 +844,138 @@ private theorem criticalTraceFormula_false_prime_powers (q : ℝ) (hq : 2 ≤ q)
     rw [inv_pow, div_eq_mul_inv]
     ring
 
-
 local notation "powers(" v ", " w ", " n ")" =>
   (∑' k : ℕ, w (((Ideal.absNorm (HeightOneSpectrum.asIdeal v) : ℕ) : ℝ) ^ (k + 1) / (4 : ℝ) ^ (n : ℕ)))
+
+section
+open scoped Classical
+
+local notation "Vg" => HeightOneSpectrum (𝓞 Gauss)
+local notation "qv(" v ")" => (Ideal.absNorm (HeightOneSpectrum.asIdeal v))
+local notation "occurs(" v ", " m ")" => (∃ k : ℕ, qv(v) ^ (k + 1) = (m : ℕ))
+
+private theorem criticalTraceFormula_false_norm_prime (v : Vg) :
+    IsPrimePow qv(v) ∧ (qv(v).minFac : 𝓞 Gauss) ∈ v.asIdeal := by
+  obtain ⟨p, k, hk, hmem, hp, he⟩ := Ideal.exists_prime_and_absNorm_eq_pow v.asIdeal
+  rw [he, hp.pow_minFac hk.ne']
+  exact ⟨⟨p, k, hp.prime, hk, rfl⟩, hmem⟩
+
+private theorem criticalTraceFormula_false_fiber_weight (m : ℕ) :
+    (∑' v : Vg, if qv(v).minFac ≠ 2 ∧ occurs(v, m) then Real.log (qv(v) : ℝ) else 0) =
+      oddShellWeight(m) := by
+  classical
+  have hh (v : Vg) (h : occurs(v, m)) : IsPrimePow m ∧ m.minFac = qv(v).minFac := by
+    obtain ⟨k, rfl⟩ := h
+    exact ⟨(isPrimePow_pow_iff (Nat.succ_ne_zero k)).mpr (criticalTraceFormula_false_norm_prime v).1,
+      Nat.pow_minFac (Nat.succ_ne_zero k)⟩
+  by_cases good : IsPrimePow m ∧ m.minFac ≠ 2
+  · rw [ite_eq_left good]
+    let p := m.minFac
+    let e := m.factorization p
+    let P : Ideal ℤ := Ideal.span {(p : ℤ)}
+    have hp : p.Prime := Nat.minFac_prime good.1.ne_one
+    have hP0 : P ≠ ⊥ := by simpa [P] using hp.ne_zero
+    have : P.IsPrime := (Ideal.span_singleton_prime (Int.natCast_ne_zero.mpr hp.ne_zero)).2
+      (Int.prime_iff_natAbs_prime.mpr (by simpa using hp))
+    have : P.IsMaximal := Ideal.IsPrime.isMaximal inferInstance hP0
+    have hpowe : p ^ e = m := good.1.minFac_pow_factorization_eq
+    have he : 0 < e := by
+      by_contra! h
+      exact good.1.ne_one (by rw [← hpowe, Nat.eq_zero_of_le_zero h, pow_zero])
+    let I := {v : Vg | v.asIdeal ∣ Ideal.map (algebraMap ℤ (𝓞 Gauss)) P}
+    let E : I ≃ P.primesOver (𝓞 Gauss) := HeightOneSpectrum.equivPrimesOver _ hP0
+    let a (v : Vg) : ℝ := if qv(v).minFac ≠ 2 ∧ occurs(v, m) then Real.log (qv(v) : ℝ) else 0
+    have hsupp : support a ⊆ I := by
+      intro v hv
+      have hv' : qv(v).minFac ≠ 2 ∧ occurs(v, m) := by
+        by_contra h
+        exact hv (ite_eq_right h)
+      have hmem : (p : 𝓞 Gauss) ∈ v.asIdeal := by
+        change (m.minFac : 𝓞 Gauss) ∈ v.asIdeal
+        rw [(hh v hv'.2).2]
+        exact (criticalTraceFormula_false_norm_prime v).2
+      change v.asIdeal ∣ Ideal.map (algebraMap ℤ (𝓞 Gauss)) P
+      rw [Ideal.dvd_iff_le, Ideal.map_span, Set.image_singleton, Ideal.span_singleton_le_iff_mem]
+      simpa [P] using hmem
+    change (∑' v, a v) = _
+    rw [← tsum_subtype_eq_of_support_subset hsupp, ← E.tsum_eq]
+    apply tsum_congr
+    intro V
+    let v : Vg := V.val
+    let Q := E V
+    have hQ : Q.val = v.asIdeal := rfl
+    have : Q.val.IsPrime := Q.property.1
+    have : Q.val.LiesOver P := Q.property.2
+    let f := Q.val.inertiaDeg ℤ
+    have hnorm : qv(v) = p ^ f := by
+      rw [← hQ, ← Ideal.absNorm_pow_inertiaDeg P Q.val]
+      simp [P, f]
+    have hf : 0 < f := by
+      by_contra! h
+      have := NumberField.HeightOneSpectrum.one_lt_absNorm v
+      rw [hnorm, Nat.eq_zero_of_le_zero h, pow_zero] at this
+      omega
+    have hiff : occurs(v, m) ↔ f ∣ e := by
+      constructor
+      · rintro ⟨k, hk⟩
+        rw [hnorm, ← pow_mul, ← hpowe] at hk
+        exact ⟨_, (Nat.pow_right_injective hp.two_le hk).symm⟩
+      · rintro ⟨d, hd⟩
+        have hdpos : d ≠ 0 := by intro h; simp [h] at hd; omega
+        exact ⟨d - 1, by rw [hnorm, ← pow_mul, show d - 1 + 1 = d by omega, ← hd, hpowe]⟩
+    have hpmin : qv(v).minFac ≠ 2 := by rw [hnorm, hp.pow_minFac hf.ne']; exact good.2
+    change (if qv(v).minFac ≠ 2 ∧ occurs(v, m) then _ else _) =
+      if f ∣ e then Real.log (Q.val.absNorm : ℝ) else 0
+    by_cases hx : f ∣ e
+    · rw [ite_eq_left ⟨hpmin, hiff.mpr hx⟩, ite_eq_left hx, hQ]
+    · rw [ite_eq_right (fun h ↦ hx (hiff.mp h.2)), ite_eq_right hx]
+  · rw [ite_eq_right good]
+    calc _ = ∑' _ : Vg, (0 : ℝ) := by
+           apply tsum_congr
+           intro v
+           exact ite_eq_right (fun h ↦ good ⟨(hh v h.2).1, fun he ↦ h.1 ((hh v h.2).2.symm.trans he)⟩)
+         _ = 0 := tsum_zero
+
+/-- Regroup a finite profile on positive powers by the resulting rational integer. -/
+private theorem criticalTraceFormula_false_group_norms (W : ℕ → ℂ)
+    (hW : (support W).Finite) (A : Vg → ℂ) :
+    (∑' v : Vg, A v * ∑' k : ℕ, W (qv(v) ^ (k + 1))) =
+    ∑' m : ℕ, (∑' v : Vg, if occurs(v, m) then A v else 0) * W m := by
+  classical
+  let T := hW.toFinset
+  have hT (m : ℕ) (hm : m ∉ T) : W m = 0 := by
+    contrapose! hm
+    exact hW.mem_toFinset.mpr hm
+  let B (m : ℕ) (v : Vg) : ℂ := if occurs(v, m) then A v else 0
+  have hsupp (m) : (support (B m)).Finite := by
+    apply (Ring.HasFiniteQuotients.finite_absNorm_heightOneSpectrum_le (S := 𝓞 Gauss) m).subset
+    intro v hv
+    have he : occurs(v, m) := by by_contra! h; exact hv (ite_eq_right (by simpa only [not_exists] using h))
+    obtain ⟨k, rfl⟩ := he
+    exact Nat.le_self_pow (by omega) _
+  have hp (v : Vg) : A v * (∑' k : ℕ, W (qv(v) ^ (k + 1))) =
+      ∑ m ∈ T, B m v * W m := by
+    let g (k : ℕ) := qv(v) ^ (k + 1)
+    have hi : Injective g := fun k l h ↦ by
+      have := Nat.pow_right_injective (NumberField.HeightOneSpectrum.one_lt_absNorm v) h
+      omega
+    let f (m : ℕ) : ℂ := if occurs(v, m) then W m else 0
+    have hzero : support f ⊆ range g := by
+      intro m hm
+      by_contra h
+      exact hm (ite_eq_right h)
+    have hre : (∑' k : ℕ, W (qv(v) ^ (k + 1))) = ∑' m : ℕ, f m := by
+      rw [← hi.tsum_eq hzero]
+      apply tsum_congr
+      intro k
+      exact (ite_eq_left (show occurs(v, g k) from ⟨k, rfl⟩)).symm
+    rw [hre, tsum_eq_sum (s := T) (fun m hm ↦ by simp only [f, hT m hm, ite_self]), Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro m _
+    by_cases h : occurs(v, m) <;> simp only [f, B, h, ite_true, ite_false, zero_mul, mul_zero]
+  rw [tsum_congr hp, Summable.tsum_finsetSum (fun m _ ↦ (summable_of_hasFiniteSupport (hsupp m)).mul_right (W m)),
+    tsum_eq_sum (s := T) (fun m hm ↦ by rw [hT m hm, mul_zero])]
+  exact Finset.sum_congr rfl fun m _ ↦ tsum_mul_right
 
 /-- Paper: Theorem 13.3.1.1, (13.3.1.5), p. 522. Regroup the powers of the
 Gaussian prime ideals by their rational norms. The finitely many exceptional
@@ -858,15 +986,83 @@ theorem criticalTraceFormula_gaussian_prime_power_regroup (w : ℝ → ℂ) (hs 
         (mass(Gauss, v) * powers(v, w, n))) =
         (∑' m : ℕ, ((oddShellWeight(m) : ℝ) : ℂ) * w ((m : ℝ) / (4 : ℝ) ^ n)) +
         ∑ v ∈ S, c v * powers(v, w, n) := by
-  sorry
+  classical
+  let L (v : Vg) : ℂ := ↑(Real.log (qv(v) : ℝ))
+  let A (v : Vg) : ℂ := if qv(v).minFac ≠ 2 then L v else 0
+  let c (v : Vg) : ℂ := L v * mass(Gauss, v) - A v
+  have hmass : {v : Vg | mass(Gauss, v) ≠ 1}.Finite := by
+    refine (finiteLocalTamagawaMass_finite Gauss).subset fun v hv h ↦ hv ?_
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, h, ENNReal.toReal_one, Complex.ofReal_one]
+  have htwo : {v : Vg | qv(v).minFac = 2}.Finite := by
+    have h := (Ring.HasFiniteQuotients.finite_setOfPred_mem (2 : 𝓞 Gauss) (by norm_num)).preimage
+      (HeightOneSpectrum.asIdeal_injective (R := 𝓞 Gauss)).injOn
+    refine h.subset fun v hv ↦ ?_
+    have hmem := (criticalTraceFormula_false_norm_prime v).2
+    change qv(v).minFac = 2 at hv
+    rw [hv, Nat.cast_ofNat] at hmem
+    exact hmem
+  have hc : (support c).Finite := by
+    apply (hmass.union htwo).subset
+    intro v hv
+    by_contra h
+    have hM : mass(Gauss, v) = 1 := not_ne_iff.mp fun hM ↦ h (Or.inl hM)
+    have hq : qv(v).minFac ≠ 2 := fun hq ↦ h (Or.inr hq)
+    exact hv (by simp only [c, A, ite_eq_left hq, hM, mul_one, sub_self])
+  refine ⟨hc.toFinset, c, fun n ↦ ?_⟩
+  let W (m : ℕ) := w ((m : ℝ) / (4 : ℝ) ^ n)
+  obtain ⟨R, hR⟩ := hs.bddAbove
+  obtain ⟨M, hM⟩ := exists_nat_gt (R * (4 : ℝ) ^ n)
+  have hcut (m : ℕ) (hm : M ≤ m) : W m = 0 := by
+    exact image_eq_zero_of_notMem_tsupport (f := w) fun h ↦ (hM.trans_le (by exact_mod_cast hm)).not_ge
+      ((div_le_iff₀ (by positivity)).mp (hR h))
+  have hW : (support W).Finite := (Finset.range M).finite_toSet.subset fun m hm ↦
+    Finset.mem_range.mpr (lt_of_not_ge fun h ↦ hm (hcut m h))
+  let Z (v : Vg) := ∑' k : ℕ, W (qv(v) ^ (k + 1))
+  have hZ (v : Vg) : Z v = powers(v, w, n) := by simp only [Z, W, Nat.cast_pow]
+  have hZs : (support Z).Finite := by
+    refine (Ring.HasFiniteQuotients.finite_absNorm_heightOneSpectrum_le (S := 𝓞 Gauss) M).subset fun v hv ↦ ?_
+    by_contra h
+    have hz (k : ℕ) := hcut (qv(v) ^ (k + 1))
+      ((le_of_not_ge h).trans (Nat.le_self_pow (Nat.succ_ne_zero _) _))
+    exact hv (by simp only [Z, hz, tsum_zero])
+  have hAZ : Summable (fun v ↦ A v * Z v) := summable_of_hasFiniteSupport
+    (hZs.subset (support_mul_subset_right ..))
+  have hCZ : Summable (fun v ↦ c v * Z v) := summable_of_hasFiniteSupport
+    (hc.subset (support_mul_subset_left ..))
+  have hcoeff (m) : (∑' v : Vg, if occurs(v, m) then A v else 0) = ((oddShellWeight(m) : ℝ) : ℂ) := by
+    rw [← criticalTraceFormula_false_fiber_weight, Complex.ofReal_tsum]
+    apply tsum_congr
+    intro v
+    by_cases h : occurs(v, m)
+    · rw [ite_eq_left h]
+      by_cases hq : qv(v).minFac ≠ 2
+      · rw [ite_eq_left ⟨hq, h⟩]; exact ite_eq_left hq
+      · rw [ite_eq_right (fun h' ↦ hq h'.1), Complex.ofReal_zero]; exact ite_eq_right hq
+    · rw [ite_eq_right h, ite_eq_right (fun h' ↦ h h'.2), Complex.ofReal_zero]
+  have hregular : (∑' v : Vg, A v * Z v) =
+      ∑' m : ℕ, ((oddShellWeight(m) : ℝ) : ℂ) * W m := by
+    rw [show (∑' v : Vg, A v * Z v) = _ from criticalTraceFormula_false_group_norms W hW A]
+    simp only [hcoeff]
+  have hcorr : (∑' v : Vg, c v * Z v) = ∑ v ∈ hc.toFinset, c v * powers(v, w, n) := by
+    rw [tsum_eq_sum (s := hc.toFinset) (fun v h ↦ mul_eq_zero_of_left
+      (notMem_support.mp (fun hv ↦ h (hc.mem_toFinset.mpr hv))) _)]
+    exact Finset.sum_congr rfl fun v _ ↦ congrArg (c v * ·) (hZ v)
+  rw [← hregular, ← hcorr, ← hAZ.tsum_add hCZ]
+  apply tsum_congr
+  intro v
+  rw [← hZ]
+  change L v * (_ * _) = A v * _ + (L v * _ - A v) * _
+  ring
+
+end
 
 open scoped ContDiff in
 /-- Paper: Theorem 13.3.1.1, (13.3.1.4)–(13.3.1.5), p. 522. Over the Gaussian
 field, compare the normalized finite-place terms of a translated second difference with
 the rational von Mangoldt weights on prime powers congruent to one modulo four.
 The cutoff has integral equal to the positive polar moment divided by the class volume.
-Gap: Restrict a radial bump to the finite places and identify the unramified
-shells. The prime above two must give a vanishing normalized error. -/
+A translated radial bump supplies the cutoff. The exceptional local unit masses
+and the prime above two contribute a vanishing normalized error. -/
 theorem criticalTraceFormula_gaussian_shell_comparison (τ : ℝ≥0ˣ →ₜ* C[Gauss])
     (_hτ : RightInverse τ (ideleClassNorm Gauss)) :
     ∃ (η φ : D[Gauss]) (weight : ℝ → ℂ), (∀ x, φ.val x = diffTest(τ, 1, step₄, η, x)) ∧
