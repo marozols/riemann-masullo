@@ -4027,8 +4027,7 @@ private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_shift
       sLocalIdelicZFunction b.val (chartₛ(χ) s) =
         sLocalIdelicZFunction f.val (chartₛ(χ) (s + d)) := by
   let η := chartₛ((1 : PontryaginDual Jₛ)) (d : ℂ)
-  obtain ⟨M, hM⟩ := sAdelePolarFree_quasiCharacter_mul r c η
-  let b := M f
+  obtain ⟨b, hb⟩ := sAdelePolarFree_exists_quasiCharacter_mul r c η f
   have he (s : ℂ) (hs : 0 < s.re) (hd : 0 < (s + d).re) :
       sLocalIdelicZFunction b.val (chartₛ(χ) s) =
         sLocalIdelicZFunction f.val (chartₛ(χ) (s + d)) := by
@@ -4040,7 +4039,7 @@ private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_shift
     have hN : N ≠ 0 := Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (mₛ g).ne_zero)
     change b.val (Multiplicative.ofAdd x.val) * (chartₛ(χ) s) g =
       f.val (Multiplicative.ofAdd x.val) * (chartₛ(χ) (s + d)) g
-    rw [hM]
+    rw [hb]
     change ((1 : ℂ) * N ^ (d : ℂ) * _) * ((χ g : ℂ) * N ^ s) =
       _ * ((χ g : ℂ) * N ^ (s + d))
     rw [Complex.cpow_add _ _ hN]
@@ -4197,10 +4196,10 @@ private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_lift
     ∃ f : sAdelePolarFree S r c, ∀ g : Jₛ, thetaAt(χ₁(χ)) f.val g =
       (χ g : ℂ)⁻¹ * p.val (Real.log ((mₛ g).val : ℝ)) := by
   obtain ⟨a, ha⟩ := sLocalHomogeneousTheta_trivial_exists_polarFree (S := S) r c p
-  obtain ⟨T, hT⟩ := sAdelePolarFree_quasiCharacter_mul r c ((circleToComplex).comp χ⁻¹)
-  refine ⟨T a, fun g ↦ ?_⟩
+  obtain ⟨b, hb⟩ := sAdelePolarFree_exists_quasiCharacter_mul r c ((circleToComplex).comp χ⁻¹) a
+  refine ⟨b, fun g ↦ ?_⟩
   rw [sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_twist (χ₁(χ)) χ (fun _ ↦ rfl) a.val
-    (T a).val (hT a), ha]
+    b.val hb, ha]
 
 /-- The S-idele quotient has the separation and countability properties used by
 the Schwartz–Bruhat projector on a split locally compact group. -/
