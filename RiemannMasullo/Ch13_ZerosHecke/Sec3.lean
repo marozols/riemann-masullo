@@ -475,7 +475,54 @@ theorem criticalTraceGeometric_converges_functional (τ : ℝ≥0ˣ →ₜ* C�
       restrictsAtInfinity(a, φ) → restrictsAtFinite(b, φ) →
       L φ = mellinAt(φ, 1, -1 / 2) + mellinAt(φ, 1, 1 / 2) -
         (∑ w : InfinitePlace F, infiniteConnesWeilPrincipalValue w (a w)) -
-        ∑' v : V, finiteTerm(v, b v) := by sorry
+        ∑' v : V, finiteTerm(v, b v) := by
+  classical
+  obtain ⟨_, poles, arch, fin, _, hpoles, harch, hfin, _, _, hsum, _⟩ :=
+    idelicExplicitFormula τ hτ
+  let vol : ℝ := (normOneIdeleClassTamagawaMeasure F univ).toReal
+  have hvol : 0 < vol := by
+    dsimp [vol]
+    rw [normOneIdeleClassTamagawaMeasure_volume]
+    have := NumberField.classNumber_pos F
+    have := NumberField.Units.regulator_pos F
+    have := NumberField.Units.torsionOrder_pos F
+    have := Int.natAbs_pos.mpr (NumberField.discr_ne_zero F)
+    rw [ENNReal.toReal_ofReal (by positivity)]
+    positivity
+  -- The printed finite-place coefficients change the dual series only at the different.
+  let printed (v : V) : StrongDual ℂ D𝔽 := finiteUnitMass(v) • fin v
+  have hmass : ∀ᶠ v : V in Filter.cofinite, finiteLocalMultiplicativeTamagawaMeasure F v
+      (v.adicCompletionIntegers F).units = 1 := by
+    simpa only [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, Filter.eventually_cofinite]
+      using finiteLocalTamagawaMass_finite F
+  have hprinted : Summable printed := hsum.congr_cofinite (hmass.mono fun v hv ↦ by
+    simp [printed, hv])
+  refine ⟨(vol : ℂ) • poles - (∑ w, arch w) - (∑' v, printed v), ?_⟩
+  intro φ a b ha hb
+  let ev : StrongDual ℂ D𝔽 →+ ℂ :=
+    { toFun := fun L ↦ L φ, map_zero' := rfl, map_add' := fun _ _ ↦ rfl }
+  have hp : (vol : ℂ) * poles φ = mellinAt(φ, 1, -1 / 2) + mellinAt(φ, 1, 1 / 2) := by
+    have htwist (s : ℂ) (g : C𝔽) : ideleClassNormTwist (1 : U𝔽) s g =
+        (((ideleClassNorm F g).val : ℝ) : ℂ) ^ s := by
+      exact one_mul ((((ideleClassNorm F g).val : ℝ) : ℂ) ^ s)
+    simp only [htwist, hpoles]
+    exact mul_div_cancel₀ _ (Complex.ofReal_ne_zero.mpr hvol.ne')
+  have hinf : ev (∑ w, arch w) = ∑ w, infiniteConnesWeilPrincipalValue w (a w) := by
+    rw [map_sum]
+    refine Finset.sum_congr rfl fun w _ ↦ ?_
+    obtain ⟨t, ht, he⟩ := harch w φ
+    have ht' : t = a w := Subtype.ext (funext fun u ↦ (ht u).trans (ha w u).symm)
+    exact ht' ▸ he
+  have hfinite : ev (∑' v, printed v) = ∑' v : V, finiteTerm(v, b v) := by
+    have heval : Continuous ev := continuous_eval_const φ
+    refine (hprinted.hasSum.map ev heval).tsum_eq.symm.trans (tsum_congr fun v ↦ ?_)
+    obtain ⟨t, ht, he⟩ := hfin v φ
+    have ht' : t = b v := Subtype.ext (funext fun u ↦ (ht u).trans (hb v u).symm)
+    change finiteUnitMass(v) * fin v φ = _
+    rw [he, ht', Complex.ofReal_div, ← mul_assoc, mul_div_cancel₀ _
+      (criticalTraceGeometric_converges_unitMass_ne_zero (F := F) v)]
+  change (vol : ℂ) * poles φ - ev (∑ w, arch w) - ev (∑' v, printed v) = _
+  rw [hp, hinf, hfinite]
 
 /-- Paper: Theorem 13.3.1.1, (13.3.1.3)–(13.3.1.5), p. 522. The finite-place
 series converges, and the polar terms minus the local principal values form a
