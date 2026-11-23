@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch10_TraceSpectral.Sec3
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 import RiemannMasullo.Ch13_ZerosHecke.Targets
+import all RiemannMasullo.Ch12_TraceGeometric.Sec5
 
 /-! # Further assertions in the proofs of §10.3 that are false as printed -/
 
@@ -219,6 +220,40 @@ def Printed.spectralStripMellinJet_norm_le : Prop :=
           ‖iteratedDeriv i (M ω) (shift(b, t))‖ ≤
             C * (∏ n ∈ Finset.range N, ((i : ℝ) - (n : ℝ))) / ‖shift(b, t)‖ ^ N
 
+open scoped ContDiff in
+/-- A radial bump with the opposite oscillation has nonzero Mellin value at the
+given imaginary frequency. The inner integral contributes the norm-one volume. -/
+private theorem spectralStripMellinJet_nonzero (τ : ℝ≥0ˣ →ₜ* C𝔽(ℚ))
+    (hτ : Function.RightInverse τ (ideleClassNorm ℚ)) (w : ℂ) :
+    ∃ φ : BruhatCompactSupport C𝔽(ℚ), (∫ r : ℝ≥0ˣ, ((r.val : ℝ) : ℂ) ^ w *
+      (∫ k : C₁(ℚ), φ.val (τ r * k.val) ∂normOneIdeleClassTamagawaMeasure ℚ)
+        ∂positiveRealHaar) ≠ 0 := by
+  let β : ContDiffBump (0 : ℝ) := ⟨1, 2, by norm_num, by norm_num⟩
+  let H (x : ℝ) : ℂ := (β x : ℂ) * Complex.exp (-(w * x))
+  have hH : ContDiff ℝ (∞) H :=
+    (Complex.ofRealCLM.contDiff.comp β.contDiff).mul
+      (Complex.contDiff_exp.comp (contDiff_const.mul Complex.ofRealCLM.contDiff).neg)
+  obtain ⟨φ, hφ⟩ := exists_normTest (F := ℚ) H hH
+    ((β.hasCompactSupport.comp_left Complex.ofReal_zero).mul_right)
+  let V : ℂ := ((normOneIdeleClassTamagawaMeasure ℚ) univ).toReal
+  have hinner (r : ℝ≥0ˣ) : (∫ k : C₁(ℚ), φ.val (τ r * k.val)
+      ∂normOneIdeleClassTamagawaMeasure ℚ) = V * H (Real.log (r.val : ℝ)) := by
+    have hk (k : C₁(ℚ)) : φ.val (τ r * k.val) = H (Real.log (r.val : ℝ)) := by
+      rw [hφ, map_mul, hτ, MonoidHom.mem_ker.mp k.property, mul_one]
+    simp only [hk, integral_const, Complex.real_smul, V, Measure.real]
+  have hrad : (∫ r : ℝ≥0ˣ, H (Real.log (r.val : ℝ)) * ((r.val : ℝ) : ℂ) ^ w
+      ∂positiveRealHaar) = Complex.ofReal (∫ x : ℝ, β x) := by
+    have he := grh_shift_integral H hH.continuous (fun _ ↦ 1) (fun _ ↦ rfl) 0 w
+    simp only [sub_zero, mul_one, Complex.ofReal_zero, mul_zero, Complex.exp_zero, one_mul] at he
+    rw [he, ← integral_complex_ofReal]
+    exact integral_congr_ae (.of_forall fun x ↦ grh_bump_mul_exp _ _)
+  refine ⟨φ, ?_⟩
+  simp_rw [hinner]
+  have rearrange (p q : ℂ) : p * (V * q) = V * (q * p) := by ring
+  simp_rw [rearrange]
+  rw [integral_const_mul, hrad]
+  exact mul_ne_zero (grh_classVolume_ne_zero (F := ℚ)) (Complex.ofReal_ne_zero.mpr β.integral_pos.ne')
+
 /-- Paper: Theorem 10.3.2.1, (10.3.2.10)–(11), p. 455.
 Take F = ℚ, the trivial base character, a = 1/2, α = 1, s = 2 and N = 2. Let z = iγ
 for the first positive critical-line zeta ordinate γ. The interior multiplicity admits
@@ -226,6 +261,49 @@ i = 0. For φ(g) = h(log |g|) exp(−iγ log |g|), with h a nonnegative smooth b
 positive integral, M(φ)(iγ) has positive norm. The n = 0 factor forces the right-hand
 side to vanish for every constant C. -/
 theorem Printed.spectralStripMellinJet_norm_le_false :
-    ¬ Printed.spectralStripMellinJet_norm_le := by sorry
+    ¬ Printed.spectralStripMellinJet_norm_le := by
+  classical
+  intro hall
+  obtain ⟨u, v, w, huv, _, hu, hv, _⟩ := spectralLineSelection_three_zeta_zeros
+  obtain ⟨γ, hγ, hz⟩ : ∃ γ : ℝ, γ ≠ 0 ∧ riemannZeta (shift(1 / 2, γ)) = 0 := by
+    by_cases h : u = 0
+    · exact ⟨v, (h ▸ huv : 0 < v).ne', hv⟩
+    · exact ⟨u, h, hu⟩
+  obtain ⟨χ, hχ⟩ := exists_spectralBasepointChoice ℚ
+  let χ' := Function.update χ 1 (1 : PontryaginDual C𝔽(ℚ))
+  have hχ' : IsSpectralBasepointChoice χ' := by
+    intro ω
+    by_cases h : ω = 1
+    · subst ω
+      rw [show χ' 1 = 1 from Function.update_self ..]
+      rfl
+    · simpa [χ', Function.update_of_ne h] using hχ ω
+  let τ : ℝ≥0ˣ →ₜ* C𝔽(ℚ) :=
+    ⟨(QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 ℚ) ℚ)).comp ratIdeleNormSection,
+      QuotientGroup.continuous_mk.comp ratIdeleNormSection_continuous⟩
+  have hτ : Function.RightInverse τ (ideleClassNorm ℚ) := ratIdeleNormSection_class_rightInverse
+  obtain ⟨φ, hφ⟩ := spectralStripMellinJet_nonzero τ hτ (shift(0, γ))
+  obtain ⟨C, _, hC⟩ := hall ℚ χ' hχ' τ hτ (1 / 2) 1 2 (by norm_num) (by norm_num)
+    φ 2 (by norm_num)
+  let L := continuedCompletedHeckeL (1 : PontryaginDual C𝔽(ℚ))
+  let z : ℂ := shift(1 / 2, γ)
+  have hpos : 0 < meromorphicOrderAt L z := spectralLineSelection_mem_lineZeros γ hz
+  obtain ⟨hL, heq⟩ := continuedCompletedHeckeL_spec (1 : PontryaginDual C𝔽(ℚ))
+  have htwo : meromorphicOrderAt L 2 ≠ ⊤ := by
+    intro h
+    have hp : 0 < meromorphicOrderAt L 2 := h ▸ WithTop.coe_lt_top (0 : ℤ)
+    have hb := completedHeckeL_continuation_zeros _ _ hL heq (by norm_num : 0 < (2 : ℂ).re) hp
+    norm_num at hb
+  have hne := hL.meromorphicOn.meromorphicOrderAt_ne_top_of_isPreconnected
+    isPreconnected_univ (mem_univ _) (mem_univ z) htwo
+  have hm : 0 < (meromorphicOrderAt L z).untop₀.toNat := by
+    rw [← WithTop.coe_untop₀_of_ne_top hne] at hpos
+    have h : (0 : ℤ) < (meromorphicOrderAt L z).untop₀ := WithTop.coe_lt_coe.mp hpos
+    omega
+  specialize hC 1 0 γ (by norm_num) hγ
+  rw [show χ' 1 = 1 from Function.update_self .., add_zero] at hC
+  have bound := hC hpos 0 (by simpa [L, z] using hm)
+  apply hφ
+  simpa [Finset.prod_range_succ] using bound
 
 end RiemannMasullo
