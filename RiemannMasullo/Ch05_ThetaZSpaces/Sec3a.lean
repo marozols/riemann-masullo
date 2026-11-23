@@ -9,6 +9,9 @@ public import Mathlib.RingTheory.MvPowerSeries.PiTopology
 public import Mathlib.RingTheory.PowerSeries.PiTopology
 public import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 public import RiemannMasullo.ForMathlib.Topology.Algebra.Module.StrongDualQuotient
+import Mathlib.Analysis.Distribution.SchwartzSpace.CompactSupport
+import Mathlib.Geometry.Manifold.PartitionOfUnity
+import Mathlib.LinearAlgebra.Dual.Lemmas
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
 /-! # Non-archimedean principal values and distributions supported at the origin
@@ -1660,13 +1663,211 @@ theorem realDiracDerivative_one (f : 𝓢(ℝ, ℂ)) :
   change (-1 : ℂ) ^ 1 • (((SchwartzMap.derivCLM ℂ ℂ) ^ 1) f) 0 = _
   rw [pow_one, pow_one, SchwartzMap.derivCLM_apply, neg_one_smul]
 
+open scoped Manifold in
+/-- A compactly supported test away from zero is a finite sum of tests on open sets
+where the distribution vanishes. -/
+private theorem realTemperedDistribution_zero_of_away (T : StrongDual ℂ 𝓢(ℝ, ℂ))
+    (hT : Distribution.dsupport (⇑T) ⊆ {(0 : ℝ)}) (f : 𝓢(ℝ, ℂ))
+    (hc : HasCompactSupport (f : ℝ → ℂ)) (h0 : 0 ∉ tsupport (f : ℝ → ℂ)) : T f = 0 := by
+  classical
+  let K := tsupport (f : ℝ → ℂ)
+  have hx (x : K) : x.val ∉ Distribution.dsupport (⇑T) := by
+    intro h
+    exact h0 ((Set.mem_singleton_iff.mp (hT h)) ▸ x.property)
+  choose U hv ho hmem using fun x : K ↦ (Distribution.notMem_dsupport_iff x.val).mp (hx x)
+  obtain ⟨s, hs⟩ := hc.elim_finite_subcover U ho fun x hx ↦ mem_iUnion.mpr ⟨⟨x, hx⟩, hmem _⟩
+  obtain ⟨ρ, hρ⟩ := SmoothPartitionOfUnity.exists_isSubordinate 𝓘(ℝ, ℝ)
+    (isClosed_tsupport (f : ℝ → ℂ)) (fun i : s ↦ U i.val) (fun i ↦ ho i.val)
+    (by simpa only [iUnion_subtype] using hs)
+  let g (i : s) : 𝓢(ℝ, ℂ) := (hc.smul_left (f := (ρ i : ℝ → ℝ))).toSchwartzMap
+    ((contMDiff_iff_contDiff.mp (ρ i).contMDiff).smul (f.smooth ⊤))
+  have hz (i : s) : T (g i) = 0 :=
+    hv i.val (g i) ((tsupport_smul_subset_left _ _).trans (hρ i))
+  have hsum : f = ∑ i : s, g i := by
+    ext x
+    simp only [sum_apply]
+    change f x = ∑ i : s, ρ i x • f x
+    rw [← Finset.sum_smul]
+    by_cases h : x ∈ K
+    · rw [← finsum_eq_sum_of_fintype, ρ.sum_eq_one h, one_smul]
+    · rw [image_eq_zero_of_notMem_tsupport h, smul_zero]
+  rw [hsum, map_sum]
+  exact Finset.sum_eq_zero fun i _ ↦ hz i
+
+/-- Repeated mean-value bounds on a ball. Each vanishing derivative at the origin
+contributes one power of its radius. -/
+private theorem realTemperedDistribution_jet_bound (f : 𝓢(ℝ, ℂ)) (ε : ℝ) (hε : 0 ≤ ε)
+    (j d : ℕ) (hjet : ∀ i < d, iteratedDeriv (j + i) (f : ℝ → ℂ) 0 = 0)
+    (x : ℝ) (hx : |x| ≤ ε) :
+    ‖iteratedDeriv j (f : ℝ → ℂ) x‖ ≤ ε ^ d * SchwartzMap.seminorm ℂ 0 (j + d) f := by
+  induction d generalizing j x with
+  | zero => simpa using SchwartzMap.le_seminorm' ℂ 0 j f x
+  | succ d ih =>
+    let K := Metric.closedBall (0 : ℝ) ε
+    have hz : iteratedDeriv j (f : ℝ → ℂ) 0 = 0 := by simpa using hjet 0 (Nat.zero_lt_succ d)
+    have hstep (y : ℝ) (hy : y ∈ K) :
+        ‖deriv (iteratedDeriv j (f : ℝ → ℂ)) y‖ ≤
+          ε ^ d * SchwartzMap.seminorm ℂ 0 (j + (d + 1)) f := by
+      rw [← iteratedDeriv_succ]
+      simpa only [Nat.succ_add, Nat.add_succ] using
+        ih (j + 1) (fun i hi ↦ by
+          simpa only [Nat.succ_add, Nat.add_succ] using hjet (i + 1) (Nat.succ_lt_succ hi)) y (by simpa [K, Real.dist_eq] using hy)
+    have hd := (convex_closedBall (0 : ℝ) ε).norm_image_sub_le_of_norm_deriv_le
+      (fun y _ ↦ ((f.smooth (j + 1 : ℕ)).differentiable_iteratedDeriv j (by exact_mod_cast Nat.lt_succ_self j)).differentiableAt)
+      hstep (Metric.mem_closedBall_self hε) (show x ∈ K by simpa [K, Real.dist_eq] using hx)
+    rw [hz, sub_zero, sub_zero, Real.norm_eq_abs] at hd
+    calc _ ≤ _ := hd
+         _ ≤ (ε ^ d * SchwartzMap.seminorm ℂ 0 (j + (d + 1)) f) * ε := by gcongr
+         _ = _ := by rw [pow_succ]; ring
+
+
+/-- Multiplication by a smooth cutoff equal to one near zero preserves the value
+of a point-supported distribution, by density of compactly supported tests. -/
+private theorem realTemperedDistribution_cutoff_eq (T : StrongDual ℂ 𝓢(ℝ, ℂ))
+    (hT : Distribution.dsupport (⇑T) ⊆ {(0 : ℝ)}) (b : ℝ → ℂ)
+    (hb : b.HasTemperateGrowth) (h1 : b =ᶠ[𝓝 0] 1) (f : 𝓢(ℝ, ℂ)) :
+    T (SchwartzMap.smulLeftCLM ℂ b f) = T f := by
+  apply closure_minimal (s := {g : 𝓢(ℝ, ℂ) | HasCompactSupport (g : ℝ → ℂ)})
+    (t := {g | T (SchwartzMap.smulLeftCLM ℂ b g) = T g}) _
+    (isClosed_eq (T.continuous.comp (SchwartzMap.smulLeftCLM ℂ b).continuous) T.continuous)
+    (SchwartzMap.dense_hasCompactSupport f)
+  intro g hg
+  change T (SchwartzMap.smulLeftCLM ℂ b g) = T g
+  rw [← sub_eq_zero, ← map_sub]
+  apply realTemperedDistribution_zero_of_away T hT
+  · change HasCompactSupport (⇑(SchwartzMap.smulLeftCLM ℂ b g) - (g : ℝ → ℂ))
+    rw [SchwartzMap.smulLeftCLM_apply hb]
+    exact (HasCompactSupport.smul_left (f := b) (show HasCompactSupport (g : ℝ → ℂ) from hg)).sub hg
+  · apply notMem_tsupport_iff_eventuallyEq.mpr
+    filter_upwards [h1] with x hx
+    simp [SchwartzMap.smulLeftCLM_apply_apply hb, show b x = 1 from hx]
+
+/-- The first `N` derivatives of a shrinking cutoff times a function with zero
+`N`-jet are uniformly of order at most its radius. -/
+private theorem realTemperedDistribution_cutoff_bound (b f : 𝓢(ℝ, ℂ))
+    (hb : tsupport (b : ℝ → ℂ) ⊆ Metric.closedBall 0 1)
+    (N m : ℕ) (hm : m ≤ N) (hjet : ∀ j ≤ N, iteratedDeriv j (f : ℝ → ℂ) 0 = 0) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ ε : ℝ, 0 < ε → ε ≤ 1 → ∀ k : ℕ,
+      SchwartzMap.seminorm ℂ k m (SchwartzMap.smulLeftCLM ℂ (fun x ↦ b (ε⁻¹ * x)) f) ≤ ε * C := by
+  let A := SchwartzMap.seminorm ℂ 0 (N + 1) f
+  let B (i : ℕ) := SchwartzMap.seminorm ℂ 0 i b
+  have hA : 0 ≤ A := apply_nonneg _ _
+  have hB (i : ℕ) : 0 ≤ B i := apply_nonneg _ _
+  refine ⟨∑ i ∈ Finset.range (m + 1), (m.choose i : ℝ) * B i * A, by positivity, ?_⟩
+  intro ε hε hε1 k
+  let bε := fun x : ℝ ↦ b (ε⁻¹ * x)
+  have htemp : bε.HasTemperateGrowth := by dsimp [bε]; fun_prop
+  refine SchwartzMap.seminorm_le_bound' ℂ k m _ (by positivity) fun x ↦ ?_
+  rw [SchwartzMap.smulLeftCLM_apply htemp]
+  change |x| ^ k * ‖iteratedDeriv m (fun y ↦ b (ε⁻¹ * y) * f y) x‖ ≤ _
+  by_cases hx : |x| ≤ ε
+  · have hb' : ContDiff ℝ m bε := (b.smooth m).comp (contDiff_const.mul contDiff_id)
+    rw [iteratedDeriv_fun_mul hb'.contDiffAt (f.smooth m).contDiffAt]
+    have hk := pow_le_one₀ (abs_nonneg x) (hx.trans hε1) (n := k)
+    refine (mul_le_of_le_one_left (norm_nonneg _) hk).trans ((norm_sum_le _ _).trans ?_)
+    rw [Finset.mul_sum]
+    apply Finset.sum_le_sum
+    intro i hi
+    have him : i ≤ m := Nat.le_of_lt_succ (Finset.mem_range.mp hi)
+    let j := m - i
+    let d := N + 1 - j
+    have hjd : j + d = N + 1 := by dsimp [j, d]; omega
+    have hdi : i < d := by dsimp [d, j]; omega
+    have hf : ‖iteratedDeriv j (f : ℝ → ℂ) x‖ ≤ ε ^ d * A := by
+      simpa only [hjd, A] using realTemperedDistribution_jet_bound f ε hε.le j d
+        (fun l hl ↦ hjet (j + l) (by omega)) x hx
+    have hbnd : ‖iteratedDeriv i (b : ℝ → ℂ) (ε⁻¹ * x)‖ ≤ B i := by
+      simpa [B] using SchwartzMap.le_seminorm' ℂ 0 i b (ε⁻¹ * x)
+    have hp : (ε⁻¹) ^ i * ε ^ d ≤ ε := by
+      rw [← pow_sub_mul_pow ε hdi.le, mul_left_comm, ← mul_pow, inv_mul_cancel₀ hε.ne', one_pow,
+        mul_one]
+      simpa using pow_le_pow_of_le_one hε.le hε1 (show 1 ≤ d - i by omega)
+    rw [iteratedDeriv_comp_const_smul (b.smooth i), norm_mul, norm_mul, norm_smul,
+      norm_pow, Real.norm_eq_abs, abs_of_pos (inv_pos.mpr hε), Complex.norm_natCast]
+    calc _ ≤ ((m.choose i : ℝ) * ((ε⁻¹) ^ i * B i)) * (ε ^ d * A) := by gcongr
+         _ = ((ε⁻¹) ^ i * ε ^ d) * ((m.choose i : ℝ) * B i * A) := by ring
+         _ ≤ _ := by gcongr
+  · have hout : ε⁻¹ * x ∉ tsupport (b : ℝ → ℂ) := by
+      intro h
+      have h' := hb h
+      rw [Metric.mem_closedBall, Real.dist_eq, sub_zero, abs_mul, abs_inv, abs_of_pos hε,
+        inv_mul_le_iff₀ hε, mul_one] at h'
+      exact hx h'
+    have heq : (fun y ↦ b (ε⁻¹ * y) * f y) =ᶠ[𝓝 x] 0 := by
+      have hcont : ContinuousAt (fun y : ℝ ↦ ε⁻¹ * y) x := by fun_prop
+      filter_upwards [hcont (notMem_tsupport_iff_eventuallyEq.mp hout)] with y hy
+      simp [show b (ε⁻¹ * y) = 0 from hy]
+    rw [heq.iteratedDeriv_eq, iteratedDeriv_const_zero, norm_zero, mul_zero]
+    positivity
+
+
+/-- Continuity bounds a tempered distribution by finitely many Schwartz seminorms.
+Localization and the shrinking-cutoff bound therefore make it vanish on a finite jet kernel. -/
+private theorem realTemperedDistribution_finite_jet (T : StrongDual ℂ 𝓢(ℝ, ℂ))
+    (hT : Distribution.dsupport (⇑T) ⊆ {(0 : ℝ)}) :
+    ∃ N : ℕ, ∀ f : 𝓢(ℝ, ℂ), (∀ j ≤ N, iteratedDeriv j (f : ℝ → ℂ) 0 = 0) → T f = 0 := by
+  classical
+  obtain ⟨s, C, -, hC⟩ := Seminorm.bound_of_continuous (schwartz_withSeminorms ℂ ℝ ℂ)
+    ((normSeminorm ℂ ℂ).comp T.toLinearMap) T.continuous.norm
+  let N := s.sup Prod.snd
+  refine ⟨N, fun f hf ↦ ?_⟩
+  let χ : ContDiffBump (0 : ℝ) := ⟨1 / 2, 1, by norm_num, by norm_num⟩
+  let b : 𝓢(ℝ, ℂ) := (χ.hasCompactSupport.comp_left Complex.ofReal_zero).toSchwartzMap
+    (Complex.ofRealCLM.contDiff.comp χ.contDiff)
+  have hb : tsupport (b : ℝ → ℂ) ⊆ Metric.closedBall 0 1 :=
+    (tsupport_comp_subset Complex.ofReal_zero _).trans χ.tsupport_eq.subset
+  have h1 : (b : ℝ → ℂ) =ᶠ[𝓝 0] 1 := by
+    filter_upwards [χ.eventuallyEq_one] with x hx
+    change ((χ x : ℝ) : ℂ) = 1
+    simp [show χ x = 1 from hx]
+  choose D hD hbound using fun i : s ↦ realTemperedDistribution_cutoff_bound b f hb N i.val.2
+    (Finset.le_sup (f := Prod.snd) i.property) hf
+  let M := ∑ i : s, D i
+  have hM : 0 ≤ M := Finset.sum_nonneg fun i _ ↦ hD i
+  have hsmall (ε : ℝ) (hε : 0 < ε) (hε1 : ε ≤ 1) : ‖T f‖ ≤ (C : ℝ) * (ε * M) := by
+    let g := SchwartzMap.smulLeftCLM ℂ (fun x : ℝ ↦ b (ε⁻¹ * x)) f
+    have htemp : (fun x : ℝ ↦ b (ε⁻¹ * x)).HasTemperateGrowth := by fun_prop
+    have hc : Tendsto (fun x : ℝ ↦ ε⁻¹ * x) (𝓝 0) (𝓝 0) := by
+      simpa only [mul_zero] using (continuous_const_mul ε⁻¹).tendsto (0 : ℝ)
+    have heq : T g = T f := realTemperedDistribution_cutoff_eq T hT _ htemp (hc h1) f
+    rw [← heq]
+    refine (hC g).trans ?_
+    change (C : ℝ) * s.sup (schwartzSeminormFamily ℂ ℝ ℂ) g ≤ _
+    gcongr
+    apply Seminorm.finset_sup_apply_le (mul_nonneg hε.le hM)
+    intro i hi
+    exact (hbound ⟨i, hi⟩ ε hε hε1 i.1).trans (mul_le_mul_of_nonneg_left
+      (Finset.single_le_sum (fun j _ ↦ hD j) (Finset.mem_univ (⟨i, hi⟩ : s))) hε.le)
+  apply norm_le_zero_iff.mp
+  have ht : Tendsto (fun ε : ℝ ↦ (C : ℝ) * (ε * M)) (𝓝[>] 0) (𝓝 0) := by
+    have hid : Tendsto (fun ε : ℝ ↦ ε) (𝓝[>] 0) (𝓝 0) := nhdsWithin_le_nhds
+    simpa only [zero_mul, mul_zero] using (hid.mul_const M).const_mul (C : ℝ)
+  apply le_of_tendsto_of_tendsto tendsto_const_nhds ht
+  filter_upwards [self_mem_nhdsWithin, mem_nhdsWithin_of_mem_nhds (gt_mem_nhds (zero_lt_one : (0 : ℝ) < 1))] with ε hε hε1
+  exact hsmall ε hε hε1.le
+
 /-- Paper: Theorem 5.3.2.1, p. 243.
 Every real tempered distribution supported at zero is a finite linear combination of
 derivatives of the Dirac distribution at zero. -/
 theorem realTemperedDistribution_eq_sum_diracDerivative (T : StrongDual ℂ 𝓢(ℝ, ℂ))
     (hT : TemperedSupportedAtOrigin T) :
     ∃ (N : ℕ) (c : Fin (N + 1) → ℂ),
-      T = ∑ k : Fin (N + 1), c k • realDiracDerivative k.val := by sorry
+      T = ∑ k : Fin (N + 1), c k • realDiracDerivative k.val := by
+  obtain ⟨N, hN⟩ := realTemperedDistribution_finite_jet T hT
+  let L (k : Fin (N + 1)) := (realDiracDerivative k.val).toLinearMap
+  have hker : (⨅ k, LinearMap.ker (L k)) ≤ LinearMap.ker T.toLinearMap := by
+    intro f hf
+    apply hN f
+    intro j hj
+    have hz := (Submodule.mem_iInf _).mp hf (⟨j, Nat.lt_succ_of_le hj⟩ : Fin (N + 1))
+    change realDiracDerivative j f = 0 at hz
+    rw [realSchwartzFlatQuotient_strongDual_dirac, mul_eq_zero] at hz
+    exact hz.resolve_left (pow_ne_zero _ (by norm_num))
+  obtain ⟨c, hc⟩ := (Submodule.mem_span_range_iff_exists_fun ℂ).mp (mem_span_of_iInf_ker_le_ker hker)
+  refine ⟨N, c, ?_⟩
+  ext f
+  simpa only [sum_apply, LinearMap.sum_apply, LinearMap.smul_apply, smul_apply, L,
+    ContinuousLinearMap.coe_coe] using (LinearMap.congr_fun hc f).symm
 
 /-- Paper: Theorem 5.3.2.1(1), p. 243.
 The flat real Schwartz subspace is the intersection of the kernels of all Dirac derivatives. -/
