@@ -3,6 +3,11 @@ module
 public import RiemannMasullo.Ch13_ZerosHecke.Sec3
 public import Mathlib.NumberTheory.NumberField.Cyclotomic.Basic
 public import Mathlib.NumberTheory.LSeries.WeakPNT
+import Mathlib.NumberTheory.NumberField.Cyclotomic.Ideal
+import Mathlib.MeasureTheory.Integral.IntegralEqImproper
+import Mathlib.Analysis.Calculus.BumpFunction.Normed
+import all RiemannMasullo.Ch12_TraceGeometric.Sec5
+import all RiemannMasullo.AppA_AlgebraicNT.Sec3
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 import RiemannMasullo.AppB_AnalyticNT.Sec4b
 
@@ -15,7 +20,7 @@ Nothing imports this file.
 @[expose] public noncomputable section
 
 open Function IsDedekindDomain MeasureTheory NumberField Set
-open scoped NNReal
+open scoped NNReal ContDiff
 
 namespace RiemannMasullo
 
@@ -463,6 +468,398 @@ private theorem criticalTraceFormula_false_smoothed_shells
   have h' := (h.comp h₄).const_mul (2 : ℂ)
   simpa [Function.comp_def, a, show Nat.totient 4 = 2 by decide, ← mul_assoc] using h'
 
+
+local notation "ν(" x ")" => (((ideleClassNorm Gauss x).val : ℝ))
+local notation "radial(" w ", " x ")" => ((Real.sqrt ν(x) : ℂ) * w ν(x))
+
+/-- A compact positive-axis profile gives a smooth radial test with its square-root
+norm factor. Its positive polar moment is the volume times the integral of the profile. -/
+private theorem criticalTraceFormula_false_radial (w : ℝ → ℂ) (hw : ContDiff ℝ ∞ w)
+    (hs : HasCompactSupport w) (hpos : tsupport w ⊆ Ioi 0) :
+    ∃ φ : D[Gauss], (∀ x, φ.val x = radial(w, x)) ∧
+      gaussianPole(φ, 1 / 2) = (((normOneIdeleClassTamagawaMeasure Gauss univ).toReal : ℝ) : ℂ) *
+        ∫ y in Ioi 0, w y := by
+  let H (x : ℝ) : ℂ := ((Real.exp (x / 2) : ℝ) : ℂ) * w (Real.exp x)
+  have hH : ContDiff ℝ ∞ H := (Complex.ofRealCLM.contDiff.comp
+    (Real.contDiff_exp.comp (contDiff_id.div_const 2))).mul (hw.comp Real.contDiff_exp)
+  have hS : HasCompactSupport (w ∘ Real.exp) := by
+    apply HasCompactSupport.intro (hs.image_of_continuousOn (Real.continuousOn_log.mono
+      (fun x hx ↦ (mem_Ioi.mp (hpos hx)).ne')))
+    intro x hx
+    change w (Real.exp x) = 0
+    exact image_eq_zero_of_notMem_tsupport fun h ↦ hx ⟨_, h, Real.log_exp _⟩
+  obtain ⟨φ, hφ⟩ := exists_normTest (F := Gauss) H hH (hS.mul_left : HasCompactSupport H)
+  have hroot (x : ℝ) (hx : 0 < x) : Real.exp (Real.log x / 2) = Real.sqrt x := by
+    rw [Real.sqrt_eq_rpow, Real.rpow_def_of_pos hx]
+    congr 1
+    ring
+  refine ⟨φ, fun x ↦ ?_, ?_⟩
+  · rw [hφ]
+    have hx : 0 < ν(x) := NNReal.coe_pos.mpr (Units.zero_lt _)
+    simp only [H, hroot _ hx, Real.exp_log hx]
+  · have hm := normTest_mellin H hH.continuous φ hφ (1 : PontryaginDual C[Gauss]) (1 / 2)
+    simp only [modulatedFourierMellin, relativeVerticalStrip, preimage_univ, indicator_univ,
+      PontryaginDual.one_apply, implies_true, ite_true, Circle.coe_one, mul_one] at hm
+    refine hm.trans (congrArg (_ * ·) ?_)
+    have hi := grh_shift_integral H hH.continuous (fun _ ↦ (1 : ℂ)) (fun _ ↦ rfl) 0 (1 / 2)
+    simp only [sub_zero, mul_one, Complex.ofReal_zero, mul_zero, Complex.exp_zero, one_mul] at hi
+    refine hi.trans ((integral_congr_ae (.of_forall fun x ↦ ?_)).trans (integral_comp_exp w))
+    change ((Real.exp (x / 2) : ℝ) : ℂ) * w (Real.exp x) * Complex.exp (1 / 2 * x) = _
+    rw [show (1 / 2 : ℂ) * x = ((x / 2 : ℝ) : ℂ) by push_cast; ring, ← Complex.ofReal_exp,
+      Algebra.smul_def]
+    change _ = ((Real.exp x : ℝ) : ℂ) * w (Real.exp x)
+    rw [mul_right_comm, ← Complex.ofReal_mul, ← Real.exp_add, add_halves]
+
+/-- A second difference of a single compact bump produces a profile of nonzero
+integral. Its supports lie in [1,48], well away from the singular local shell. -/
+private theorem criticalTraceFormula_false_radial_difference (τ : ℝ≥0ˣ →ₜ* C[Gauss])
+    (hτ : RightInverse τ (ideleClassNorm Gauss)) :
+    ∃ (η φ : D[Gauss]) (w : ℝ → ℂ), (∀ x, φ.val x = diffTest(τ, 1, step₄, η, x)) ∧
+      (∀ x, φ.val x = radial(w, x)) ∧ ContDiff ℝ ∞ w ∧
+      HasCompactSupport w ∧ tsupport w ⊆ Icc 1 48 ∧ (∫ y in Ioi 0, w y) ≠ 0 ∧
+      gaussianPole(φ, 1 / 2) =
+        (((normOneIdeleClassTamagawaMeasure Gauss univ).toReal : ℝ) : ℂ) * ∫ y in Ioi 0, w y := by
+  let β : ContDiffBump (2 : ℝ) := ⟨1 / 2, 1, by norm_num, by norm_num⟩
+  let B (x : ℝ) : ℂ := (β x : ℂ)
+  let w (x : ℝ) : ℂ := (1 / 4) * B ((1 / 16) * x) - B ((1 / 4) * x) + B x
+  have hB : ContDiff ℝ ∞ B := Complex.ofRealCLM.contDiff.comp β.contDiff
+  have hS : HasCompactSupport B := β.hasCompactSupport.comp_left Complex.ofReal_zero
+  have hzero (x : ℝ) (hx : x < 1 ∨ 3 < x) : B x = 0 := by
+    apply Complex.ofReal_eq_zero.mpr
+    apply β.zero_of_le_dist
+    rw [Real.dist_eq]
+    change 1 ≤ |x - 2|
+    rcases hx with h | h
+    · rw [abs_of_neg (by linarith)]; linarith
+    · rw [abs_of_pos (by linarith)]; linarith
+  have hSB : tsupport B ⊆ Icc 1 3 := by
+    apply closure_minimal _ isClosed_Icc
+    intro x hx
+    by_contra h
+    exact hx (hzero x (by simpa only [mem_Icc, not_and_or, not_le] using h))
+  have hBW : tsupport w ⊆ Icc 1 48 := by
+    apply closure_minimal _ isClosed_Icc
+    intro x hx
+    by_contra h
+    have hc : x < 1 ∨ 48 < x := by simpa only [mem_Icc, not_and_or, not_le] using h
+    have h₁ : B (1 / 16 * x) = 0 := hzero _ (hc.imp (by intro; linarith) (by intro; linarith))
+    have h₂ : B (1 / 4 * x) = 0 := hzero _ (hc.imp (by intro; linarith) (by intro; linarith))
+    have h₃ : B x = 0 := hzero _ (hc.imp id (by intro; linarith))
+    exact hx (by simp only [w, h₁, h₂, h₃, mul_zero, sub_zero, add_zero])
+  have hW : ContDiff ℝ ∞ w :=
+    ((contDiff_const.mul (hB.comp (contDiff_const.mul contDiff_id))).sub
+      (hB.comp (contDiff_const.mul contDiff_id))).add hB
+  have hWS : HasCompactSupport w := isCompact_Icc.of_isClosed_subset (isClosed_tsupport _) hBW
+  have hWP : tsupport w ⊆ Ioi 0 := fun x hx ↦ lt_of_lt_of_le zero_lt_one (hBW hx).1
+  obtain ⟨η, hη, _⟩ := criticalTraceFormula_false_radial B hB hS
+    (fun x hx ↦ lt_of_lt_of_le zero_lt_one (hSB hx).1)
+  obtain ⟨φ, hφ, hP⟩ := criticalTraceFormula_false_radial w hW hWS hWP
+  refine ⟨η, φ, w, fun x ↦ ?_, hφ, hW, hWS, hBW, ?_, hP⟩
+  · have hnorm (t : ℝ≥0ˣ) : ν((τ t)⁻¹ * x) = ν(x) / (t.val : ℝ) := by
+      rw [map_mul, map_inv, hτ, Units.val_mul, Units.val_inv_eq_inv_val, NNReal.coe_mul,
+        NNReal.coe_inv, div_eq_inv_mul]
+    have hx : 0 ≤ ν(x) := NNReal.coe_nonneg _
+    simp only [hφ, hη, hnorm, one_mul, Units.val_pow_eq_pow_val, NNReal.coe_pow,
+      Units.val_mk0, NNReal.coe_ofNat, Units.val_one, NNReal.coe_one, div_one]
+    have h₄ : Real.sqrt (4 : ℝ) = 2 := (Real.sqrt_eq_iff_mul_self_eq (by norm_num) (by norm_num)).mpr (by norm_num)
+    have h₁₆ : Real.sqrt (16 : ℝ) = 4 := (Real.sqrt_eq_iff_mul_self_eq (by norm_num) (by norm_num)).mpr (by norm_num)
+    norm_num [w, Real.sqrt_div hx, h₄, h₁₆, div_eq_inv_mul]
+    ring
+  · have hI : ∫ y in Ioi (0 : ℝ), w y = ∫ y, w y := by
+      apply setIntegral_eq_integral_of_forall_compl_eq_zero
+      exact fun x hx ↦ image_eq_zero_of_notMem_tsupport fun h ↦ hx (hWP h)
+    let D (a : ℝ) (x : ℝ) := B (a * x)
+    have hD (a : ℝ) (ha : a ≠ 0) : Integrable (D a) := by
+      have hcont : Continuous (D a) := hB.continuous.comp (continuous_const.mul continuous_id)
+      have hcompact : HasCompactSupport (D a) := hS.comp_smul (c := a) ha
+      exact hcont.integrable_of_hasCompactSupport hcompact
+    have hset : (∫ y, w y) = ∫ y, B y := by
+      change (∫ y, (1 / 4 : ℂ) * D (1 / 16) y - D (1 / 4) y + B y) = _
+      have h₁ := (hD (1 / 16) (by norm_num)).const_mul (1 / 4 : ℂ)
+      have h₂ := hD (1 / 4) (by norm_num)
+      rw [integral_add (f := fun y ↦ (1 / 4 : ℂ) * D (1 / 16) y - D (1 / 4) y)
+        (h₁.sub h₂) (hB.continuous.integrable_of_hasCompactSupport hS),
+        integral_sub h₁ h₂, integral_const_mul]
+      simp only [D, Measure.integral_comp_mul_left]
+      norm_num [Algebra.smul_def]
+      ring
+    rw [hI, hset, show (∫ y, B y) = ((∫ y, β y : ℝ) : ℂ) from integral_ofReal]
+    exact Complex.ofReal_ne_zero.mpr (ne_of_gt (β.integral_pos (μ := volume)))
+
+attribute [local instance] instFiniteCompletionUnitsMeasurableSec4b instFiniteCompletionMeasurableSec4b
+
+local notation "mass(" F ", " v ")" =>
+  (((finiteLocalMultiplicativeTamagawaMeasure F v (HeightOneSpectrum.adicCompletionIntegers F v).units).toReal : ℝ) : ℂ)
+
+/-- All multiplicative shells are translates of the integer units, and hence have equal mass. -/
+private theorem criticalTraceFormula_false_shell_measure {F : Type} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (k : ℕ) :
+    finiteLocalMultiplicativeTamagawaMeasure F v {u : (v.adicCompletion F)ˣ | ‖u.val‖ = (v.asIdeal.absNorm : ℝ) ^ k} =
+      finiteLocalMultiplicativeTamagawaMeasure F v (v.adicCompletionIntegers F).units := by
+  classical
+  let K := v.adicCompletion F
+  let q : ℝ := v.asIdeal.absNorm
+  let μ := finiteLocalMultiplicativeTamagawaMeasure F v
+  let U := (v.adicCompletionIntegers F).units
+  let : BorelSpace Kˣ := ⟨rfl⟩
+  let : μ.IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v
+  let val : Valuation K (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let a : Kˣ := (Units.mk0 (π : K) hπ.ne_zero)⁻¹ ^ k
+  have hq : 0 < q := by dsimp [q]; exact_mod_cast (Nat.zero_lt_of_lt (NumberField.HeightOneSpectrum.one_lt_absNorm v))
+  have ha : ‖a.val‖ = q ^ k := by
+    rw [show a.val = ((π : K)⁻¹) ^ k by rfl, norm_pow, norm_inv, norm_uniformizer_adicCompletion v _ hπ, inv_inv]
+  have hU (u : Kˣ) : u ∈ U ↔ ‖u.val‖ = 1 :=
+    HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.trans
+      Valued.toNormedField.norm_eq_one_iff.symm
+  let S := {u : Kˣ | ‖u.val‖ = q ^ k}
+  have he : (fun u : Kˣ ↦ a * u) ⁻¹' S = (U : Set Kˣ) := by
+    ext u
+    change ‖(a * u).val‖ = q ^ k ↔ u ∈ U
+    rw [Units.val_mul, norm_mul, ha, hU]
+    exact ⟨fun h ↦ mul_left_cancel₀ (pow_ne_zero k hq.ne') (h.trans (mul_one _).symm),
+      fun h ↦ by rw [h, mul_one]⟩
+  exact (measure_preimage_mul μ a S).symm.trans (congrArg μ he)
+
+private theorem criticalTraceFormula_false_exists_shell {F : Type} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (u : (v.adicCompletion F)ˣ) (hu : 1 < ‖u.val‖) :
+    ∃ k : ℕ, ‖u.val‖ = (v.asIdeal.absNorm : ℝ) ^ (k + 1) := by
+  let j : ℤ := WithZero.log (Valued.v u.val)
+  have hn : ‖u.val‖ = (v.asIdeal.absNorm : ℝ) ^ j := norm_adicCompletion_eq_zpow F v u.ne_zero
+  have hq : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast NumberField.HeightOneSpectrum.one_lt_absNorm v
+  have hj : 0 < j := (zpow_lt_zpow_iff_right₀ hq).mp (by simpa [← hn] using hu)
+  refine ⟨j.toNat - 1, hn.trans ?_⟩
+  rw [← zpow_natCast]
+  congr 1
+  omega
+
+/-- Integration of a radial compact cutoff supported on norms above one is a
+finite sum over the positive powers of the residue cardinality. -/
+private theorem criticalTraceFormula_false_radial_shells {F : Type} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (w : ℝ → ℂ) (hs : HasCompactSupport w)
+    (hlo : ∀ y ≤ 1, w y = 0) :
+    (∫ u : (v.adicCompletion F)ˣ, w ‖u.val‖ ∂finiteLocalMultiplicativeTamagawaMeasure F v) =
+      mass(F, v) * ∑' k : ℕ, w ((v.asIdeal.absNorm : ℝ) ^ (k + 1)) := by
+  classical
+  let K := v.adicCompletion F
+  let μ := finiteLocalMultiplicativeTamagawaMeasure F v
+  let q : ℝ := v.asIdeal.absNorm
+  have hq : 1 < q := by dsimp [q]; exact_mod_cast NumberField.HeightOneSpectrum.one_lt_absNorm v
+  obtain ⟨R, hR⟩ := hs.bddAbove
+  obtain ⟨N, hN⟩ := pow_unbounded_of_one_lt R hq
+  have hout (k : ℕ) (hk : N ≤ k) : w (q ^ (k + 1)) = 0 := by
+    exact image_eq_zero_of_notMem_tsupport fun h ↦
+      ((hN.trans_le (pow_le_pow_right₀ hq.le (by omega : N ≤ k + 1))).not_ge (hR h))
+  let B (k : ℕ) (u : Kˣ) : ℂ := if ‖u.val‖ = q ^ (k + 1) then w (q ^ (k + 1)) else 0
+  have he (u : Kˣ) : w ‖u.val‖ = ∑ k ∈ Finset.range N, B k u := by
+    by_cases hu : 1 < ‖u.val‖
+    · obtain ⟨j, hj⟩ := criticalTraceFormula_false_exists_shell v u hu
+      change ‖u.val‖ = q ^ (j + 1) at hj
+      have hne (k : ℕ) (hk : k ≠ j) : ‖u.val‖ ≠ q ^ (k + 1) := fun h ↦
+        hk (by have := (pow_right_injective₀ (zero_lt_one.trans hq) hq.ne') (h.symm.trans hj); omega)
+      rw [Finset.sum_eq_single j (fun k _ hk ↦ by simp [B, hne k hk])
+        (fun h ↦ by simp [B, hj, hout j (by simpa using h)]), hj]
+      simp [B, hj]
+    · rw [hlo _ (le_of_not_gt hu)]
+      symm
+      apply Finset.sum_eq_zero
+      intro k _
+      have hne : ‖u.val‖ ≠ q ^ (k + 1) := fun h ↦ hu (h ▸ one_lt_pow₀ hq (Nat.succ_ne_zero k))
+      simp [B, hne]
+  let : BorelSpace Kˣ := ⟨rfl⟩
+  let : μ.IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v
+  let S (k : ℕ) := {u : Kˣ | ‖u.val‖ = q ^ (k + 1)}
+  have hm (k) : MeasurableSet (S k) := (isClosed_eq (continuous_norm.comp Units.continuous_val)
+    continuous_const).measurableSet
+  have hfin (k) : μ (S k) ≠ ⊤ := by
+    rw [show μ (S k) = _ from criticalTraceFormula_false_shell_measure v (k + 1)]
+    exact (Submonoid.units_isCompact (isCompact_iff_compactSpace.mpr
+      (compactSpace_adicCompletionIntegers v (K := F)))).measure_lt_top.ne
+  have hB (k : ℕ) : Integrable (B k) μ := by
+    change Integrable ((S k).indicator (fun _ ↦ w (q ^ (k + 1)))) μ
+    exact (integrable_indicator_iff (hm k)).mpr (integrableOn_const (hfin k))
+  rw [show (fun u : Kˣ ↦ w ‖u.val‖) = fun u ↦ ∑ k ∈ Finset.range N, B k u from funext he,
+    integral_finsetSum _ fun k _ ↦ hB k,
+    tsum_eq_sum (s := Finset.range N) (fun k hk ↦ hout k (by simpa using hk)), Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro k _
+  change (∫ u, (S k).indicator (fun _ ↦ _) u ∂μ) = _
+  rw [integral_indicator (hm k), setIntegral_const, Complex.real_smul, measureReal_def,
+    show μ (S k) = _ from criticalTraceFormula_false_shell_measure v (k + 1)]
+
+/-- Away from the singular shell, the square-root norm in the test cancels the
+denominator of the finite principal value. -/
+private theorem criticalTraceFormula_false_finite_pv {F : Type} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (w : ℝ → ℂ) (hs : HasCompactSupport w)
+    (hpos : tsupport w ⊆ Icc 1 48) (n : ℕ) (hn : n ≠ 0) (b : BruhatCompactSupport (v.adicCompletion F)ˣ)
+    (hb : ∀ u : (v.adicCompletion F)ˣ, b.val u =
+      (Real.sqrt (‖u.val‖ / (4 : ℝ) ^ n) : ℂ) * w (‖u.val‖ / (4 : ℝ) ^ n)) :
+    finiteConnesWeilPrincipalValue v 1 b = (2 : ℂ)⁻¹ ^ n * (mass(F, v) *
+      ∑' k : ℕ, w ((v.asIdeal.absNorm : ℝ) ^ (k + 1) / (4 : ℝ) ^ n)) := by
+  let K := v.adicCompletion F
+  let T := (4 : ℝ) ^ n
+  let f (y : ℝ) := w (y / T)
+  have hT : 1 < T := one_lt_pow₀ (by norm_num : (1 : ℝ) < 4) hn
+  have hTpos : 0 < T := zero_lt_one.trans hT
+  have hs' : HasCompactSupport f := by simpa [f, div_eq_inv_mul] using hs.comp_smul (c := T⁻¹) (inv_ne_zero hTpos.ne')
+  have hlo (y : ℝ) (hy : y ≤ 1) : f y = 0 := by
+    exact image_eq_zero_of_notMem_tsupport (f := w) fun h ↦
+      ((div_lt_one hTpos).mpr (hy.trans_lt hT)).not_ge (hpos h).1
+  have hzero : b.val 1 = 0 := by
+    rw [hb, Units.val_one, norm_one, show w (1 / (4 : ℝ) ^ n) = 0 from hlo 1 le_rfl, mul_zero]
+  have hp := (finiteConnesWeilPrincipalValue_of_apply_one_zero v b hzero).2
+  have hroot : Real.sqrt T = (2 : ℝ) ^ n := by
+    rw [show T = ((2 : ℝ) ^ n) ^ 2 by dsimp [T]; rw [← pow_mul, mul_comm, pow_mul]; norm_num,
+      Real.sqrt_sq (by positivity)]
+  rw [hp, ← criticalTraceFormula_false_radial_shells v f hs' hlo, ← integral_const_mul]
+  apply integral_congr_ae (.of_forall fun u ↦ ?_)
+  by_cases hu : 1 < ‖u.val‖
+  · have hsub : ‖1 - u.val‖ = ‖u.val‖ := by
+      rw [sub_eq_add_neg, IsUltrametricDist.norm_add_eq_max_of_norm_ne_norm
+        (by simpa using hu.ne : ‖(1 : K)‖ ≠ ‖-u.val‖), norm_neg, norm_one, max_eq_right hu.le]
+    rw [hb, hsub, Real.sqrt_div (norm_nonneg _), hroot]
+    have hsq : (Real.sqrt ‖u.val‖ : ℂ) ^ 2 = (‖u.val‖ : ℂ) := by
+      exact_mod_cast Real.sq_sqrt (norm_nonneg u.val)
+    change _ = (2 : ℂ)⁻¹ ^ n * w _
+    push_cast
+    rw [inv_pow]
+    field_simp [show (‖u.val‖ : ℂ) ≠ 0 from Complex.ofReal_ne_zero.mpr (norm_ne_zero_iff.mpr u.ne_zero)]
+    linear_combination w (‖u.val‖ / (4 : ℝ) ^ n) * hsq
+  · rw [hb, show w (‖u.val‖ / (4 : ℝ) ^ n) = 0 from hlo _ (le_of_not_gt hu)]
+    simp [f, hlo _ (le_of_not_gt hu)]
+private theorem criticalTraceFormula_false_odd_shell (p k : ℕ) (hp : p.Prime) (hodd : ¬ p ∣ 4) :
+    let P : Ideal ℤ := Ideal.span {(p : ℤ)}
+    (∑' Q : P.primesOver (𝓞 Gauss),
+      if Q.val.inertiaDeg ℤ ∣ k then Real.log (Q.val.absNorm : ℝ) else 0) =
+      if (p : ZMod 4) ^ k = 1 then 2 * Real.log p else 0 := by
+  let P : Ideal ℤ := Ideal.span {(p : ℤ)}
+  have hP0 : P ≠ ⊥ := by simpa [P] using hp.ne_zero
+  have : P.IsPrime := (Ideal.span_singleton_prime (Int.natCast_ne_zero.mpr hp.ne_zero)).2
+    (Int.prime_iff_natAbs_prime.mpr (by simpa using hp))
+  have : P.IsMaximal := Ideal.IsPrime.isMaximal inferInstance hP0
+  let : Fintype (P.primesOver (𝓞 Gauss)) := (IsDedekindDomain.primesOver_finite P (𝓞 Gauss)).fintype
+  let f := orderOf (p : ZMod 4)
+  have : Fact p.Prime := ⟨hp⟩
+  have : IsCyclotomicExtension {4} ℚ Gauss := CyclotomicField.isCyclotomicExtension 4 ℚ
+  have hf (Q : P.primesOver (𝓞 Gauss)) : Q.val.inertiaDeg ℤ = f := by
+    have := Q.property.1
+    have := Q.property.2
+    exact IsCyclotomicExtension.Rat.inertiaDeg_eq_of_not_dvd p Gauss Q.val hodd
+  have he (Q : P.primesOver (𝓞 Gauss)) : Q.val.ramificationIdx ℤ = 1 := by
+    have := Q.property.1
+    have := Q.property.2
+    exact IsCyclotomicExtension.Rat.ramificationIdx_eq_of_not_dvd p Gauss Q.val hodd
+  have hcard : Fintype.card (P.primesOver (𝓞 Gauss)) * f = 2 := by
+    have h := Ideal.sum_ramification_inertia_eq_finrank P (𝓞 Gauss)
+    simpa only [he, hf, one_mul, Finset.sum_const, Finset.card_univ, smul_eq_mul,
+      RingOfIntegers.rank, IsCyclotomicExtension.Rat.finrank 4 Gauss,
+      show Nat.totient 4 = 2 by decide] using h
+  have hlog (Q : P.primesOver (𝓞 Gauss)) : Real.log (Q.val.absNorm : ℝ) = f * Real.log p := by
+    have := Q.property.1
+    have := Q.property.2
+    have hn : Q.val.absNorm = p ^ f := by
+      rw [← Ideal.absNorm_pow_inertiaDeg P Q.val, hf Q]
+      simp [P]
+    rw [hn, Nat.cast_pow, Real.log_pow]
+  change (∑' Q : P.primesOver (𝓞 Gauss), _) = _
+  rw [tsum_fintype]
+  by_cases h : f ∣ k
+  · simp only [hf, h, ite_true, hlog, orderOf_dvd_iff_pow_eq_one.mp h,
+      Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ← mul_assoc, ← Nat.cast_mul, hcard]
+    norm_num
+  · have hn : (p : ZMod 4) ^ k ≠ 1 := fun hk ↦ h (orderOf_dvd_iff_pow_eq_one.mpr hk)
+    simp [hf, h, hn]
+
+local notation "oddShellWeight(" m ")" =>
+  (if IsPrimePow (m : ℕ) ∧ (m : ℕ).minFac ≠ 2 then
+    ∑' Q : (Ideal.span {((m : ℕ).minFac : ℤ)}).primesOver (𝓞 Gauss),
+      if Q.val.inertiaDeg ℤ ∣ (m : ℕ).factorization (m : ℕ).minFac
+        then Real.log (Q.val.absNorm : ℝ) else 0
+  else (0 : ℝ))
+
+/-- The weights of all unramified prime-ideal powers over a rational integer are
+twice the rational von Mangoldt weight in the class one modulo four. -/
+private theorem criticalTraceFormula_false_odd_weight (m : ℕ) :
+    oddShellWeight(m) = 2 * ArithmeticFunction.vonMangoldt.residueClass (1 : ZMod 4) m := by
+  classical
+  simp only [ArithmeticFunction.vonMangoldt.residueClass, Set.indicator_apply, mem_ofPred_eq,
+    ArithmeticFunction.vonMangoldt_apply]
+  by_cases hm : IsPrimePow m
+  · have hp : m.minFac.Prime := Nat.minFac_prime hm.ne_one
+    by_cases htwo : m.minFac = 2
+    · have hdiv : 2 ∣ m := htwo ▸ Nat.minFac_dvd m
+      have hmod : (m : ZMod 4) ≠ 1 := by
+        obtain ⟨d, rfl⟩ := hdiv
+        intro h
+        have h' := (ZMod.natCast_eq_natCast_iff' (2 * d) 1 4).mp (by simpa using h)
+        omega
+      simp [htwo, hmod]
+    · have hodd : ¬ m.minFac ∣ 4 := fun h ↦ htwo
+        ((Nat.prime_dvd_prime_iff_eq hp Nat.prime_two).mp
+          (hp.dvd_of_dvd_pow (show m.minFac ∣ 2 ^ 2 by simpa using h)))
+      rw [ite_eq_left (And.intro hm htwo), ite_eq_left hm]
+      rw [criticalTraceFormula_false_odd_shell _ _ hp hodd]
+      have he : (m.minFac : ZMod 4) ^ m.factorization m.minFac = (m : ZMod 4) := by
+        exact_mod_cast congrArg (fun x : ℕ ↦ (x : ZMod 4)) hm.minFac_pow_factorization_eq
+      rw [he]
+      split_ifs <;> ring
+  · simp [hm]
+
+/-- A single ramified prime contributes a vanishing error after normalization.
+Only linearly many powers can occur below the translated support. -/
+private theorem criticalTraceFormula_false_prime_powers (q : ℝ) (hq : 2 ≤ q) (w : ℝ → ℂ) (hw : Continuous w)
+    (hs : HasCompactSupport w) :
+    Filter.Tendsto (fun n : ℕ ↦
+      (∑' k : ℕ, w (q ^ (k + 1) / (4 : ℝ) ^ n)) / (4 : ℂ) ^ n)
+      Filter.atTop (nhds 0) := by
+  classical
+  obtain ⟨R, hR⟩ := hs.bddAbove
+  obtain ⟨K, hK⟩ := exists_nat_gt R
+  have hKR : R < (2 : ℝ) ^ K := hK.trans_le (by exact_mod_cast Nat.lt_two_pow_self.le)
+  obtain ⟨M, _, hM⟩ := (hs.insert 0).exists_isMaxOn (insert_nonempty _ _) hw.norm.continuousOn
+  have hb x : ‖w x‖ ≤ ‖w M‖ := by
+    by_cases hx : w x = 0
+    · simp [hx]
+    · exact isMaxOn_iff.mp hM x (Or.inr (subset_tsupport _ (mem_support.mpr hx)))
+  have htr (n k : ℕ) (hk : 2 * n + K ≤ k) :
+      w (q ^ (k + 1) / (4 : ℝ) ^ n) = 0 := by
+    by_contra! h
+    have hr := hR (subset_tsupport _ (mem_support.mpr h))
+    have hpow : (2 : ℝ) ^ K * (4 : ℝ) ^ n ≤ 2 ^ (k + 1) := by
+      rw [show (4 : ℝ) = 2 ^ 2 by norm_num, ← pow_mul, ← pow_add]
+      exact pow_le_pow_right₀ (by norm_num) (by omega)
+    exact (not_lt_of_ge hr) (hKR.trans_le ((le_div_iff₀ (by positivity)).mpr
+      (hpow.trans (pow_le_pow_left₀ (by norm_num) hq _))))
+  have hnr := tendsto_self_mul_const_pow_of_lt_one (r := (4 : ℝ)⁻¹) (by norm_num) (by norm_num)
+  have hr := tendsto_pow_atTop_nhds_zero_of_lt_one (r := (4 : ℝ)⁻¹) (by norm_num) (by norm_num)
+  have hlim := (((hnr.const_mul 2).add (hr.const_mul (K : ℝ))).mul_const ‖w M‖)
+  simp only [mul_zero, add_zero, zero_mul] at hlim
+  refine squeeze_zero_norm (a := fun n : ℕ ↦ (2 * n + K : ℕ) * ‖w M‖ / (4 : ℝ) ^ n) ?_ ?_
+  · intro n
+    rw [tsum_eq_sum (s := Finset.range (2 * n + K)) (fun k hk ↦ htr n k (by simpa using hk)),
+      norm_div, norm_pow, Complex.norm_ofNat]
+    gcongr
+    exact (norm_sum_le _ _).trans ((Finset.sum_le_sum fun k _ ↦ hb _).trans_eq (by simp))
+  · refine hlim.congr fun n ↦ ?_
+    push_cast
+    rw [inv_pow, div_eq_mul_inv]
+    ring
+
+
+local notation "powers(" v ", " w ", " n ")" =>
+  (∑' k : ℕ, w (((Ideal.absNorm (HeightOneSpectrum.asIdeal v) : ℕ) : ℝ) ^ (k + 1) / (4 : ℝ) ^ (n : ℕ)))
+
+/-- Paper: Theorem 13.3.1.1, (13.3.1.5), p. 522. Regroup the powers of the
+Gaussian prime ideals by their rational norms. The finitely many exceptional
+places account for the different and the prime above two. -/
+theorem criticalTraceFormula_gaussian_prime_power_regroup (w : ℝ → ℂ) (hs : HasCompactSupport w) :
+    ∃ (S : Finset (HeightOneSpectrum (𝓞 Gauss))) (c : HeightOneSpectrum (𝓞 Gauss) → ℂ), ∀ n : ℕ,
+      (∑' v : HeightOneSpectrum (𝓞 Gauss), (Real.log (v.asIdeal.absNorm : ℝ) : ℂ) *
+        (mass(Gauss, v) * powers(v, w, n))) =
+        (∑' m : ℕ, ((oddShellWeight(m) : ℝ) : ℂ) * w ((m : ℝ) / (4 : ℝ) ^ n)) +
+        ∑ v ∈ S, c v * powers(v, w, n) := by
+  sorry
+
 open scoped ContDiff in
 /-- Paper: Theorem 13.3.1.1, (13.3.1.4)–(13.3.1.5), p. 522. Over the Gaussian
 field, compare the normalized finite-place terms of a translated second difference with
@@ -482,7 +879,55 @@ theorem criticalTraceFormula_gaussian_shell_comparison (τ : ℝ≥0ˣ →ₜ* C
         Filter.Tendsto (fun n ↦ (2 : ℂ)⁻¹ ^ n *
           (∑' v : HeightOneSpectrum (𝓞 Gauss), (Real.log (v.asIdeal.absNorm : ℝ) : ℂ) *
             finiteConnesWeilPrincipalValue v 1 (b n v)) -
-          splitShells(weight, n)) Filter.atTop (nhds 0) := by sorry
+          splitShells(weight, n)) Filter.atTop (nhds 0) := by
+  obtain ⟨η, φ, w, hd, hφ, hw, hc, hpos, hI, hP⟩ := criticalTraceFormula_false_radial_difference τ _hτ
+  let V : ℂ := (((normOneIdeleClassTamagawaMeasure Gauss univ).toReal : ℝ) : ℂ)
+  have hV : V ≠ 0 := by
+    dsimp [V]
+    rw [criticalTraceFormula_false_gaussian_volume]
+    exact Complex.ofReal_ne_zero.mpr (by positivity)
+  refine ⟨η, φ, w, hd, hP ▸ mul_ne_zero hV hI, hw, hc, fun y hy ↦
+    lt_of_lt_of_le zero_lt_one (hpos hy).1, ?_, fun b hb ↦ ?_⟩
+  · rw [hP, mul_div_cancel_left₀ _ hV]
+  obtain ⟨S, c, hsum⟩ := criticalTraceFormula_gaussian_prime_power_regroup w hc
+  have hlim (v : HeightOneSpectrum (𝓞 Gauss)) :=
+    (criticalTraceFormula_false_prime_powers (v.asIdeal.absNorm : ℝ)
+        (by exact_mod_cast NumberField.HeightOneSpectrum.one_lt_absNorm v) w hw.continuous hc).const_mul (c v)
+  have ht := tendsto_finsetSum S (fun v _ ↦ hlim v)
+  simp only [mul_zero, Finset.sum_const_zero] at ht
+  refine Filter.Tendsto.congr' ?_ ht
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℕ)] with n hn
+  have hp (v : HeightOneSpectrum (𝓞 Gauss)) := criticalTraceFormula_false_finite_pv v w hc hpos n hn.ne' (b n v) (by
+    intro u
+    rw [hb, hφ]
+    have hnorm : ν((τ (step₄ ^ n))⁻¹ * IdeleClassGroup.ofAdicCompletion (𝓞 Gauss) Gauss v u) =
+        ‖u.val‖ / (4 : ℝ) ^ n := by
+      rw [map_mul, map_inv, _hτ, ideleClassNorm_ofAdicCompletion]
+      simp only [Units.val_mul, Units.val_inv_eq_inv_val, Units.val_pow_eq_pow_val,
+        NNReal.coe_mul, NNReal.coe_inv, NNReal.coe_pow, Units.val_mk0, div_eq_inv_mul]
+      rfl
+    rw [hnorm])
+  have hl : (2 : ℂ)⁻¹ ^ n * (∑' v : HeightOneSpectrum (𝓞 Gauss),
+      (Real.log (v.asIdeal.absNorm : ℝ) : ℂ) * finiteConnesWeilPrincipalValue v 1 (b n v)) =
+        (∑' v : HeightOneSpectrum (𝓞 Gauss), (Real.log (v.asIdeal.absNorm : ℝ) : ℂ) *
+        (mass(Gauss, v) * powers(v, w, n))) / (4 : ℂ) ^ n := by
+    rw [← tsum_mul_left, ← tsum_div_const]
+    apply tsum_congr
+    intro v
+    rw [hp v]
+    rw [show (4 : ℂ) ^ n = ((2 : ℂ) ^ n) ^ 2 by rw [← pow_mul, mul_comm, pow_mul]; norm_num, inv_pow]
+    ring
+  have hr : (∑' m : ℕ, ((oddShellWeight(m) : ℝ) : ℂ) * w ((m : ℝ) / (4 : ℝ) ^ n)) / (4 : ℂ) ^ n = splitShells(w, n) := by
+    rw [← mul_div_assoc, ← tsum_mul_left]
+    congr 1
+    apply tsum_congr
+    intro m
+    rw [criticalTraceFormula_false_odd_weight, Complex.ofReal_mul, Complex.ofReal_ofNat, mul_assoc]
+  rw [hl, hsum, add_div, hr, add_sub_cancel_left, Finset.sum_div]
+  apply Finset.sum_congr rfl
+  intro v _
+  exact (mul_div_assoc ..).symm
+
 
 private theorem criticalTraceFormula_false_polar {F : Type} [Field F] [NumberField F]
     (τ : ℝ≥0ˣ →ₜ* C[F]) (hτ : RightInverse τ (ideleClassNorm F))
