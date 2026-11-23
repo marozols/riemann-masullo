@@ -16,6 +16,10 @@ import Mathlib.Analysis.Meromorphic.RCLike
 import Mathlib.Analysis.SpecialFunctions.Exponential
 import Mathlib.Geometry.Manifold.PartitionOfUnity
 import Mathlib.Topology.Algebra.IsOpenUnits
+import RiemannMasullo.ForMathlib.Topology.Algebra.Group.CompactOpen
+import RiemannMasullo.ForMathlib.Topology.Algebra.OpenSubgroup
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.InfiniteAdeleRing
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 
 /-! # Extensions by zero and holomorphic S-idelic zeta functions
@@ -3491,6 +3495,233 @@ theorem sLocalIdelicZFunction_entire_of_polarFree (r : RealModels) (c : ComplexM
       (fun z hz ↦ sLocalIdelicZFunction_eq_integral f ⟨χ, z, hz, rfl⟩) s
   simpa only [hEq] using hI'
 
+/-- Continuous complex quasi-characters on the units of a finite completion are locally constant. -/
+private theorem polarFree_finite_character_locallyConstant (v : V) (η : QuasiCharacter (v.adicCompletion F)ˣ) :
+    IsLocallyConstant η := by
+  let K := v.adicCompletion F
+  let : ProperSpace K := properSpace_adicCompletion v
+  let : LocallyCompactSpace Kˣ := (IsOpenUnits.isOpenEmbedding_unitsVal (M := K)).locallyCompactSpace
+  let : TotallyDisconnectedSpace Kˣ := (Units.isEmbedding_val₀ (G₀ := K)).isTotallyDisconnected_range.mp
+    (isTotallyDisconnected_of_totallyDisconnectedSpace _)
+  have hU : η ⁻¹' Metric.ball (1 : ℂ) 1 ∈ 𝓝 (1 : Kˣ) :=
+    η.continuous.continuousAt.preimage_mem_nhds (map_one η ▸ Metric.ball_mem_nhds _ zero_lt_one)
+  obtain ⟨H, hK, hH⟩ := exists_compact_openSubgroup_sub_mem_nhds hU
+  let : CompactSpace H := isCompact_iff_compactSpace.mp hK
+  let φ := η.toMonoidHom.comp H.toSubgroup.subtype
+  have hφ : φ = 1 := monoidHom_eq_one_of_compact_range_subset_ball φ
+    (isCompact_range (η.continuous.comp continuous_subtype_val)) (by
+      rintro _ ⟨u, rfl⟩
+      exact hH u.property)
+  apply (IsLocallyConstant.iff_eventually_eq _).mpr
+  intro x
+  have ht : Tendsto (fun y : Kˣ ↦ y / x) (𝓝 x) (𝓝 1) := by
+    simpa only [id_eq, div_self'] using (continuous_id.div_const x).tendsto x
+  filter_upwards [ht (H.isOpen.mem_nhds H.one_mem)] with y hy
+  have hk : η (y / x) = 1 := DFunLike.congr_fun hφ ⟨y/x, hy⟩
+  simpa only [div_mul_cancel, hk, one_mul] using (map_mul η (y / x) x)
+
+/-- A quasi-character twist of a finite polar-free factor again extends by zero at the origin. -/
+private theorem polarFree_finite_character_twist (v : V) (η : QuasiCharacter (v.adicCompletion F)ˣ)
+    (g : ℬ(v.adicCompletion F)) (hg : g (Multiplicative.ofAdd 0) = 0) :
+    ∃ h : ℬ(v.adicCompletion F), h (Multiplicative.ofAdd 0) = 0 ∧
+      ∀ x : (v.adicCompletion F)ˣ, h (Multiplicative.ofAdd x.val) = η x * g (Multiplicative.ofAdd x.val) := by
+  let G (x : (v.adicCompletion F)ˣ) := g (Multiplicative.ofAdd x.val)
+  obtain ⟨h₁, h₂⟩ := (exists_finitePlaceSchwartz_zeroExtension_iff v G).mp ⟨g, hg, fun _ ↦ rfl⟩
+  exact (exists_finitePlaceSchwartz_zeroExtension_iff v _).mpr
+    ⟨(polarFree_finite_character_locallyConstant v η).mul h₁, h₂.mul_left⟩
+
+/-- A character of a product factors into its archimedean part and its finite-place factors. -/
+private theorem polarFree_character_factors (η : QuasiCharacter Jₛ) :
+    ∃ (α : QuasiCharacter A∞ˣ) (β : ∀ v : S, QuasiCharacter (v.val.adicCompletion F)ˣ),
+      ∀ u : Aₛˣ, η (QuotientGroup.mk u) = α ((ContinuousMulEquiv.prodUnits _ _) u).1 *
+        ∏ v : S, β v ((ContinuousMulEquiv.piUnits ((ContinuousMulEquiv.prodUnits _ _) u).2) v) := by
+  classical
+  let P := ContinuousMulEquiv.prodUnits A∞ ((v : S) → v.val.adicCompletion F)
+  let D := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+  let q : Aₛˣ →ₜ* Jₛ := ⟨QuotientGroup.mk' _, QuotientGroup.continuous_mk⟩
+  let LP : A∞ˣ × ((v : S) → v.val.adicCompletion F)ˣ →ₜ* Aₛˣ := ⟨P.symm.toMonoidHom, P.symm.continuous⟩
+  let LD : ((v : S) → (v.val.adicCompletion F)ˣ) →ₜ* ((v : S) → v.val.adicCompletion F)ˣ := ⟨D.symm.toMonoidHom, D.symm.continuous⟩
+  let a : QuasiCharacter A∞ˣ := (η.comp q).comp (LP.comp (ContinuousMonoidHom.inl _ _))
+  let b := (η.comp q).comp ((LP.comp (ContinuousMonoidHom.inr _ _)).comp
+    LD)
+  let inj (v : S) : (v.val.adicCompletion F)ˣ →ₜ* ((w : S) → (w.val.adicCompletion F)ˣ) :=
+    ⟨MonoidHom.mulSingle (fun w : S ↦ (w.val.adicCompletion F)ˣ) v,
+      continuous_mulSingle (A := fun w : S ↦ (w.val.adicCompletion F)ˣ) v⟩
+  refine ⟨a, fun v ↦ b.comp (inj v), fun u ↦ ?_⟩
+  let z := P u
+  have hu : η (q u) = a z.1 * b (D z.2) := by
+    change η (q u) = η (q (P.symm (z.1, 1))) * η (q (P.symm (1, D.symm (D z.2))))
+    rw [D.symm_apply_apply, ← map_mul, ← map_mul, ← map_mul]
+    simp [z]
+  refine hu.trans (congrArg (a z.1 * ·) ?_)
+  change b (D z.2) = ∏ v, b (Pi.mulSingle v ((D z.2) v))
+  rw [← map_prod, Finset.univ_prod_mulSingle]
+
+/-- The archimedean factor of a polar-free tensor can be twisted in mixed coordinates. -/
+private theorem polarFree_arch_character_twist (r : RealModels) (c : ComplexModels)
+    (hm : ∀ x : ArchCoordinates, InfiniteAdeleRing.ringEquiv_mixedSpace F (assemble(r, c, x)) = x)
+    (α : QuasiCharacter A∞ˣ) (f : ℬ(A∞))
+    (f₀ : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces))
+    (hf : ∀ x : ArchCoordinates, f₀.val x = f (Multiplicative.ofAdd (assemble(r, c, x)))) :
+    ∃ (g : ℬ(A∞)) (g₀ : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces)),
+      (∀ x : ArchCoordinates, g₀.val x = g (Multiplicative.ofAdd (assemble(r, c, x)))) ∧
+      ∀ a : A∞ˣ, g (Multiplicative.ofAdd a.val) = α a * f (Multiplicative.ofAdd a.val) := by
+  let m := InfiniteAdeleRing.ringEquiv_mixedSpace F
+  let D := ContinuousMulEquiv.prodUnits (RealPlaces → ℝ) (ComplexPlaces → ℂ)
+  let R := ContinuousMulEquiv.piUnits (M := fun _ : RealPlaces ↦ ℝ)
+  let C := ContinuousMulEquiv.piUnits (M := fun _ : ComplexPlaces ↦ ℂ)
+  let J : ArchCoordinatesˣ →ₜ* A∞ˣ :=
+    ⟨Units.map m.symm.toMonoidHom, (continuous_infiniteAdeleRingEquivMixedSpace_symm F).units_map _⟩
+  let A : (RealPlaces → ℝˣ) →ₜ* (RealPlaces → ℝ)ˣ := R.symm
+  let B : (ComplexPlaces → ℂˣ) →ₜ* (ComplexPlaces → ℂ)ˣ := C.symm
+  let P : ((RealPlaces → ℝ)ˣ × (ComplexPlaces → ℂ)ˣ) →ₜ* ArchCoordinatesˣ := D.symm
+  let η := α.comp (J.comp (P.comp (A.prodMap B)))
+  obtain ⟨M, hM⟩ := (archimedeanFlatSchwartz_quasiCharacter_mul η).exists
+  let g₀ := M f₀
+  let h (x : A∞) := g₀.val (m x)
+  let g : ℬ(A∞) := ⟨h ∘ Multiplicative.toAdd, (mem_archimedeanSchwartzBruhat_iff h).mpr
+    ⟨g₀.val, fun _ ↦ rfl⟩⟩
+  refine ⟨g, g₀, fun x ↦ congrArg g₀.val (hm x).symm, fun a ↦ ?_⟩
+  let u := Units.map m.toMonoidHom a
+  let v := (R (D u).1, C (D u).2)
+  have hχ : η v = α a := by
+    change α (J (D.symm (R.symm (R (D u).1), C.symm (C (D u).2)))) = α a
+    rw [R.symm_apply_apply, C.symm_apply_apply, Prod.mk.eta, D.symm_apply_apply]
+    exact congrArg α (Units.ext (m.symm_apply_apply a.val))
+  have hval : assemble(r, c, m a.val) = a.val := m.injective (hm _)
+  change g₀.val (m a.val) = _
+  calc _ = η v * f₀.val (m a.val) := hM f₀ v
+       _ = _ := by rw [hχ, hf, hval]
+
+/-- Paper: Lemma 5.3.4.2(3), p. 260.
+Multiplying a polar-free test on the ideles by a continuous quasi-character of their
+quotient gives another polar-free test, for the same archimedean models. -/
+theorem sAdelePolarFree_exists_quasiCharacter_mul (r : RealModels) (c : ComplexModels) (η : Xₛ)
+    (f : sAdelePolarFree S r c) :
+    ∃ h : sAdelePolarFree S r c, ∀ u : Aₛˣ, h.val (Multiplicative.ofAdd u.val) =
+      η (QuotientGroup.mk u) * f.val (Multiplicative.ofAdd u.val) := by
+  classical
+  let r₀ : RealModels := fun w ↦ ⟨InfinitePlace.Completion.ringEquivRealOfIsReal w.2,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal w.2).toHomeomorph.isHomeomorph⟩
+  let c₀ : ComplexModels := fun w ↦ ⟨InfinitePlace.Completion.ringEquivComplexOfIsComplex w.2,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.2).toHomeomorph.isHomeomorph⟩
+  have hm (x : ArchCoordinates) : InfiniteAdeleRing.ringEquiv_mixedSpace F (assemble(r₀, c₀, x)) = x := by
+    rw [InfiniteAdeleRing.ringEquiv_mixedSpace_apply]
+    apply Prod.ext <;> funext w
+    · simp [w.2, r₀, ← InfinitePlace.Completion.ringEquivRealOfIsReal_apply w.2]
+    · simp [InfinitePlace.not_isReal_iff_isComplex.mpr w.2, c₀,
+        ← InfinitePlace.Completion.ringEquivComplexOfIsComplex_apply w.2]
+  let e := (sAdeleSchwartz_inductiveTensor_equiv F S).choose
+  let U := sAdelePolarFree S r c
+  have hU : U = sAdelePolarFree S r₀ c₀ := sAdelePolarFree_eq_of_models r r₀ c c₀
+  obtain ⟨α, β, hη⟩ := polarFree_character_factors (F := F) (S := S) η
+  let generators : Set ℬₛ := {y | ∃ (a : ℬ(A∞)) (t : ∀ v : S, ℬ(v.val.adicCompletion F)),
+    (∃ a₀ : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces),
+      ∀ x : ArchCoordinates, a₀.val x = a (Multiplicative.ofAdd (assemble(r₀, c₀, x)))) ∧
+    (∀ v : S, t v (Multiplicative.ofAdd 0) = 0) ∧ e (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, t v)) = y}
+  have hspan : U = Submodule.span ℂ generators := hU.trans (sAdelePolarFree_eq_span_tmul r₀ c₀)
+  let W : Submodule ℂ ℬₛ :=
+    { carrier := {y | ∃ z ∈ U, ∀ u : Aₛˣ, z (Multiplicative.ofAdd u.val) =
+          η (QuotientGroup.mk u) * y (Multiplicative.ofAdd u.val)}
+      zero_mem' := ⟨0, U.zero_mem, fun _ ↦ (mul_zero _).symm⟩
+      add_mem' := by
+        rintro x y ⟨x', hx', h₁⟩ ⟨y', hy', h₂⟩
+        exact ⟨x' + y', U.add_mem hx' hy', fun u ↦ (congrArg₂ (· + ·) (h₁ u) (h₂ u)).trans (mul_add _ _ _).symm⟩
+      smul_mem' := by
+        rintro a x ⟨x', hx', he⟩
+        refine ⟨a • x', U.smul_mem a hx', fun u ↦ ?_⟩
+        change a * x' _ = _ * (a * x _)
+        rw [he, mul_left_comm] }
+  have hUW : Submodule.span ℂ generators ≤ W := by
+    apply Submodule.span_le.mpr
+    intro y hy
+    obtain ⟨a, t, ⟨a₀, ha⟩, ht, rfl⟩ := hy
+    have arch := polarFree_arch_character_twist (F := F) r₀ c₀ hm α a a₀
+    have hab := arch ha
+    obtain ⟨a', a₀', hf, hu⟩ := hab
+    choose t' ht' hmul using fun v : S ↦ polarFree_finite_character_twist (F := F) v.val (β v) (t v) (ht v)
+    refine ⟨e (a' ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, t' v)), ?_, fun u ↦ ?_⟩
+    · exact hspan.ge (Submodule.subset_span (show _ ∈ generators from ⟨a', t', ⟨a₀', hf⟩, ht', rfl⟩))
+    · let P := ContinuousMulEquiv.prodUnits A∞ ((v : S) → v.val.adicCompletion F)
+      let D := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+      have ha' := hu (P u).1
+      have ht'' (v : S) := hmul v (D (P u).2 v)
+      let X := a (Multiplicative.ofAdd (P u).1.val)
+      let Y (v : S) := t v (Multiplicative.ofAdd (D (P u).2 v).val)
+      let Z (v : S) := β v (D (P u).2 v)
+      have hprod : (∏ v, t' v (Multiplicative.ofAdd (D (P u).2 v).val)) =
+          (∏ v, Z v) * ∏ v, Y v :=
+        (Finset.prod_congr rfl (fun v _ ↦ ht'' v)).trans Finset.prod_mul_distrib
+      calc
+        _ = _ := (sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec a' t' u.val
+        _ = (α (P u).1 * X) * ((∏ v, Z v) * ∏ v, Y v) := congrArg₂ (· * ·) ha' hprod
+        _ = (α (P u).1 * ∏ v, Z v) * (X * ∏ v, Y v) := by ring
+        _ = _ := congrArg₂ (· * ·) (hη u).symm
+          ((sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec a t u.val).symm
+  obtain ⟨z, hz, he⟩ := hUW (hspan.le f.property)
+  exact ⟨⟨z, hz⟩, he⟩
+
+/-- The nonzero elements of a nontrivially normed field are dense. -/
+private theorem polarFree_dense_field_units (K : Type*) [NontriviallyNormedField K] : DenseRange (Units.val : Kˣ → K) := by
+  apply (dense_compl_singleton (0 : K)).mono
+  intro x hx
+  exact ⟨Units.mk0 x hx, rfl⟩
+
+/-- Two Schwartz-Bruhat functions on the S-adelic ring that agree on the units of the ring
+agree everywhere, because the units are dense in a product of local fields. -/
+theorem sAdeleSchwartzBruhat_eq_of_eqOn_units {f g : ℬₛ}
+    (h : ∀ u : Aₛˣ, f (Multiplicative.ofAdd (u : Aₛ)) =
+      g (Multiplicative.ofAdd (u : Aₛ))) :
+    f = g := by
+  have hA (w : InfinitePlace F) : DenseRange (Units.val : w.Completionˣ → w.Completion) := by
+    have h₂ : 1 < ‖(2 : w.Completion)‖ := by
+      rw [← (InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+        (map_zero _) (2 : w.Completion), map_ofNat]
+      norm_num
+    let : NontriviallyNormedField w.Completion := ⟨⟨2, h₂⟩⟩
+    exact polarFree_dense_field_units w.Completion
+  have hB (v : S) : DenseRange (Units.val : (v.val.adicCompletion F)ˣ → v.val.adicCompletion F) := by
+    let H := (Valued.v : Valuation (v.val.adicCompletion F) (WithZero (Multiplicative ℤ))).exists_isUniformizer_of_isCyclic_of_nontrivial
+    let π : v.val.adicCompletion F := H.choose
+    have hn := norm_uniformizer_adicCompletion v.val π H.choose_spec
+    have hq : 1 < (v.val.asIdeal.absNorm : ℝ) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v.val
+    have hπ : 1 < ‖π⁻¹‖ := by rw [norm_inv, hn, inv_inv]; exact hq
+    let : NontriviallyNormedField (v.val.adicCompletion F) := ⟨⟨π⁻¹, hπ⟩⟩
+    exact polarFree_dense_field_units (v.val.adicCompletion F)
+  let A := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+  let D := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+  let P := ContinuousMulEquiv.prodUnits A∞ ((v : S) → v.val.adicCompletion F)
+  have hprod := (DenseRange.piMap hA).prodMap (DenseRange.piMap hB)
+  have ext := hprod.equalizer ((schwartzBruhat_continuous f).comp continuous_ofAdd)
+    ((schwartzBruhat_continuous g).comp continuous_ofAdd) (funext fun p ↦ h (P.symm (A.symm p.1, D.symm p.2)))
+  exact Subtype.ext (funext fun x ↦ congrFun ext x.toAdd)
+
+/-- Pointwise multiplication on the units determines a unique linear action on polar-free tests. -/
+private theorem polarFree_character_linear (r : RealModels) (c : ComplexModels) (b : Xₛ) :
+    ∃ M : ↥(sAdelePolarFree S r c) →ₗ[ℂ] ↥(sAdelePolarFree S r c), ∀ f (u : Aₛˣ),
+      (M f).val (Multiplicative.ofAdd u.val) = b (QuotientGroup.mk u) * f.val (Multiplicative.ofAdd u.val) := by
+  classical
+  choose T hT using sAdelePolarFree_exists_quasiCharacter_mul (F := F) (S := S) r c b
+  refine ⟨{ toFun := T, map_add' := ?_, map_smul' := ?_ }, hT⟩
+  · intro f g
+    apply Subtype.ext
+    apply sAdeleSchwartzBruhat_eq_of_eqOn_units (F := F) (S := S)
+    intro u
+    exact (hT _ u).trans ((mul_add _ _ _).trans (congrArg₂ (· + ·) (hT f u).symm (hT g u).symm))
+  · intro a f
+    apply Subtype.ext
+    apply sAdeleSchwartzBruhat_eq_of_eqOn_units (F := F) (S := S)
+    intro u
+    exact (hT _ u).trans ((mul_left_comm _ a _).trans (congrArg (a * ·) (hT f u).symm))
+
+/-- Paper: Lemma 5.3.4.2(3), p. 260.
+The pointwise quasi-character multiplier is continuous for the subspace topology on
+polar-free adelic tests. -/
+theorem sAdelePolarFree_quasiCharacter_mul_continuous (r : RealModels) (c : ComplexModels) (b : Xₛ)
+    (M : ↥(sAdelePolarFree S r c) →ₗ[ℂ] ↥(sAdelePolarFree S r c))
+    (_hM : ∀ f (u : Aₛˣ), (M f).val (Multiplicative.ofAdd u.val) =
+      b (QuotientGroup.mk u) * f.val (Multiplicative.ofAdd u.val)) : Continuous M := by sorry
+
 /-- Paper: Lemma 5.3.4.2(3), p. 260.
 Pointwise multiplication by a continuous quasi-character of the S-ideles is a continuous
 complex-linear self-map of the polar-free subspace, and it acts there by multiplication at
@@ -3501,14 +3732,9 @@ statement to the quasi-character and to its inverse, with no closed-range argume
 theorem sAdelePolarFree_quasiCharacter_mul_clm (r : RealModels) (c : ComplexModels) (b : Xₛ) :
     ∃ M : ↥(sAdelePolarFree S r c) →L[ℂ] ↥(sAdelePolarFree S r c),
       ∀ f (g : Aₛˣ), (M f).val (Multiplicative.ofAdd g.val) =
-        b (QuotientGroup.mk g) * f.val (Multiplicative.ofAdd g.val) := by sorry
-
-/-- Two Schwartz-Bruhat functions on the S-adelic ring that agree on the units of the ring
-agree everywhere, because the units are dense in a product of local fields. -/
-theorem sAdeleSchwartzBruhat_eq_of_eqOn_units {f g : ℬₛ}
-    (h : ∀ u : Aₛˣ, f (Multiplicative.ofAdd (u : Aₛ)) =
-      g (Multiplicative.ofAdd (u : Aₛ))) :
-    f = g := by sorry
+        b (QuotientGroup.mk g) * f.val (Multiplicative.ofAdd g.val) := by
+  obtain ⟨T, hT⟩ := polarFree_character_linear r c b
+  exact ⟨⟨T, sAdelePolarFree_quasiCharacter_mul_continuous r c b T hT⟩, hT⟩
 
 /-- Paper: Lemma 5.3.4.2(3), p. 260.
 A continuous quasi-character of the S-ideles trivial on S-units acts on polar-free
