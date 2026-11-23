@@ -4,7 +4,9 @@ public import RiemannMasullo.Ch10_TraceSpectral.Sec4b
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec6
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 
+import Mathlib.Topology.ContinuousMap.SecondCountableSpace
 import all RiemannMasullo.Ch03_IdelicZeta.Sec2
+import all RiemannMasullo.Ch09_HardySobolev.Sec1
 
 /-!
 # Printed completion and indexing claims in §10.4.3
@@ -77,6 +79,71 @@ def Printed.spectralLineCompletion_quotientInjective : Prop :=
       v ∈ thetaClosure(F, ω, a, s) →
       ∃ f : adelePolarSubspace F, u.val.val = θ(ω, f)
 
+/-- Norm weights compose by addition of their exponents. -/
+private theorem spectralLineCompletion_comp_weight {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] (m : G →ₜ* ℝ≥0ˣ) (a b : ℝ) (f : G → ℂ) :
+    modulationWeight m a (modulationWeight m b f) = modulationWeight m (a + b) f := by
+  funext x
+  change ((_ : ℝ) : ℂ) * (((_ : ℝ) : ℂ) * f x) = ((_ : ℝ) : ℂ) * f x
+  rw [Real.rpow_add (NNReal.coe_pos.mpr (Units.zero_lt _)), Complex.ofReal_mul, mul_assoc]
+
+/-- Twisting preserves the all-exponent decay space and its norm-one isotype. -/
+private theorem spectralLineCompletion_weight_isotype {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+    (m : G →ₜ* ℝ≥0ˣ) (ω : PontryaginDual m.toMonoidHom.ker) (a : ℝ)
+    (u : modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω) :
+    ∃ w : modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω,
+      w.val.val = modulationWeight m a u.val.val := by
+  let f := modulationWeight m a u.val.val
+  have hf : f ∈ modulatedExponentialDecaySubmodule m univ := by
+    simp only [modulatedExponentialDecaySubmodule, Submodule.mem_iInf, Submodule.mem_comap]
+    intro b
+    change modulationWeight m b.val (modulationWeight m a u.val.val) ∈ _
+    rw [spectralLineCompletion_comp_weight]
+    exact modulationWeight_mem_schwartzBruhat m univ ⟨b.val + a, trivial⟩ u.val
+  let y : ModulatedExponentialDecay m univ := ⟨f, hf⟩
+  refine ⟨⟨y, (mem_modulatedDecayIsotype_iff m ω _ _ y).mpr ?_⟩, rfl⟩
+  intro k x
+  have hu := (mem_modulatedDecayIsotype_iff m ω _ _ u.val).mp u.property k x
+  change ((_ : ℝ) : ℂ) * u.val.val (k.val⁻¹ * x) =
+    (ω k : ℂ) * (((_ : ℝ) : ℂ) * u.val.val x)
+  have hk : m k.val = 1 := k.property
+  simp only [map_mul, map_inv, hk, inv_one, one_mul, hu, mul_left_comm]
+
+/-- At degree zero the Sobolev measure is Haar measure, so every Schwartz–Bruhat
+function has an almost-everywhere equal representative in this completion. -/
+private theorem spectralLineCompletion_zero_sobolev {F : Type} [Field F] [NumberField F]
+    (f : SchwartzBruhat C[F]) : ∃ v : W[F, 0], (v : C[F] → ℂ) =ᵐ[μ[F]] f.val := by
+  let _ : (μ[F]).IsHaarMeasure := instIdeleClassHaarMeasureSec1
+  have hμ : (μ[F]).withDensity (fun g : C[F] ↦ ENNReal.ofReal
+      (intervalSobolevDensity 0 0 0 (Real.log ((ideleClassNorm F g).val : ℝ)))) = μ[F] := by
+    simp [intervalSobolevDensity]
+  have rep (ν : Measure C[F]) (hν : ν = μ[F]) :
+      ∃ v : Lp ℂ 2 ν, (v : C[F] → ℂ) =ᵐ[μ[F]] f.val := by
+    subst ν
+    have h := schwartzBruhat_memLp_two_of_integrable f (SchwartzBruhat.integrable μ[F] f)
+    exact ⟨h.toLp f.val, h.coeFn_toLp⟩
+  exact rep _ hμ
+
+/-- Apply the purported injectivity at the opposite weight and Sobolev degree zero
+to recover an untwisted theta representative. Twisting it back gives descent. -/
+private theorem spectralLineCompletion_descends_of_quotientInjective
+    (hinj : Printed.spectralLineCompletion_quotientInjective) :
+    Printed.spectralLineCompletion_descends := by
+  rintro F _ _ ω a s hs u v hv ⟨f, hf⟩
+  obtain ⟨w, hw⟩ := spectralLineCompletion_weight_isotype m[F] ω (-a) u
+  let ψ := modulatedExponentialDecayTwist m[F] univ ⟨0, trivial⟩ w.val
+  have hψ : ψ.val = w.val.val := modulationWeight_zero m[F] w.val.val
+  obtain ⟨v', hv'⟩ := spectralLineCompletion_zero_sobolev ψ
+  rw [hψ] at hv'
+  have hmem : v' ∈ thetaClosure(F, ω, -a, 0) :=
+    subset_closure ⟨f, by simpa only [hw, hf] using hv'⟩
+  obtain ⟨g, hg⟩ := hinj F ω (-a) 0 le_rfl w v' hv' hmem
+  apply subset_closure
+  refine ⟨g, ?_⟩
+  rw [← hg, hw, spectralLineCompletion_comp_weight, add_neg_cancel, modulationWeight_zero]
+  exact hv
+
 /-- Paper: Diagram (10.4.3.2), p. 465. Take `F = ℚ`, the trivial isotype,
 `a = 2` and `s = 4`. The polar-free test with real factor
 `G − 3G(2 ·) + 2G(4 ·)` for `G(x) = exp(−πx²)` and integral finite
@@ -87,7 +154,9 @@ log-norm bump supported in `|x| < π/(4γ)`. Its Mellin value has positive
 real part there. It represents a nonzero source class and its completion
 is in the twisted theta closure. -/
 theorem Printed.spectralLineCompletion_quotientInjective_false :
-    ¬ Printed.spectralLineCompletion_quotientInjective := by sorry
+    ¬ Printed.spectralLineCompletion_quotientInjective := by
+  exact fun h ↦ Printed.spectralLineCompletion_descends_false
+    (spectralLineCompletion_descends_of_quotientInjective h)
 
 local notation "zeroOrder(" χ ", " a ", " t ")" =>
   meromorphicOrderAt (continuedCompletedHeckeL χ) ((a : ℂ) + (t : ℂ) * Complex.I)
@@ -179,6 +248,134 @@ def Printed.spectralLineJet_cofinite_iff_coordinates : Prop :=
           Tendsto i atTop cofinite ↔
             Tendsto (fun n ↦ ((i n).val.1, (i n).val.2.1)) atTop atTop
 
+/-- The dual of the rational norm-one group is countably infinite. Single-place sign
+changes give distinct involutions in the norm kernel. -/
+private theorem spectralLineJet_rational_characters :
+    Nonempty (ℕ ≃ PontryaginDual C₁[ℚ]) := by
+  classical
+  let V := IsDedekindDomain.HeightOneSpectrum (𝓞 ℚ)
+  let U := (v : V) → (v.adicCompletionIntegers ℚ)ˣ
+  obtain ⟨e, _⟩ := ratIdeleClassGroup_decomposition
+  let sign (v : V) : U := Pi.mulSingle v (-1)
+  have square (v : V) : e (1, sign v) ^ 2 = 1 := by
+    rw [← map_pow, ← e.map_one]
+    refine congrArg e (Prod.ext (one_pow _) ?_)
+    funext w
+    by_cases h : w = v
+    · subst w
+      simp [sign]
+    · simp [sign, Pi.mulSingle_eq_of_ne h]
+  let g (v : V) : C₁[ℚ] := ⟨e (1, sign v), by
+    change ideleClassNorm ℚ (e (1, sign v)) = 1
+    apply sq_eq_one.mp
+    rw [← map_pow, square, map_one]⟩
+  have hinj : Injective g := by
+    intro v w heq
+    by_contra h
+    have hu := congrArg (fun p : ℝ≥0ˣ × U ↦ p.2 v)
+      (e.injective (congrArg Subtype.val heq))
+    have hfalse : (-1 : (v.adicCompletionIntegers ℚ)ˣ) = 1 := by
+      simpa [sign, Pi.mulSingle_eq_of_ne h] using hu
+    have := congrArg (fun u : (v.adicCompletionIntegers ℚ)ˣ ↦ (u.val : v.adicCompletion ℚ)) hfalse
+    have badK : (-1 : v.adicCompletion ℚ) = 1 := by simpa using this
+    have bad : (-1 : ℚ) = 1 := (algebraMap ℚ (v.adicCompletion ℚ)).injective
+      (by simpa only [map_neg, map_one] using badK)
+    norm_num at bad
+  let _ : Infinite V := Infinite.of_injective
+    (Rat.HeightOneSpectrum.primesEquiv (R := 𝓞 ℚ)).symm
+    (Rat.HeightOneSpectrum.primesEquiv (R := 𝓞 ℚ)).symm.injective
+  let _ : Infinite C₁[ℚ] := Infinite.of_injective g hinj
+  let _ : CompactSpace C₁[ℚ] := isCompact_iff_compactSpace.mp
+    ((isProperMap_ideleClassNorm ℚ).isCompact_preimage (isCompact_singleton (x := 1)))
+  let _ : LocallyCompactSpace C₁[ℚ] := inferInstance
+  let _ : SecondCountableTopology C₁[ℚ] := Topology.IsInducing.subtypeVal.secondCountableTopology
+  let _ : SecondCountableTopology Circle :=
+    inferInstanceAs (SecondCountableTopology (Metric.sphere (0 : ℂ) 1))
+  let _ : SecondCountableTopology (PontryaginDual C₁[ℚ]) :=
+    (ContinuousMonoidHom.isEmbedding_toContinuousMap C₁[ℚ] Circle).secondCountableTopology
+  let _ : Countable (PontryaginDual C₁[ℚ]) := countable_of_Lindelof_of_discrete
+  let _ : Infinite (PontryaginDual C₁[ℚ]) := by
+    apply not_finite_iff_infinite.mp
+    intro hfin
+    obtain ⟨d, _⟩ := pontryaginDual_bidual (G := C₁[ℚ])
+    exact (Finite.of_injective d d.injective).false
+  exact nonempty_equiv_of_countable
+
+/-- Bauer's critical-line theorem for primitive Dirichlet characters gives infinitely
+many ordinates for each rational unitary Hecke character. An imaginary norm twist
+translates the ordinates. See Bauer, *Zeros of Dirichlet L-series on the critical
+line*, Corollary 1, p. 38. -/
+private theorem spectralLineJet_rational_criticalLine_infinite (χ : PontryaginDual C[ℚ]) :
+    Infinite (lineZeros(χ, (1 / 2 : ℝ))) := by sorry
+
+/-- The order of the completed Hecke function is finite everywhere, since its order
+is finite at 2. -/
+private theorem spectralLineJet_order_ne_top {F : Type} [Field F] [NumberField F]
+    (χ : PontryaginDual C[F]) (z : ℂ) :
+    meromorphicOrderAt (continuedCompletedHeckeL χ) z ≠ ⊤ := by
+  obtain ⟨hL, heq⟩ := continuedCompletedHeckeL_spec χ
+  apply hL.meromorphicOn.meromorphicOrderAt_ne_top_of_isPreconnected
+    isPreconnected_univ (mem_univ (2 : ℂ)) (mem_univ z)
+  intro h
+  have hp : 0 < meromorphicOrderAt (continuedCompletedHeckeL χ) 2 :=
+    h ▸ WithTop.coe_lt_top (0 : ℤ)
+  have hb := completedHeckeL_continuation_zeros χ _ hL heq (by norm_num : 0 < (2 : ℂ).re) hp
+  norm_num at hb
+
+/-- Only finitely many ordinates in a row have bounded absolute value. Their complex
+points belong to the divisor support on a compact vertical segment. -/
+private theorem spectralLineJet_bounded_ordinates {F : Type} [Field F] [NumberField F]
+    (χ : PontryaginDual C[F]) (a R : ℝ) :
+    {t : lineZeros(χ, a) | |t.val| ≤ R}.Finite := by
+  let z (y : ℝ) : ℂ := (a : ℂ) + (y : ℂ) * Complex.I
+  let K := z '' Icc (-R) R
+  have hc : IsCompact K := isCompact_Icc.image (by fun_prop : Continuous z)
+  let f := continuedCompletedHeckeL χ
+  have hf : MeromorphicOn f K := fun z _ ↦ (continuedCompletedHeckeL_spec χ).1.meromorphicOn z (mem_univ z)
+  have hinj : Injective (fun t : lineZeros(χ, a) ↦ z t.val) := by
+    intro x y h
+    exact Subtype.ext (by simpa [z] using congrArg Complex.im h)
+  apply (((MeromorphicOn.divisor f K).finiteSupport hc).preimage hinj.injOn).subset
+  intro t ht
+  have htK : z t.val ∈ K := ⟨t.val, abs_le.mp ht, rfl⟩
+  change MeromorphicOn.divisor f K (z t.val) ≠ 0
+  rw [hf.divisor_apply htK, Ne, WithTop.untop₀_eq_zero]
+  exact not_or.mpr ⟨t.property.ne', spectralLineJet_order_ne_top χ _⟩
+
+/-- Rank the ordinates by absolute value, breaking ties by signed value. Every
+initial segment is finite, so the ranks form an infinite subset of the naturals. -/
+private theorem spectralLineJet_ordered_ordinates {F : Type} [Field F] [NumberField F]
+    (χ : PontryaginDual C[F]) (a : ℝ) [Infinite (lineZeros(χ, a))] :
+    ∃ e : ℕ ≃ lineZeros(χ, a), Monotone (fun j ↦ |(e j).val|) := by
+  classical
+  let Z := lineZeros(χ, a)
+  let key (t : Z) := toLex (|t.val|, t.val)
+  let pred (t : Z) := {u : Z | key u < key t}
+  let rank (t : Z) := (pred t).ncard
+  have hlt {u t : Z} (h : key u < key t) : rank u < rank t := by
+    refine Set.ncard_lt_ncard ?_ ?_
+    · refine Set.ssubset_iff_subset_ne.mpr ⟨fun x hx ↦ lt_trans hx h, fun heq ↦ ?_⟩
+      have hu : u ∈ pred t := h
+      rw [← heq] at hu
+      exact lt_irrefl (key u) hu
+    · exact (spectralLineJet_bounded_ordinates χ a |t.val|).subset
+        fun x hx ↦ Prod.Lex.monotone_fst (key x) (key t) (le_of_lt hx)
+  have hinj : Injective rank := by
+    intro u t h
+    rcases lt_trichotomy (key u) (key t) with he | he | he
+    · exact ((hlt he).ne h).elim
+    · exact Subtype.ext (congrArg (fun p ↦ (ofLex p).2) he)
+    · exact ((hlt he).ne h.symm).elim
+  let r := Equiv.ofInjective rank hinj
+  let _ : Infinite (range rank) := Infinite.of_injective r r.injective
+  let n := Nat.Subtype.orderIsoOfNat (range rank)
+  let e := n.toEquiv.trans r.symm
+  refine ⟨e, fun i j hij ↦ ?_⟩
+  have hle : rank (e i) ≤ rank (e j) := by
+    change (r (r.symm (n i))).val ≤ (r (r.symm (n j))).val
+    simpa only [Equiv.apply_symm_apply] using (show (n i).val ≤ (n j).val from n.monotone hij)
+  exact Prod.Lex.monotone_fst _ _ (le_of_not_gt fun h ↦ (not_lt_of_ge hle) (hlt h))
+
 /-- Paper: Theorem 10.4.3.1(2), pp. 467–468. Over ℚ take `a = 1/2` and
 `s = 4`. Use the Dirichlet characters for the basepoints and put the
 trivial character first. Every primitive Dirichlet row has infinitely many
@@ -186,7 +383,28 @@ critical-line ordinates (Bauer, Corollary 1), finitely many in each bounded
 interval, so each admits an absolute-value enumeration. The zeroth jets
 `(0,j,0)` escape each finite set while their first coordinate is constant. -/
 theorem Printed.spectralLineJet_cofinite_iff_coordinates_false :
-    ¬ Printed.spectralLineJet_cofinite_iff_coordinates := by sorry
+    ¬ Printed.spectralLineJet_cofinite_iff_coordinates := by
+  classical
+  intro hall
+  obtain ⟨χ, hχ⟩ := exists_spectralBasepointChoice ℚ
+  obtain ⟨ω⟩ := spectralLineJet_rational_characters
+  let a : ℝ := 1 / 2
+  have rows (k : ℕ) : ∃ e : ℕ ≃ lineZeros(χ (ω k), a), Monotone (fun j ↦ |(e j).val|) := by
+    let _ := spectralLineJet_rational_criticalLine_infinite (χ (ω k))
+    exact spectralLineJet_ordered_ordinates _ _
+  choose t ht using rows
+  let J := lineJetIndices(χ, ω, t, a, (4 : ℝ))
+  have hpos (n : ℕ) : 0 < (zeroOrder(χ (ω 0), a, (t 0 n).val)).untop₀.toNat := by
+    have h := (t 0 n).property
+    rw [← WithTop.coe_untop₀_of_ne_top (spectralLineJet_order_ne_top _ _)] at h
+    have hh := WithTop.coe_lt_coe.mp h
+    omega
+  let row (n : ℕ) : J := ⟨(0, n, 0), lt_min (hpos n) (Nat.floor_pos.mpr (by norm_num))⟩
+  have hinj : Injective row := fun m n h ↦ congrArg (fun x : J ↦ x.val.2.1) h
+  have hesc : Tendsto row atTop cofinite := Nat.cofinite_eq_atTop ▸ hinj.tendsto_cofinite
+  have hprod := (hall ℚ a 4 (by norm_num [a]) (by norm_num) χ hχ ω t ht row).mp hesc
+  obtain ⟨n, hn⟩ := (hprod.eventually (eventually_ge_atTop (1, 0))).exists
+  exact Nat.not_succ_le_zero 0 hn.1
 
 /-- Paper: (10.4.3.21), p. 469. As printed: a finite rectangle has image
 given by the finite sum over an initial segment of the lexicographic jet
