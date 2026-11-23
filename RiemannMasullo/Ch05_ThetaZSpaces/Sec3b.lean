@@ -3584,6 +3584,40 @@ theorem sLocalHomogeneousTheta_exists_polarFree_of_decay (r : RealModels) (c : C
   exact (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ f p hf s hs).trans
     (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ b.val p hb s hs).symm
 
+/-- Paper: Proposition 5.3.4.4(2) and (3), p. 264.
+On a fixed norm-twist component, a zeta transform has a representative in the
+chosen polar-free space exactly when its homogeneous theta function has
+exponential decay at every real exponent. -/
+theorem sLocalIdelicZFunction_eq_polarFree_iff_theta_exponentialDecay (r : RealModels) (c : ComplexModels)
+    (χ : PontryaginDual Jₛ) (f : ℬₛ) :
+    (∃ a : sAdelePolarFree S r c, ∀ s : ℂ,
+      sLocalIdelicZFunction f (chartₛ(χ) s) = sLocalIdelicZFunction a.val (chartₛ(χ) s)) ↔
+      (⇑(thetaAt(χ₁(χ)) f) : Jₛ → ℂ) ∈ modulatedExponentialDecaySubmodule
+        ⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ univ := by
+  constructor
+  · rintro ⟨a, ha'⟩
+    obtain ⟨τ, hτ⟩ := sIdeleQuotientNorm_exists_section F S
+    obtain ⟨M, hM, _⟩ := existsUnique_positiveRealFourierMellin univ isOpen_univ
+      (ordConnected_univ : OrdConnected (univ : Set ℝ)) univ_nonempty
+    let B : SchwartzBergman univ := ⟨_, sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_bergman r c χ a⟩
+    let p := M.symm B
+    obtain ⟨b, hb⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_lift r c χ p
+    have hchart (z : ℂ) : sLocalIdelicZFunction f (chartₛ(χ) z) = sLocalIdelicZFunction b.val (chartₛ(χ) z) := by
+      apply sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_continue
+        (sLocalIdelicZFunction_meromorphic f χ) (sLocalIdelicZFunction_meromorphic b.val χ) _ z
+      intro s hs
+      calc
+        _ = B.val s := ha' s
+        _ = (M p).val s := congrArg (fun v : SchwartzBergman univ ↦ v.val s) (M.apply_symm_apply B).symm
+        _ = _ := hM p s (mem_univ _)
+        _ = _ := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ b.val p.val hb s hs).symm
+    rw [sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_eq_theta χ f b.val hchart]
+    refine (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_mem χ b.val τ hτ p.val ?_).mpr p.property
+    intro g
+    rw [hb, mul_inv_cancel_left₀ (Circle.coe_ne_zero _)]
+  · intro hd
+    obtain ⟨b, _, hb⟩ := sLocalHomogeneousTheta_exists_polarFree_of_decay r c χ f hd
+    exact ⟨b, hb⟩
 
 /-- Paper: Proposition 5.3.4.4(1) and (3), p. 264.
 On the component of χ, a zeta transform is entire exactly when the homogeneous theta
@@ -3606,23 +3640,8 @@ theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay (χ : Pontryagin
     (ordConnected_univ : OrdConnected (univ : Set ℝ)) univ_nonempty
   constructor
   · intro ha
-    obtain ⟨a, ha'⟩ := (sLocalIdelicZFunction_entire_iff_eq_polarFree r c χ f).mp ha
-    let B : SchwartzBergman univ := ⟨_, sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_bergman r c χ a⟩
-    let p := M.symm B
-    obtain ⟨b, hb⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_lift r c χ p
-    have hchart (z : ℂ) : sLocalIdelicZFunction f (chartₛ(χ) z) = sLocalIdelicZFunction b.val (chartₛ(χ) z) := by
-      apply sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_continue
-        (sLocalIdelicZFunction_meromorphic f χ) (sLocalIdelicZFunction_meromorphic b.val χ) _ z
-      intro s hs
-      calc
-        _ = B.val s := ha' s
-        _ = (M p).val s := congrArg (fun v : SchwartzBergman univ ↦ v.val s) (M.apply_symm_apply B).symm
-        _ = _ := hM p s (mem_univ _)
-        _ = _ := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ b.val p.val hb s hs).symm
-    rw [sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_eq_theta χ f b.val hchart]
-    refine (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_mem χ b.val τ hτ p.val ?_).mpr p.property
-    intro g
-    rw [hb, mul_inv_cancel_left₀ (Circle.coe_ne_zero _)]
+    exact (sLocalIdelicZFunction_eq_polarFree_iff_theta_exponentialDecay r c χ f).mp
+      ((sLocalIdelicZFunction_entire_iff_eq_polarFree r c χ f).mp ha)
   · intro hd
     obtain ⟨p, hp⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_exists_profile χ f τ hτ
     have hmem := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_mem χ f τ hτ p hp).mp hd
