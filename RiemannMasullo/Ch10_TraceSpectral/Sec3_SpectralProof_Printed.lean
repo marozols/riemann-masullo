@@ -519,7 +519,9 @@ theorem Printed.spectralStripMellinJet_norm_le_false :
     φ 2 (by norm_num)
   let L := continuedCompletedHeckeL (1 : PontryaginDual C𝔽(ℚ))
   let z : ℂ := shift(1 / 2, γ)
-  have hpos : 0 < meromorphicOrderAt L z := spectralLineSelection_mem_lineZeros γ hz
+  have hpos : 0 < meromorphicOrderAt L z := spectralLineSelection_mem_lineZeros γ (by
+    push_cast
+    exact hz)
   obtain ⟨hL, heq⟩ := continuedCompletedHeckeL_spec (1 : PontryaginDual C𝔽(ℚ))
   have htwo : meromorphicOrderAt L 2 ≠ ⊤ := by
     intro h
