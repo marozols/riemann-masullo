@@ -2,8 +2,8 @@ module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
-import all RiemannMasullo.Ch03_IdelicZeta.Sec2
-import all RiemannMasullo.Ch03_IdelicZeta.Sec3b
+import RiemannMasullo.Ch03_IdelicZeta.Sec2
+import RiemannMasullo.Ch03_IdelicZeta.Sec3b
 import RiemannMasullo.ForMathlib.Analysis.Complex.PeriodicStrip
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import Mathlib.Algebra.Order.Archimedean.Real.Hom
@@ -3884,7 +3884,7 @@ private theorem sLocalEpsilonFactor_norm_strip (χ : PontryaginDual Jₛ) (a b :
   classical
   have hf (v : S) : ∃ C ≥ (1 : ℝ), ∀ z : ℂ, z.re ∈ Icc a b →
       ‖finiteLocalEpsilonFactor v.val (sLocalFiniteRestriction v (chartₛ(χ) z))‖ ≤ C := by
-    obtain ⟨η, hη, _⟩ := sLocalFinite_charts χ v
+    obtain ⟨η, hη, _⟩ := sLocalFiniteRestriction_exists_normTwistChart χ v
     have ht := finite_norm_chart_period v.val η
     have hq : 1 < (v.val.asIdeal.absNorm : ℝ) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v.val
     have hcont := (finiteLocalEpsilonFactor_entire v.val η).differentiableOn
@@ -3936,7 +3936,7 @@ private theorem local_entire_normalized_eq (χ : PontryaginDual Jₛ)
     sLocalNormalizedZFunction f (chartₛ(χ) z) =
       sLocalIdelicZFunction f (chartₛ(χ) z) * (sLocalHeckeL (chartₛ(χ) z))⁻¹ := by
   apply (sLocalNormalizedZFunction_entire f χ).eqOn_of_preconnected_of_eventuallyEq
-    (ha.mul (fun z _ ↦ (differentiable_inv_sLocalHeckeL χ).analyticAt z)) isPreconnected_univ
+    (ha.mul (fun z _ ↦ (sLocalHeckeL_inv_differentiable χ).analyticAt z)) isPreconnected_univ
     (mem_univ (1 : ℂ)) _ (mem_univ z)
   filter_upwards [(isOpen_lt continuous_const continuous_re).mem_nhds
     (show 0 < (1 : ℂ).re by simp)] with s hs
@@ -3956,7 +3956,7 @@ private theorem cleared_chart_reflection (χ : PontryaginDual Jₛ)
   obtain ⟨h', he'⟩ := local_chart_inverse_extension χ ψ h he
   have heq := sLocalNormalizedZFunction_functionalEquation f (chartₛ(χ) s)
   have hpos : 0 < (1-s).re := by simpa using hs
-  erw [sLocal_dual_chart χ s, local_entire_normalized_eq χ f ha,
+  erw [sLocalNormTwistChart_dual χ s, local_entire_normalized_eq χ f ha,
     sLocalNormalizedZFunction_eq_div (sAdeleSchwartzFourier f) χ⁻¹ (s := 1-s) hpos,
     ← sLocalIdelicZFunction_eq_integral (sAdeleSchwartzFourier f) ⟨χ⁻¹, 1-s, hpos, rfl⟩,
     sLocalHeckeL_eq_partialEulerProduct χ ψ h he,
@@ -4014,7 +4014,7 @@ private theorem zetaChart_positive_height_tail (χ : PontryaginDual Jₛ)
     (f : SchwartzBruhat (Multiplicative (SAdeleRing F S))) (a b : ℝ) (ha : 0 < a) (N : ℕ) :
     ∃ C > (0 : ℝ), ∃ T : ℝ, ∀ z : ℂ, z.re ∈ Icc a b → T ≤ |z.im| →
       ‖sLocalIdelicZFunction f (chartₛ(χ) z)‖ ≤ C / |z.im| ^ N := by
-  obtain ⟨C, hC, ht⟩ := sLocalIdelicZFunction_heightBound f χ a (max a b + 1) ha
+  obtain ⟨C, hC, ht⟩ := sLocalIdelicZFunction_rapid_decay_on_positive_strip f χ a (max a b + 1) ha
     (by linarith [le_max_left a b]) (N+1) (by omega)
   obtain ⟨T, hT⟩ := eventually_atTop.mp (eventually_comap.mp ht)
   refine ⟨C, hC, max T 1, fun z hz hy ↦ ?_⟩
@@ -4033,7 +4033,7 @@ private theorem cleared_chart_left_tail (χ : PontryaginDual Jₛ)
     ∃ C ≥ (0 : ℝ), ∃ T : ℝ, ∀ z : ℂ, a ≤ z.re → z.re ≤ 1/2 → T ≤ |z.im| → heckeGammaFactor ψ z ≠ 0 →
       ‖(∏ v : S, (finiteHeckeEulerFactor ψ v.val z)⁻¹) * sLocalIdelicZFunction f (chartₛ(χ) z)‖ ≤
         C / |z.im|^N := by
-  obtain ⟨A,T,hA,hT,hΓ⟩ := heckeGamma_reflection_bound ψ⁻¹ (1/2) (1-a)
+  obtain ⟨A,T,hA,hT,hΓ⟩ := heckeGammaFactor_reflection_bound_on_strip ψ⁻¹ (1/2) (1-a)
   obtain ⟨B,hB,hε⟩ := sLocalEpsilonFactor_norm_strip χ a (1/2)
   obtain ⟨C,hC,hD⟩ := finiteEulerInverse_prod_bounds (S := S) ψ⁻¹ (1/2) (1-a)
   obtain ⟨E,hE,H,hZ⟩ := zetaChart_positive_height_tail χ⁻¹ (sAdeleSchwartzFourier f) (1/2) (1-a) (by norm_num) N
