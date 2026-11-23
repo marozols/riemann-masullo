@@ -6,7 +6,7 @@ import RiemannMasullo.Ch10_TraceSpectral.Sec1
 
 import Mathlib.Topology.ContinuousMap.SecondCountableSpace
 import all RiemannMasullo.Ch03_IdelicZeta.Sec2
-import all RiemannMasullo.Ch09_HardySobolev.Sec1
+import RiemannMasullo.Ch09_HardySobolev.Sec1
 
 /-!
 # Printed completion and indexing claims in §10.4.3

@@ -1504,7 +1504,7 @@ private theorem modulatedSobolev_generator_symbol
 omit [SecondCountableTopology G] [BorelSpace G] in
 /-- An integrable Schwartz–Bruhat function is square-integrable, since its stage
 bounds include the unweighted supremum norm. -/
-private theorem schwartzBruhat_memLp_two_of_integrable {μ : Measure G}
+theorem schwartzBruhat_memLp_two_of_integrable {μ : Measure G}
     (f : SchwartzBruhat G) (hf : Integrable (f : G → ℂ) μ) : MemLp (f : G → ℂ) 2 μ := by
   obtain ⟨p, e, s, hs⟩ := (mem_schwartzBruhatSubmodule_iff _).mp
     (show (f : G → ℂ) ∈ schwartzBruhatSubmodule G from
