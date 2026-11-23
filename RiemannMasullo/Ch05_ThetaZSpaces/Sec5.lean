@@ -577,7 +577,33 @@ theorem sLocalThetaEigendistributions_eq_span (c : QuasiCharacter Jₛ) :
 /-- Paper: Theorem 5.5.1.2(2), p. 278.
 The normalized S-local family in the strong dual of the theta quotient is holomorphic. -/
 theorem sLocalThetaEigendistribution_holomorphic (χ : PontryaginDual Jₛ) :
-    VectorHolomorphicOn (fun s ↦ sLocalThetaEigendistribution (chartₛ(χ) s)) univ := by sorry
+    VectorHolomorphicOn (fun s ↦ sLocalThetaEigendistribution (chartₛ(χ) s)) univ := by
+  let : T2Space (SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_t2_of_isClosed
+    (sLocalAdelicTheta_ker_isClosed (F := F) (S := S))
+  let : PolynormableSpace ℂ (SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_polynormable
+  let : IsTopologicalAddGroup (SLocalAdelicThetaSpace F S) :=
+    PolynormableSpace.isTopologicalAddGroup ℂ _
+  let : ContinuousSMul ℂ (SLocalAdelicThetaSpace F S) := PolynormableSpace.continuousSMul ℂ _
+  let : UniformSpace (SLocalAdelicThetaSpace F S) := IsTopologicalAddGroup.rightUniformSpace _
+  let : IsUniformAddGroup (SLocalAdelicThetaSpace F S) := isUniformAddGroup_of_addCommGroup
+  let : MontelSpace ℂ (SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_montel
+  let : CompleteSpace D(SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_strongDual_complete
+  let : PolynormableSpace ℂ D(SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_strongDual_nuclear.{_, 0} (F := F) (S := S)).2.1
+  apply sLocalNormalizedEigendistribution_holomorphic_pointwise
+  intro x
+  obtain ⟨f, rfl⟩ := (Kₛ).mkQ_surjective x
+  let M : ℂ := ↑(∏ v : S, unitMass(v.val))
+  have hM : M ≠ 0 := sLocalNormalizedEigendistribution_mass_ne_zero
+  have he : (fun z ↦ sLocalThetaEigendistribution (chartₛ(χ) z) ((Kₛ).mkQ f)) =
+      (fun z ↦ M⁻¹ * sLocalNormalizedZFunction f (chartₛ(χ) z)) := by
+    funext z
+    have h := (existsUnique_sLocalNormalizedEigendistribution (chartₛ(χ) z)).exists.choose_spec f
+    change M * sLocalNormalizedEigendistribution (chartₛ(χ) z) f = _ at h
+    change sLocalNormalizedEigendistribution (chartₛ(χ) z) f = _
+    rw [← h, ← mul_assoc, inv_mul_cancel₀ hM, one_mul]
+  rw [he]
+  exact (sLocalNormalizedZFunction_entire f χ).differentiableOn.const_mul M⁻¹
 
 end SLocal
 
