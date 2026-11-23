@@ -3560,6 +3560,31 @@ private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_m
   with_reducible
     exact sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_profile (G := Jₛ) m hm τ hτ' χ v p hp'
 
+/-- Paper: Proposition 5.3.4.4(3) ⇒ (2), p. 264.
+For any fixed archimedean models, a homogeneous theta function with all-exponent decay
+has a polar-free representative with the same theta function on the quotient and the
+same zeta transform everywhere on the norm-twist component. -/
+theorem sLocalHomogeneousTheta_exists_polarFree_of_decay (r : RealModels) (c : ComplexModels)
+    (χ : PontryaginDual Jₛ) (f : ℬₛ)
+    (hd : (⇑(thetaAt(χ₁(χ)) f) : Jₛ → ℂ) ∈ modulatedExponentialDecaySubmodule
+      ⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ univ) :
+    ∃ b : sAdelePolarFree S r c, thetaAt(χ₁(χ)) b.val = thetaAt(χ₁(χ)) f ∧
+      ∀ s : ℂ, sLocalIdelicZFunction f (chartₛ(χ) s) = sLocalIdelicZFunction b.val (chartₛ(χ) s) := by
+  obtain ⟨τ, hτ⟩ := sIdeleQuotientNorm_exists_section F S
+  obtain ⟨p, hp⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_exists_profile χ f τ hτ
+  have hmem := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_mem χ f τ hτ p hp).mp hd
+  let v : PositiveRealExponentialDecay univ := ⟨p, hmem⟩
+  obtain ⟨b, hb⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_lift r c χ v
+  have hf (g : Jₛ) : thetaAt(χ₁(χ)) f g = (χ g : ℂ)⁻¹ * p (Real.log ((mₛ g).val : ℝ)) := by
+    rw [← hp, inv_mul_cancel_left₀ (Circle.coe_ne_zero _)]
+  refine ⟨b, ContinuousMap.ext fun g ↦ (hb g).trans (hf g).symm, ?_⟩
+  apply realArchimedeanMellin_existsUnique_eqNF
+    (sLocalIdelicZFunction_meromorphic f χ) (sLocalIdelicZFunction_meromorphic b.val χ)
+  intro s hs
+  exact (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ f p hf s hs).trans
+    (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ b.val p hb s hs).symm
+
+
 /-- Paper: Proposition 5.3.4.4(1) and (3), p. 264.
 On the component of χ, a zeta transform is entire exactly when the homogeneous theta
 function has exponential decay at every real exponent. Its covariance is the
