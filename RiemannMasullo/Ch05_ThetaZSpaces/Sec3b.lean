@@ -2,7 +2,6 @@ module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
-import all RiemannMasullo.AppB_AnalyticNT.Sec4b
 import Mathlib.Algebra.Order.Archimedean.Real.Hom
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec1b
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec2b
@@ -1640,13 +1639,215 @@ theorem archimedeanFlatSchwartz_isClosed :
 -- TODO(paper-gap): The estimates (5.3.3.21)–(5.3.3.23) fail for bumps
 -- supported close to, but away from, the origin.
 
+/-- Repeated mean-value bounds on the unit segment bound a flat function by its highest
+derivative. -/
+private theorem archimedeanFlatSchwartz_restrict_segment
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (f : ℝ → E) (n : ℕ) (hf : ContDiff ℝ (n + 1) f)
+    (hflat : ∀ k ≤ n, iteratedDeriv k f 0 = 0) {C : ℝ}
+    (hC : ∀ t ∈ Icc 0 1, ‖iteratedDeriv (n + 1) f t‖ ≤ C) :
+    ∀ t ∈ Icc 0 1, ‖f t‖ ≤ C := by
+  have hpos := (norm_nonneg _).trans (hC 0 (by simp))
+  have step (g : ℝ → E) (hd : Differentiable ℝ g) (hz : g 0 = 0)
+      (hder : ∀ t ∈ Icc 0 1, ‖deriv g t‖ ≤ C) (x : ℝ) (hx : x ∈ Icc 0 1) :
+      ‖g x‖ ≤ C := by
+    have h := norm_image_sub_le_of_norm_deriv_le_segment'
+      (fun t _ ↦ (hd t).hasDerivAt.hasDerivWithinAt)
+      (fun t ht ↦ hder t (Ico_subset_Icc_self ht)) x hx
+    simpa [hz] using h.trans (mul_le_of_le_one_right hpos (by simpa using hx.2))
+  induction n generalizing f with
+  | zero =>
+    exact step f (hf.differentiable (by norm_num)) (by simpa using hflat 0 le_rfl)
+      (by simpa [iteratedDeriv_one] using hC)
+  | succ n ih =>
+    apply step f (hf.differentiable (by exact_mod_cast Nat.succ_ne_zero (n + 1)))
+      (by simpa using hflat 0 (Nat.zero_le _))
+    apply ih (deriv f) (hf.deriv')
+    · intro k hk
+      rw [← iteratedDeriv_succ']
+      exact hflat (k + 1) (Nat.succ_le_succ hk)
+    · simpa only [← iteratedDeriv_succ'] using hC
+
+/-- Taylor expansion on the segment from a wall point bounds the value by a power of the
+distance to the wall. -/
+private theorem archimedeanFlatSchwartz_restrict_taylor_ray
+    {V B : Type*} [NormedAddCommGroup V] [NormedSpace ℝ V]
+    [NormedAddCommGroup B] [NormedSpace ℝ B]
+    (f : V → B) (a v : V) (n : ℕ) (hf : ContDiff ℝ (n + 1) f)
+    (hflat : ∀ k ≤ n, iteratedFDeriv ℝ k f a (fun _ ↦ v) = 0) (C : ℝ)
+    (hbound : ∀ (t : ℝ), t ∈ Icc 0 1 → ‖iteratedFDeriv ℝ (n + 1) f (t • v + a)‖ ≤ C) :
+    ‖f (a + v)‖ ≤ C * ‖v‖ ^ (n + 1) := by
+  let L : ℝ →L[ℝ] V := (ContinuousLinearMap.id ℝ ℝ).smulRight v
+  let g : ℝ → B := (fun y ↦ f (y + a)) ∘ L
+  have hc : ContDiff ℝ (n + 1) (fun y ↦ f (y + a)) :=
+    hf.comp (show ContDiff ℝ (n + 1) (fun y : V ↦ y + a) by fun_prop)
+  have hd (k : ℕ) (hk : k ≤ n + 1) (t : ℝ) :
+      iteratedDeriv k g t = iteratedFDeriv ℝ k f (L t + a) (fun _ ↦ v) := by
+    rw [iteratedDeriv_eq_iteratedFDeriv]
+    change (iteratedFDeriv ℝ k ((fun y ↦ f (y + a)) ∘ L) t) _ = _
+    rw [L.iteratedFDeriv_comp_right hc t (mod_cast hk)]
+    simp [iteratedFDeriv_comp_add_right, ContinuousMultilinearMap.compContinuousLinearMap_apply, L]
+  have h0 (k : ℕ) (hk : k ≤ n) : iteratedDeriv k g 0 = 0 := by
+    simpa [hd k (hk.trans (Nat.le_succ n))] using hflat k hk
+  have hC (t : ℝ) (ht : t ∈ Icc 0 1) :
+      ‖iteratedDeriv (n + 1) g t‖ ≤ C * ‖v‖ ^ (n + 1) := by
+    rw [hd _ le_rfl]
+    refine ((iteratedFDeriv ℝ (n + 1) f (L t + a)).le_opNorm _).trans ?_
+    simpa [L] using mul_le_mul_of_nonneg_right
+      (hbound t ht) (pow_nonneg (norm_nonneg v) (n + 1))
+  have h := archimedeanFlatSchwartz_restrict_segment g n (hc.comp L.contDiff) h0 hC 1 (by simp)
+  simpa [g, L, add_comm v a] using h
+
+/-- Iterating the Fréchet derivative of a jet gives the norm of the derivative of the combined
+order. -/
+private theorem archimedeanFlatSchwartz_restrict_iterated_norm
+    {V B : Type*} [NormedAddCommGroup V] [NormedSpace ℝ V]
+    [NormedAddCommGroup B] [NormedSpace ℝ B] (f : V → B) (j k : ℕ) (x : V) :
+    ‖iteratedFDeriv ℝ k (iteratedFDeriv ℝ j f) x‖ = ‖iteratedFDeriv ℝ (k + j) f x‖ := by
+  induction j generalizing k with
+  | zero =>
+    rw [iteratedFDeriv_zero_eq_comp, LinearIsometryEquiv.norm_iteratedFDeriv_comp_left,
+      Nat.add_zero]
+  | succ j ih =>
+    rw [iteratedFDeriv_succ_eq_comp_left, LinearIsometryEquiv.norm_iteratedFDeriv_comp_left,
+      norm_iteratedFDeriv_fderiv, ih]
+    rw [Nat.succ_add, Nat.add_succ]
+
+/-- At a point where all jets vanish, the Taylor estimate applies to every derivative of a
+Schwartz function. -/
+private theorem archimedeanFlatSchwartz_restrict_jet_at_wall
+    {V : Type*} [NormedAddCommGroup V] [NormedSpace ℝ V]
+    (f : 𝓢(V, ℂ)) (a v : V) (j n : ℕ)
+    (hflat : ∀ k, iteratedFDeriv ℝ k (f : V → ℂ) a = 0) :
+    ‖iteratedFDeriv ℝ j (f : V → ℂ) (a + v)‖ ≤
+      SchwartzMap.seminorm ℝ 0 (n + 1 + j) f * ‖v‖ ^ (n + 1) := by
+  let g := iteratedFDeriv ℝ j (f : V → ℂ)
+  have hg : ContDiff ℝ (n + 1) g := (f.smooth _).iteratedFDeriv_right'
+  refine archimedeanFlatSchwartz_restrict_taylor_ray g a v n hg (fun k _ ↦ ?_) _ (fun t ht ↦ ?_)
+  · have hz : iteratedFDeriv ℝ k g a = 0 := norm_eq_zero.mp (by
+      dsimp only [g]
+      rw [archimedeanFlatSchwartz_restrict_iterated_norm, hflat, norm_zero])
+    rw [hz]
+    rfl
+  · dsimp only [g]
+    rw [archimedeanFlatSchwartz_restrict_iterated_norm]
+    exact f.norm_iteratedFDeriv_le_seminorm ℝ _ _
+
+/-- Every derivative of a flat Schwartz function vanishes to arbitrary order in each separate
+coordinate. -/
+private theorem archimedeanFlatSchwartz_restrict_wall_bounds
+    (f : archimedeanFlatSchwartz (ι := ι) (κ := κ)) (j m : ℕ) :
+    ∃ C ≥ 0, ∀ x : archAdd(ι, κ),
+      (∀ i, ‖iteratedFDeriv ℝ j (f.val : archAdd(ι, κ) → ℂ) x‖ ≤ C * ‖x.1 i‖ ^ m) ∧
+      (∀ k, ‖iteratedFDeriv ℝ j (f.val : archAdd(ι, κ) → ℂ) x‖ ≤ C * ‖x.2 k‖ ^ m) := by
+  classical
+  let A := archAdd(ι, κ)
+  have hflat (a : A) (ha : meetsWall(a)) (k : ℕ) :
+      iteratedFDeriv ℝ k (f.val : A → ℂ) a = 0 := by
+    apply ContinuousMultilinearMap.ext
+    intro v
+    have h := f.property
+    simp only [archimedeanFlatSchwartz, Submodule.mem_iInf, LinearMap.mem_ker,
+      IsLinearMap.mk'_apply] at h
+    exact h ⟨a, ha⟩ k v
+  cases m with
+  | zero =>
+    refine ⟨SchwartzMap.seminorm ℝ 0 j f.val, apply_nonneg _ _, fun x ↦ ?_⟩
+    have h := f.val.norm_iteratedFDeriv_le_seminorm ℝ j x
+    simp [h]
+  | succ n =>
+    let C := SchwartzMap.seminorm ℝ 0 (n + 1 + j) f.val
+    have hC : 0 ≤ C := apply_nonneg _ _
+    have bound (x v : A) (ha : meetsWall(x - v)) :
+        ‖iteratedFDeriv ℝ j (f.val : A → ℂ) x‖ ≤ C * ‖v‖ ^ (n + 1) := by
+      have ht := archimedeanFlatSchwartz_restrict_jet_at_wall f.val (x - v) v j n (hflat _ ha)
+      rw [sub_add_cancel] at ht
+      exact ht
+    refine ⟨C, hC, fun x ↦ ⟨fun i ↦ ?_, fun k ↦ ?_⟩⟩
+    · let v : A := (Pi.single i (x.1 i), 0)
+      have hv : ‖v‖ = ‖x.1 i‖ := by
+        change ‖((Pi.single i (x.1 i) : ι → ℝ), (0 : κ → ℂ))‖ = _
+        rw [Prod.norm_def, Pi.norm_single, norm_zero, max_eq_left (norm_nonneg _)]
+      have h := bound x v (Or.inl ⟨i, by
+        change x.1 i - (Pi.single i (x.1 i) : ι → ℝ) i = 0
+        simp⟩)
+      rwa [hv] at h
+    · let v : A := (0, Pi.single k (x.2 k))
+      have hv : ‖v‖ = ‖x.2 k‖ := by
+        change ‖((0 : ι → ℝ), (Pi.single k (x.2 k) : κ → ℂ))‖ = _
+        rw [Prod.norm_def, Pi.norm_single, norm_zero, max_eq_right (norm_nonneg _)]
+      have h := bound x v (Or.inr ⟨k, by
+        change x.2 k - (Pi.single k (x.2 k) : κ → ℂ) k = 0
+        simp⟩)
+      rwa [hv] at h
+
+/-- A common bound on the individual coordinate norms also bounds their maximum, including the
+empty product. -/
+private theorem archimedeanFlatSchwartz_restrict_pi_bound
+    {S K : Type*} [Fintype S] [NormedAddCommGroup K] (y : S → K)
+    (m : ℕ) (d C : ℝ) (hd : 0 ≤ d) (h0 : d ≤ C) (hC : 0 ≤ C)
+    (hy : ∀ i, ‖y i‖ ^ m * d ≤ C) : ‖y‖ ^ m * d ≤ C := by
+  cases isEmpty_or_nonempty S with
+  | inl h =>
+    have hzero : y = 0 := Subsingleton.elim _ _
+    rw [hzero, norm_zero]
+    cases m <;> simp [h0, hC]
+  | inr h =>
+    obtain ⟨i, _, hi⟩ := Finset.univ.exists_max_image (fun i ↦ ‖y i‖) Finset.univ_nonempty
+    have hn : ‖y‖ ≤ ‖y i‖ :=
+      (pi_norm_le_iff_of_nonneg (norm_nonneg _)).mpr fun k ↦ hi k (Finset.mem_univ _)
+    exact (mul_le_mul_of_nonneg_right (pow_le_pow_left₀ (norm_nonneg _) hn _) hd).trans (hy i)
+
+/-- All jets decay faster than every power of the maximum of one, the coordinate norm and the
+inverse-coordinate norm. -/
+private theorem archimedeanFlatSchwartz_restrict_jet_decay
+    (f : archimedeanFlatSchwartz (ι := ι) (κ := κ)) (j m : ℕ) :
+    ∃ C ≥ 0, ∀ u : archMul(ι, κ), (max 1 (max ‖archVal u‖ ‖archVal (u⁻¹)‖)) ^ m *
+      ‖iteratedFDeriv ℝ j (f.val : archAdd(ι, κ) → ℂ) (archVal u)‖ ≤ C := by
+  classical
+  obtain ⟨B, hB, hb⟩ := archimedeanFlatSchwartz_restrict_wall_bounds f j m
+  let C := max B (max (SchwartzMap.seminorm ℝ 0 j f.val) (SchwartzMap.seminorm ℝ m j f.val))
+  refine ⟨C, hB.trans (le_max_left _ _), fun u ↦ ?_⟩
+  let d := ‖iteratedFDeriv ℝ j (f.val : archAdd(ι, κ) → ℂ) (archVal u)‖
+  have hd : 0 ≤ d := norm_nonneg _
+  have h0 : d ≤ C := (f.val.norm_iteratedFDeriv_le_seminorm ℝ j _).trans
+    ((le_max_left _ _).trans (le_max_right _ _))
+  have hbC : B ≤ C := le_max_left _ _
+  have hC : 0 ≤ C := hB.trans hbC
+  have join {a b : ℝ} (ha : a ^ m * d ≤ C) (hb : b ^ m * d ≤ C) :
+      max a b ^ m * d ≤ C := by
+    rcases max_choice a b with h | h
+    · rwa [h]
+    · rwa [h]
+  have invBound {r : ℝ} (hr : 0 < r) (h : d ≤ B * r ^ m) : r⁻¹ ^ m * d ≤ C := by
+    rw [inv_pow, inv_mul_eq_div]
+    exact ((div_le_iff₀ (pow_pos hr m)).mpr h).trans hbC
+  apply join (by simpa using h0)
+  apply join ((f.val.le_seminorm ℝ m j _).trans ((le_max_right _ _).trans (le_max_right _ _)))
+  rw [Prod.norm_def]
+  apply join
+  · apply archimedeanFlatSchwartz_restrict_pi_bound _ _ _ _ hd h0 hC
+    intro i
+    change ‖(↑((u.1 i)⁻¹) : ℝ)‖ ^ m * d ≤ C
+    rw [Units.val_inv_eq_inv_val, norm_inv]
+    exact invBound (norm_pos_iff.mpr (u.1 i).ne_zero) ((hb (archVal u)).1 i)
+  · apply archimedeanFlatSchwartz_restrict_pi_bound _ _ _ _ hd h0 hC
+    intro k
+    change ‖(↑((u.2 k)⁻¹) : ℂ)‖ ^ m * d ≤ C
+    rw [Units.val_inv_eq_inv_val, norm_inv]
+    exact invBound (norm_pos_iff.mpr (u.2 k).ne_zero) ((hb (archVal u)).2 k)
+
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
-After restriction to the units, each separate coordinate weight of a flat Schwartz
-function is Schwartz–Bruhat. The analytic estimate is pointwise in the choice of
-exponents and in the input function. -/
+In logarithmic radial and angular coordinates, coordinate weights preserve Schwartz–Bruhat
+decay for a Schwartz function whose Euclidean jets decay rapidly in the norms of both
+the coordinates and their inverses. -/
 private theorem archimedeanFlatSchwartz_restrict_twist_mem
-    (f : archimedeanFlatSchwartz (ι := ι) (κ := κ)) (a : weights(ι, κ, (univ : Set ℝ))) :
-    weightMap(a) (fun u ↦ f.val (archVal u)) ∈ schwartzBruhatSubmodule (archMul(ι, κ)) := by
+    (f : 𝓢(archAdd(ι, κ), ℂ))
+    (hjets : ∀ j m : ℕ, ∃ C ≥ 0, ∀ u : archMul(ι, κ),
+      (max 1 (max ‖archVal u‖ ‖archVal (u⁻¹)‖)) ^ m *
+        ‖iteratedFDeriv ℝ j (f : archAdd(ι, κ) → ℂ) (archVal u)‖ ≤ C)
+    (a : weights(ι, κ, (univ : Set ℝ))) :
+    weightMap(a) (fun u ↦ f (archVal u)) ∈ schwartzBruhatSubmodule (archMul(ι, κ)) := by
   sorry
 
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
@@ -1665,19 +1866,12 @@ theorem archimedeanFlatSchwartz_restrict_to_weighted :
   let R : X →ₗ[ℂ] Y :=
     { toFun := fun f ↦ ⟨fun u ↦ f.val (archVal u),
         (Submodule.mem_iInf _).mpr fun a ↦ Submodule.mem_comap.mpr
-          (archimedeanFlatSchwartz_restrict_twist_mem f a)⟩
+          (archimedeanFlatSchwartz_restrict_twist_mem f.val
+            (archimedeanFlatSchwartz_restrict_jet_decay f) a)⟩
       map_add' := fun _ _ ↦ rfl
       map_smul' := fun _ _ ↦ rfl }
   have hY : IsFrechetTVS Y :=
     archimedeanWeightedSchwartz_frechet isOpen_univ ordConnected_univ univ_nonempty
-  have hE : IsFrechetTVS 𝓢(A, ℂ) := by
-    have : (uniformity 𝓢(A, ℂ)).IsCountablyGenerated := by
-      rw [uniformity_eq_comap_nhds_zero]
-      infer_instance
-    refine ⟨inferInstance, (schwartz_withSeminorms ℂ _ _).toPolynormableSpace,
-      UniformSpace.metrizableSpace, ?_⟩
-    rw [IsUniformAddGroup.rightUniformSpace_eq]
-    exact completeSpace_schwartzMap
   -- The zero twist makes point evaluations continuous on the weighted space.
   let W := weights(ι, κ, (univ : Set ℝ))
   let a₀ : W := (fun _ ↦ ⟨0, by simp⟩, fun _ ↦ ⟨0, by simp⟩)
@@ -1706,7 +1900,33 @@ theorem archimedeanFlatSchwartz_restrict_to_weighted :
         fun h ↦ Subtype.ext (funext h)⟩
     rw [heq]
     exact isClosed_iInter fun u ↦ isClosed_eq ((evY u).comp continuous_snd) ((evX u).comp continuous_fst)
-  have hR := weilTest_continuous_of_isClosed_graph hE hY X archimedeanFlatSchwartz_isClosed R hgraph
+  -- Project the closed graph onto the complete space of flat tests. Open mapping
+  -- makes this projection a quotient map, so continuity can be tested on its graph.
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace Y := hY.2.2.2
+  have : TopologicalSpace.MetrizableSpace Y := hY.2.2.1
+  have : CompleteSpace 𝓢(A, ℂ) := completeSpace_schwartzMap
+  have : CompleteSpace X := completeSpace_coe_iff_isComplete.mpr archimedeanFlatSchwartz_isClosed.isComplete
+  have : IsUniformAddGroup X := X.toAddSubgroup.isUniformAddGroup
+  have : (uniformity 𝓢(A, ℂ)).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero]
+    infer_instance
+  have : (uniformity X).IsCountablyGenerated :=
+    inferInstanceAs (uniformity (X : Set 𝓢(A, ℂ))).IsCountablyGenerated
+  have : BaireSpace X := BaireSpace.of_completelyPseudoMetrizable
+  let Γ := R.graph
+  have : CompleteSpace Γ := completeSpace_coe_iff_isComplete.mpr hgraph.isComplete
+  have : IsUniformAddGroup Γ := Γ.toAddSubgroup.isUniformAddGroup
+  have : FirstCountableTopology Γ := inferInstanceAs (FirstCountableTopology (Γ : Set (X × Y)))
+  let P : Γ →L[ℂ] X := (ContinuousLinearMap.fst ℂ X Y).comp Γ.subtypeL
+  have hs : Surjective P := fun x ↦ ⟨⟨(x, R x), (LinearMap.mem_graph_iff _ _).mpr rfl⟩, rfl⟩
+  have ho : IsOpenMap P := isOpenMap_of_not_isMeagre_range P
+    (hs.range_eq ▸ not_isMeagre_of_isOpen isOpen_univ univ_nonempty)
+  have hq : IsOpenQuotientMap P := ⟨hs, P.continuous, ho⟩
+  have hR : Continuous R := hq.isQuotientMap.continuous_iff.mpr <|
+    (continuous_snd.comp continuous_subtype_val).congr fun p ↦
+      (LinearMap.mem_graph_iff R p.val).mp p.property
   exact ⟨⟨R, hR⟩, fun _ _ ↦ rfl⟩
 
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
