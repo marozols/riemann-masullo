@@ -2,6 +2,7 @@ module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
+import all RiemannMasullo.AppB_AnalyticNT.Sec4b
 import Mathlib.Algebra.Order.Archimedean.Real.Hom
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec1b
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec2b
@@ -1640,6 +1641,15 @@ theorem archimedeanFlatSchwartz_isClosed :
 -- supported close to, but away from, the origin.
 
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
+After restriction to the units, each separate coordinate weight of a flat Schwartz
+function is Schwartz–Bruhat. The analytic estimate is pointwise in the choice of
+exponents and in the input function. -/
+private theorem archimedeanFlatSchwartz_restrict_twist_mem
+    (f : archimedeanFlatSchwartz (ι := ι) (κ := κ)) (a : weights(ι, κ, (univ : Set ℝ))) :
+    weightMap(a) (fun u ↦ f.val (archVal u)) ∈ schwartzBruhatSubmodule (archMul(ι, κ)) := by
+  sorry
+
+/-- Paper: Lemma 5.3.3.3(3), p. 253.
 Forward half of the restriction equivalence: restricting a flat Schwartz function to the
 product of the punctured lines is a continuous linear map into the all-exponent weighted
 space. The estimates (5.3.3.21)–(5.3.3.23) fail for bumps supported close to, but away
@@ -1647,7 +1657,57 @@ from, the origin; the bound comes instead from Taylor's theorem at the coordinat
 theorem archimedeanFlatSchwartz_restrict_to_weighted :
     ∃ R : ↥(archimedeanFlatSchwartz (ι := ι) (κ := κ)) →L[ℂ] 𝓦(univ),
       ∀ (f : archimedeanFlatSchwartz) (u : archMul(ι, κ)), (R f).val u = f.val (archVal u) := by
-  sorry
+  classical
+  let G := archMul(ι, κ)
+  let A := archAdd(ι, κ)
+  let X := archimedeanFlatSchwartz (ι := ι) (κ := κ)
+  let Y := 𝓦(univ)
+  let R : X →ₗ[ℂ] Y :=
+    { toFun := fun f ↦ ⟨fun u ↦ f.val (archVal u),
+        (Submodule.mem_iInf _).mpr fun a ↦ Submodule.mem_comap.mpr
+          (archimedeanFlatSchwartz_restrict_twist_mem f a)⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hY : IsFrechetTVS Y :=
+    archimedeanWeightedSchwartz_frechet isOpen_univ ordConnected_univ univ_nonempty
+  have hE : IsFrechetTVS 𝓢(A, ℂ) := by
+    have : (uniformity 𝓢(A, ℂ)).IsCountablyGenerated := by
+      rw [uniformity_eq_comap_nhds_zero]
+      infer_instance
+    refine ⟨inferInstance, (schwartz_withSeminorms ℂ _ _).toPolynormableSpace,
+      UniformSpace.metrizableSpace, ?_⟩
+    rw [IsUniformAddGroup.rightUniformSpace_eq]
+    exact completeSpace_schwartzMap
+  -- The zero twist makes point evaluations continuous on the weighted space.
+  let W := weights(ι, κ, (univ : Set ℝ))
+  let a₀ : W := (fun _ ↦ ⟨0, by simp⟩, fun _ ↦ ⟨0, by simp⟩)
+  let P : SeminormFamily ℂ (archimedeanWeightedSchwartzSubmodule (ι := ι) (κ := κ) univ)
+      (W × {p : Seminorm ℂ (SchwartzBruhat G) // Continuous p}) :=
+    fun i ↦ i.2.val.comp (archimedeanSchwartzTwist univ i.1)
+  let T : Y →ₗ[ℂ] SchwartzBruhat G := archimedeanSchwartzTwist univ a₀
+  have htw : Continuous T := by
+    apply (PolynormableSpace.withSeminorms ℂ (SchwartzBruhat G)).continuous_of_continuous_comp
+    intro p
+    exact (withGeneratingSeminorms_spec _ P).continuous_seminorm (a₀, p)
+  have evY (u : G) : Continuous (fun g : Y ↦ g.val u) := by
+    apply ((continuous_schwartzBruhat_eval_forEndpoints u).comp htw).congr
+    intro g
+    change archimedeanSchwartzTwist univ a₀ g u = g.val u
+    simpa [a₀] using archimedeanSchwartzTwist_apply univ a₀ g u
+  have evX (u : G) : Continuous (fun f : X ↦ f.val (archVal u)) :=
+    (TemperedDistribution.delta (archVal u)).continuous.comp continuous_subtype_val
+  -- Equality on every tuple of units cuts out the graph of the restriction map.
+  have hgraph : IsClosed (R.graph : Set (X × Y)) := by
+    have heq : (R.graph : Set (X × Y)) = ⋂ u : G, {p : X × Y | p.2.val u = p.1.val (archVal u)} := by
+      ext p
+      change p ∈ R.graph ↔ _
+      rw [LinearMap.mem_graph_iff, mem_iInter]
+      exact ⟨fun h u ↦ congrArg (fun y : Y ↦ y.val u) h,
+        fun h ↦ Subtype.ext (funext h)⟩
+    rw [heq]
+    exact isClosed_iInter fun u ↦ isClosed_eq ((evY u).comp continuous_snd) ((evX u).comp continuous_fst)
+  have hR := weilTest_continuous_of_isClosed_graph hE hY X archimedeanFlatSchwartz_isClosed R hgraph
+  exact ⟨⟨R, hR⟩, fun _ _ ↦ rfl⟩
 
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
 Inverse half of the restriction equivalence, for a fixed restriction map: a function of
