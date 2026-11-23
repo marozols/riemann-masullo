@@ -3446,15 +3446,6 @@ theorem sLocalIdelicZFunction_schwartzBergman_of_entire (χ : PontryaginDual J�
 
 end EntireChartStripBounds
 
-/-- Paper: Proposition 5.3.4.4(1)–(2), p. 264.
-On the component of χ, a zeta transform is entire exactly when it agrees there
-with the transform of a polar-free test. -/
-theorem sLocalIdelicZFunction_entire_iff_eq_polarFree (r : RealModels) (c : ComplexModels)
-    (χ : PontryaginDual Jₛ) (f : ℬₛ) :
-    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) univ ↔
-      ∃ f₀ : sAdelePolarFree S r c, ∀ s : ℂ,
-        sLocalIdelicZFunction f (chartₛ(χ) s) = sLocalIdelicZFunction f₀.val (chartₛ(χ) s) := by sorry
-
 /-- Multiplication of a test by a character of the idele quotient factors that character
 out of the S-unit sum, since every projected diagonal S-unit has class one. -/
 private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_twist_sum (b : Xₛ)
@@ -3961,6 +3952,33 @@ theorem sLocalIdelicZFunction_eq_polarFree_iff_theta_exponentialDecay (r : RealM
     obtain ⟨b, _, hb⟩ := sLocalHomogeneousTheta_exists_polarFree_of_decay r c χ f hd
     exact ⟨b, hb⟩
 
+/-- Paper: Proposition 5.3.4.4(1)–(2), p. 264.
+On the component of χ, a zeta transform is entire exactly when it agrees there
+with the transform of a polar-free test. -/
+theorem sLocalIdelicZFunction_entire_iff_eq_polarFree (r : RealModels) (c : ComplexModels)
+    (χ : PontryaginDual Jₛ) (f : ℬₛ) :
+    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) univ ↔
+      ∃ f₀ : sAdelePolarFree S r c, ∀ s : ℂ,
+        sLocalIdelicZFunction f (chartₛ(χ) s) = sLocalIdelicZFunction f₀.val (chartₛ(χ) s) := by
+  constructor
+  · intro ha
+    let B : SchwartzBergman univ := ⟨_, sLocalIdelicZFunction_schwartzBergman_of_entire χ f ha⟩
+    obtain ⟨M, hM, _⟩ := existsUnique_positiveRealFourierMellin univ isOpen_univ
+      (ordConnected_univ : OrdConnected (univ : Set ℝ)) univ_nonempty
+    let p := M.symm B
+    obtain ⟨b, hb⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_lift r c χ p
+    refine ⟨b, ?_⟩
+    apply realArchimedeanMellin_existsUnique_eqNF
+      (sLocalIdelicZFunction_meromorphic f χ) (sLocalIdelicZFunction_meromorphic b.val χ)
+    intro s hs
+    calc
+      _ = (M p).val s := congrArg (fun v : SchwartzBergman univ ↦ v.val s) (M.apply_symm_apply B).symm
+      _ = _ := hM p s (mem_univ _)
+      _ = _ := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ b.val p.val hb s hs).symm
+  · rintro ⟨b, hb⟩
+    have he := sLocalIdelicZFunction_entire_of_polarFree r c b.val b.property χ
+    exact fun z hz ↦ (he z hz).congr (.of_forall fun w ↦ (hb w).symm)
+
 /-- Paper: Proposition 5.3.4.4(1) and (3), p. 264.
 On the component of χ, a zeta transform is entire exactly when the homogeneous theta
 function has exponential decay at every real exponent. Its covariance is the
@@ -3977,30 +3995,8 @@ theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay (χ : Pontryagin
       {e : w.val.Completion ≃+* ℂ // IsHomeomorph (e : w.val.Completion → ℂ)} :=
     ⟨InfinitePlace.Completion.ringEquivComplexOfIsComplex w.property,
       (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.property).toHomeomorph.isHomeomorph⟩
-  obtain ⟨τ, hτ⟩ := sIdeleQuotientNorm_exists_section F S
-  obtain ⟨M, hM, _⟩ := existsUnique_positiveRealFourierMellin univ isOpen_univ
-    (ordConnected_univ : OrdConnected (univ : Set ℝ)) univ_nonempty
-  constructor
-  · intro ha
-    exact (sLocalIdelicZFunction_eq_polarFree_iff_theta_exponentialDecay r c χ f).mp
-      ((sLocalIdelicZFunction_entire_iff_eq_polarFree r c χ f).mp ha)
-  · intro hd
-    obtain ⟨p, hp⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_exists_profile χ f τ hτ
-    have hmem := (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_mem χ f τ hτ p hp).mp hd
-    let v : PositiveRealExponentialDecay univ := ⟨p, hmem⟩
-    have hrad : ∀ g : Jₛ, thetaAt(χ₁(χ)) f g = (χ g : ℂ)⁻¹ * p (Real.log ((mₛ g).val : ℝ)) := by
-      intro g
-      rw [← hp, inv_mul_cancel_left₀ (Circle.coe_ne_zero _)]
-    have hdiff : Differentiable ℂ (M v).val := by
-      simpa only [preimage_univ, differentiableOn_univ] using (M v).property.2.1
-    have eqB : (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) = (M v).val := by
-      funext z
-      apply sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_continue
-        (sLocalIdelicZFunction_meromorphic f χ) (fun z _ ↦ (hdiff.analyticAt z).meromorphicNFAt) _ z
-      exact fun s hs ↦ (sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial χ f p hrad s hs).trans
-        (hM v s (mem_univ _)).symm
-    rw [eqB]
-    exact fun z _ ↦ hdiff.analyticAt z
+  exact (sLocalIdelicZFunction_entire_iff_eq_polarFree r c χ f).trans
+    (sLocalIdelicZFunction_eq_polarFree_iff_theta_exponentialDecay r c χ f)
 
 /-- Mellin integration turns a compact unit average followed by dilation into the
 average of the character times the scalar dilation. -/
