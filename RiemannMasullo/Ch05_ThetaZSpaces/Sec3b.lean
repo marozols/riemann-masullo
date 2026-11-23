@@ -3492,13 +3492,57 @@ theorem sLocalIdelicZFunction_entire_of_polarFree (r : RealModels) (c : ComplexM
   simpa only [hEq] using hI'
 
 /-- Paper: Lemma 5.3.4.2(3), p. 260.
+Pointwise multiplication by a continuous quasi-character of the S-ideles is a continuous
+complex-linear self-map of the polar-free subspace, and it acts there by multiplication at
+the S-ideles. This is the analytic content of the linear homeomorphism of part (3): the
+printed proof (p. 261) obtains only that the range is dense and concludes surjectivity, which
+is the gap reported on the issue. The homeomorphism is recovered below by applying this
+statement to the quasi-character and to its inverse, with no closed-range argument. -/
+theorem sAdelePolarFree_quasiCharacter_mul_clm (r : RealModels) (c : ComplexModels) (b : Xₛ) :
+    ∃ M : ↥(sAdelePolarFree S r c) →L[ℂ] ↥(sAdelePolarFree S r c),
+      ∀ f (g : Aₛˣ), (M f).val (Multiplicative.ofAdd g.val) =
+        b (QuotientGroup.mk g) * f.val (Multiplicative.ofAdd g.val) := by sorry
+
+/-- Two Schwartz-Bruhat functions on the S-adelic ring that agree on the units of the ring
+agree everywhere, because the units are dense in a product of local fields. -/
+theorem sAdeleSchwartzBruhat_eq_of_eqOn_units {f g : ℬₛ}
+    (h : ∀ u : Aₛˣ, f (Multiplicative.ofAdd (u : Aₛ)) =
+      g (Multiplicative.ofAdd (u : Aₛ))) :
+    f = g := by sorry
+
+/-- Paper: Lemma 5.3.4.2(3), p. 260.
 A continuous quasi-character of the S-ideles trivial on S-units acts on polar-free
 functions by pointwise multiplication and defines a linear homeomorphism.
 The character is given on the S-idele quotient. -/
 theorem sAdelePolarFree_quasiCharacter_mul (r : RealModels) (c : ComplexModels) (b : Xₛ) :
     ∃ M : ↥(sAdelePolarFree S r c) ≃L[ℂ] ↥(sAdelePolarFree S r c),
       ∀ f (g : Aₛˣ), (M f).val (Multiplicative.ofAdd g.val) =
-        b (QuotientGroup.mk g) * f.val (Multiplicative.ofAdd g.val) := by sorry
+        b (QuotientGroup.mk g) * f.val (Multiplicative.ofAdd g.val) := by
+  classical
+  -- The inverse of multiplication by the character is multiplication by its inverse.
+  let bInv : Xₛ := b.comp (ContinuousMonoidHom.inv Jₛ)
+  have hInv (g : Jₛ) : bInv g = (b g)⁻¹ := map_inv b g
+  have hcancel (g : Jₛ) : bInv g * b g = 1 := by
+    rw [hInv, inv_mul_cancel₀]
+    exact ((Group.isUnit g).map b).ne_zero
+  obtain ⟨M, hM⟩ := sAdelePolarFree_quasiCharacter_mul_clm (F := F) (S := S) r c b
+  obtain ⟨N, hN⟩ := sAdelePolarFree_quasiCharacter_mul_clm (F := F) (S := S) r c bInv
+  have hleft : LeftInverse N M := by
+    intro f
+    apply Subtype.ext
+    apply sAdeleSchwartzBruhat_eq_of_eqOn_units
+    intro g
+    rw [hN (M f) g, hM f g, ← mul_assoc, hcancel, one_mul]
+  have hright : RightInverse N M := by
+    intro f
+    apply Subtype.ext
+    apply sAdeleSchwartzBruhat_eq_of_eqOn_units
+    intro g
+    have h : b (QuotientGroup.mk g) * bInv (QuotientGroup.mk g) = 1 := by
+      rw [mul_comm]
+      exact hcancel _
+    rw [hM (N f) g, hN f g, ← mul_assoc, h, one_mul]
+  exact ⟨ContinuousLinearEquiv.equivOfInverse M N hleft hright, hM⟩
 
 -- TODO(paper-gap): In (5.3.4.9), the summation index m_v does not occur in the summand.
 -- Norm-one class representatives with archimedean component one need not exist.
