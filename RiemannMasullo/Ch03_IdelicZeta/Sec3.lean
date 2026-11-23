@@ -187,6 +187,54 @@ def sAdeleSchwartzFourier (f : ℬ(Aₛ)) : ℬ(Aₛ) :=
   ⟨fun y ↦ tamagawaFourier (sAdditiveTamagawaMeasure F S) (sAdeleStandardCharacter F S)
     (fun x ↦ f (Multiplicative.ofAdd x)) y.toAdd, sAdeleSchwartzFourier_mem f⟩
 
+open Classical in
+/-- Paper: Theorem 2.2.3.2, p. 82. Fourier transformation of an S-adelic test
+inserted with the integer tail multiplies its local transform by the tail mass
+on the inverse different and vanishes elsewhere. -/
+theorem adeleSchwartzFourier_sAdeleSchwartzToGlobal :
+    ∃ c : ℝ≥0, c ≠ 0 ∧ ∀ (h : ℬ(Aₛ)) (y : AdeleRing (𝓞 F) F),
+      adeleSchwartzFourier (sAdeleSchwartzToGlobal F S h) (Multiplicative.ofAdd y) =
+        if ∀ v : HeightOneSpectrum (𝓞 F), v ∉ S →
+          ‖y.2 v‖ ≤ (v.asIdeal.absNorm : ℝ) ^ multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F)) then
+          (c : ℝ) • sAdeleSchwartzFourier h (Multiplicative.ofAdd (adeleProjection F S y))
+        else 0 := by
+  classical
+  obtain ⟨c, hc, _, hp, _⟩ := sAdeleProjection_dual_masses F S
+  refine ⟨c, hc, fun h y ↦ ?_⟩
+  let G := Multiplicative Aₛ
+  let μ : Measure G := sAdditiveTamagawaMeasure F S
+  have hG := sAdele_fourierMeasure (F := F) (S := S)
+  let : T2Space G := hG.1
+  let : LocallyCompactSpace G := hG.2.1
+  let : BorelSpace G := hG.2.2.1
+  let : μ.IsHaarMeasure := hG.2.2.2.1
+  let f := fun x : Aₛ ↦ h (Multiplicative.ofAdd x)
+  let I := integralAdelesOutside F S
+  let p := adeleProjection F S
+  have he : (fun x ↦ sAdeleSchwartzToGlobal F S h (Multiplicative.ofAdd x)) =
+      (I : Set (AdeleRing (𝓞 F) F)).indicator (f ∘ p) := by
+    funext x
+    rw [sAdeleSchwartzToGlobal_apply]
+    have hi : x ∈ I ↔ ∀ v ∉ S, x.2 v ∈ v.adicCompletionIntegers F := by
+      simp only [I, integralAdelesOutside, Subring.mem_iInf]
+      rfl
+    by_cases hx : x ∈ I
+    · rw [ite_eq_left (hi.mp hx), indicator_of_mem hx]
+      rfl
+    · rw [ite_eq_right (hi.not.mp hx), indicator_of_notMem hx]
+  let : MeasurableSpace (AdeleRing (𝓞 F) F) := borel _
+  let ft := tamagawaFourier (additiveTamagawaMeasure F) (adeleStandardCharacter F)
+  change ft (fun x ↦ sAdeleSchwartzToGlobal F S h (Multiplicative.ofAdd x)) y = _
+  rw [he]
+  have ht := congrFun (tamagawaFourier_sAdeleLift F S c hp f (SchwartzBruhat.integrable μ h)) y
+  refine ht.trans ?_
+  split
+  · rename_i hy
+    rw [indicator_of_mem (show y ∈ sAdeleTailDual F S from hy)]
+    rfl
+  · rename_i hy
+    exact indicator_of_notMem (show y ∉ sAdeleTailDual F S from hy) _
+
 /-- Paper: §3.3.1, p. 128. The Fourier transform at zero integrates the
 test function against the additive Tamagawa measure. -/
 theorem sAdeleSchwartzFourier_apply_zero (f : ℬ(Aₛ)) :

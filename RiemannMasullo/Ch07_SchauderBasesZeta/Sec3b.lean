@@ -453,7 +453,21 @@ private theorem sLocalAbsolutePW_globalSupport_fourier {F : Type*} [Field F] [Nu
         adeleSchwartzFourier (sAdeleSchwartzToGlobal F S h) (Multiplicative.ofAdd y) ≠ 0 →
           sAdeleSchwartzFourier h (Multiplicative.ofAdd (adeleProjection F S y)) ≠ 0 ∧
             ∀ v, v ∉ S → ‖y.2 v‖ ≤ D v := by
-  sorry
+  classical
+  let D (v : HeightOneSpectrum (𝓞 F)) :=
+    (v.asIdeal.absNorm : ℝ) ^ multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F))
+  refine ⟨D, fun v ↦ one_le_pow₀ (by exact_mod_cast (HeightOneSpectrum.one_lt_absNorm v).le), ?_, ?_⟩
+  · apply (Ideal.finite_factors (differentIdeal_ne_bot (A := ℤ) (B := 𝓞 F))).subset
+    intro v hv
+    by_contra hn
+    exact hv (by simp [D, multiplicity_eq_zero_of_not_dvd hn])
+  · obtain ⟨c, _, hc⟩ := adeleSchwartzFourier_sAdeleSchwartzToGlobal (F := F) (S := S)
+    intro h y hy
+    rw [hc] at hy
+    split at hy
+    · rename_i htail
+      exact ⟨fun hz ↦ hy (by rw [hz, smul_zero]), htail⟩
+    · exact (hy rfl).elim
 
 /-- An idele whose S-coordinates lie in the S-product region of size `Y` and whose other
 finite coordinates are bounded by `D` has idelic norm at most `Y` times the product of `D`. -/
