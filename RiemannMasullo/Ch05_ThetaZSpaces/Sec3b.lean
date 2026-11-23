@@ -3117,6 +3117,349 @@ theorem sAdelePolarFree_eq_of_models (r r' : RealModels) (c c' : ComplexModels) 
     sAdelePolarFree S r c = sAdelePolarFree S r' c' :=
   le_antisymm (sAdelePolarFree_le_of_models r r' c c') (sAdelePolarFree_le_of_models r' r c' c)
 
+/-- A Schwartz–Bruhat function on a group, pulled back along a topological group
+isomorphism, is integrable for every Haar measure. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_pullback {G H : Type*}
+    [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G] [MeasurableSpace G] [BorelSpace G]
+    [CommGroup H] [TopologicalSpace H] [IsTopologicalGroup H] [T2Space H] [LocallyCompactSpace H]
+    [MeasurableSpace H] [BorelSpace H]
+    (μ : Measure G) [μ.IsHaarMeasure] (Φ : G ≃ₜ* H) (T : SchwartzBruhat H) :
+    Integrable (fun g ↦ T.val (Φ g)) μ := by
+  have hT := SchwartzBruhat.integrable (μ.map Φ) T
+  exact (Φ.toHomeomorph.measurableEmbedding.integrable_map_iff.mp hT)
+
+/-- A finite-place Schwartz–Bruhat function vanishing at zero is integrable on the
+units against every norm power. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_finite {K : Type*} [NormedField K]
+    [MeasurableSpace Kˣ] [OpensMeasurableSpace Kˣ] (μ : Measure Kˣ) [IsFiniteMeasureOnCompacts μ]
+    (h : Kˣ → ℂ) (hh : Continuous h) (hs : HasCompactSupport h) (σ : ℝ) :
+    Integrable (fun u : Kˣ ↦ ‖h u‖ * ‖u.val‖ ^ σ) μ := by
+  have hc : Continuous (fun u : Kˣ ↦ ‖u.val‖ ^ σ) :=
+    (continuous_norm.comp Units.continuous_val).rpow_const
+      (fun u ↦ Or.inl (norm_ne_zero_iff.mpr u.ne_zero))
+  exact (hh.norm.mul hc).integrable_of_hasCompactSupport (hs.norm.mul_right)
+
+
+/-- A ring isomorphism that is a homeomorphism has a continuous inverse. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_symm {A B : Type*} [Ring A] [Ring B]
+    [TopologicalSpace A] [TopologicalSpace B] (e : A ≃+* B) (he : IsHomeomorph e) :
+    Continuous e.symm := by
+  convert (IsHomeomorph.homeomorph _ he).symm.continuous using 1
+  funext z
+  apply he.injective
+  rw [RingEquiv.apply_symm_apply]
+  exact ((IsHomeomorph.homeomorph _ he).apply_symm_apply z).symm
+
+/-- A product over the infinite places splits into the real and the complex places. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_prod (φ : InfinitePlace F → ℝ) :
+    ∏ w, φ w = (∏ i : RealPlaces, φ i.val) * ∏ j : ComplexPlaces, φ j.val := by
+  rw [← Fintype.prod_subtype_mul_prod_subtype (fun w : InfinitePlace F ↦ w.IsReal) φ]
+  congr 1
+  exact Fintype.prod_equiv (Equiv.subtypeEquivRight fun w ↦ InfinitePlace.not_isReal_iff_isComplex)
+    _ _ (fun _ ↦ rfl)
+
+/-- The modulus of a norm twist of a unitary character is the corresponding real norm power. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_norm (χ : PontryaginDual Jₛ) (s : ℂ)
+    (g : Aₛˣ) :
+    ‖chartₛ(χ) s (QuotientGroup.mk g)‖ =
+      (∏ w : InfinitePlace F, ‖g.val.1 w‖ ^ ((w.mult : ℝ) * s.re)) *
+        ∏ v : S, ‖g.val.2 v‖ ^ s.re := by
+  change ‖(χ (QuotientGroup.mk g) : ℂ) * ((((mₛ (QuotientGroup.mk g) : ℝ≥0) : ℝ) : ℂ)) ^ s‖ = _
+  rw [norm_mul, Circle.norm_coe, one_mul, sIdeleQuotientNorm_mk,
+    Complex.norm_cpow_eq_rpow_re_of_pos (NNReal.coe_pos.mpr (Units.zero_lt _))]
+  have hnorm : (((sIdeleNorm F S g : ℝ≥0ˣ) : ℝ≥0) : ℝ) =
+      (∏ w : InfinitePlace F, ‖g.val.1 w‖ ^ w.mult) * ∏ v : S, ‖g.val.2 v‖ := by
+    simp [sIdeleNorm, MonoidHom.mul_apply, MonoidHom.finsetProd_apply, MonoidHom.pow_apply,
+      Units.val_mul, Units.val_pow_eq_pow_val, Units.coe_map,
+      NNReal.coe_mul, NNReal.coe_prod, NNReal.coe_pow]
+  rw [hnorm, Real.mul_rpow (by positivity) (by positivity),
+    ← Real.finsetProd_rpow _ _ (fun w _ ↦ by positivity),
+    ← Real.finsetProd_rpow _ _ (fun v _ ↦ by positivity)]
+  congr 1
+  exact Finset.prod_congr rfl fun w _ ↦
+    (Real.rpow_natCast_mul (norm_nonneg (g.val.1 w)) w.mult s.re).symm
+
+
+/-- On a pure tensor with a flat archimedean factor and finite factors vanishing at zero,
+the zeta integrand is absolutely integrable at every norm twist. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_tensor (r : RealModels)
+    (c : ComplexModels)
+    (hr : ∀ (w : RealPlaces) (x : w.val.Completion), ‖(r w).val x‖ = ‖x‖)
+    (hc : ∀ (w : ComplexPlaces) (x : w.val.Completion), ‖(c w).val x‖ = ‖x‖)
+    (f : ℬ(A∞)) (g : ∀ v : S, ℬ(v.val.adicCompletion F))
+    (f₀ : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces))
+    (hf₀ : ∀ x : ArchCoordinates, f₀.val x = f (Multiplicative.ofAdd (assemble(r, c, x))))
+    (hg : ∀ v : S, g v (Multiplicative.ofAdd 0) = 0) (h : ℬₛ)
+    (hh : ∀ x : Aₛ, h (Multiplicative.ofAdd x) =
+      f (Multiplicative.ofAdd x.1) * ∏ v : S, g v (Multiplicative.ofAdd (x.2 v)))
+    (χ : PontryaginDual Jₛ) (z : ℂ) :
+    Integrable (fun u : Aₛˣ ↦ h (Multiplicative.ofAdd u.val) * chartₛ(χ) z (QuotientGroup.mk u))
+      (sMultiplicativeTamagawaMeasure F S) := by
+  classical
+  let (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+  have (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (v : V) : MeasurableSpace (v.adicCompletion F) := borel _
+  have (v : V) : BorelSpace (v.adicCompletion F) := ⟨rfl⟩
+  let (v : V) : MeasurableSpace (v.adicCompletion F)ˣ := borel _
+  have (v : V) : BorelSpace (v.adicCompletion F)ˣ := ⟨rfl⟩
+  have (w : InfinitePlace F) : BorelSpace w.Completionˣ := ⟨by
+    change (borel w.Completion).comap Units.val = _
+    rw [← borel_comap, ← (Units.isEmbedding_val₀ (G₀ := w.Completion)).eq_induced]⟩
+  have (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  have (w : InfinitePlace F) : SecondCountableTopology w.Completionˣ :=
+    (Units.isEmbedding_val₀ (G₀ := w.Completion)).secondCountableTopology
+  have (v : V) : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  have (v : V) : SecondCountableTopology (v.adicCompletion F)ˣ :=
+    (Units.isEmbedding_val₀ (G₀ := v.adicCompletion F)).secondCountableTopology
+  have (v : V) : LocallyCompactSpace (v.adicCompletion F)ˣ :=
+    (IsOpenUnits.isOpenEmbedding_unitsVal (M := v.adicCompletion F)).locallyCompactSpace
+  let : MeasurableSpace (InfiniteAdeleRing F) :=
+    inferInstanceAs (MeasurableSpace ((w : InfinitePlace F) → w.Completion))
+  let : MeasurableSpace Aₛ :=
+    inferInstanceAs (MeasurableSpace (InfiniteAdeleRing F × ((v : S) → v.val.adicCompletion F)))
+  let μa := infiniteLocalMultiplicativeTamagawaMeasure F
+  let μb := fun v : S ↦ finiteLocalMultiplicativeTamagawaMeasure F v.val
+  have (w : InfinitePlace F) : (μa w).IsHaarMeasure :=
+    infiniteLocalMultiplicativeTamagawaMeasure_isHaarMeasure w
+  have (v : S) : (μb v).IsHaarMeasure :=
+    finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v.val
+  let e := ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+    ((v : S) → v.val.adicCompletion F)
+  let eArch := ContinuousMulEquiv.piUnits (M := fun w : InfinitePlace F ↦ w.Completion)
+  let eS := ContinuousMulEquiv.piUnits (M := fun v : S ↦ v.val.adicCompletion F)
+  let ψ : (((w : InfinitePlace F) → w.Completionˣ) × ((v : S) → (v.val.adicCompletion F)ˣ)) →
+      Aₛˣ := fun x ↦ e.symm (eArch.symm x.1, eS.symm x.2)
+  have hmap : sMultiplicativeTamagawaMeasure F S =
+      ((Measure.pi μa).prod (Measure.pi μb)).map ψ := rfl
+  have hB := sIdeleGroup_borelSpace (F := F) (S := S)
+  let φ (u : Aₛˣ) : ℂ := h (Multiplicative.ofAdd u.val) * chartₛ(χ) z (QuotientGroup.mk u)
+  have hφ : Continuous φ :=
+    ((schwartzBruhat_continuous (G := Multiplicative Aₛ) h).comp
+      (continuous_ofAdd.comp Units.continuous_val)).mul
+      ((chartₛ(χ) z).continuous.comp QuotientGroup.continuous_mk)
+  have hψ : Continuous ψ := e.symm.continuous.comp
+    ((eArch.symm.continuous.comp continuous_fst).prodMk (eS.symm.continuous.comp continuous_snd))
+  rw [hmap]
+  refine (integrable_map_measure ?_ hψ.measurable.aemeasurable).mpr ?_
+  · rw [← hmap]
+    exact hφ.aestronglyMeasurable
+  let A (a : (w : InfinitePlace F) → w.Completionˣ) : ℝ :=
+    ‖f (Multiplicative.ofAdd (show A∞ from fun w ↦ (a w).val))‖ *
+      ∏ w, ‖(a w).val‖ ^ ((w.mult : ℝ) * z.re)
+  let Bf (v : S) (u : (v.val.adicCompletion F)ˣ) : ℝ :=
+    ‖g v (Multiplicative.ofAdd u.val)‖ * ‖u.val‖ ^ z.re
+  have hA : Integrable A (Measure.pi μa) := by
+    obtain ⟨R, hR⟩ :=
+      archimedeanFlatSchwartz_restrict_to_weighted (ι := RealPlaces) (κ := ComplexPlaces)
+    let wt : ((RealPlaces → (insert 0 univ : Set ℝ)) × (ComplexPlaces → (insert 0 univ : Set ℝ))) :=
+      (fun _ ↦ ⟨z.re, by simp⟩, fun _ ↦ ⟨z.re, by simp⟩)
+    let f₁ : ↥(archimedeanWeightedSchwartzSubmodule (ι := RealPlaces) (κ := ComplexPlaces) univ) :=
+      R f₀
+    let T := archimedeanSchwartzTwist univ wt f₁
+    let : MeasurableSpace ((RealPlaces → ℝˣ) × (ComplexPlaces → ℂˣ)) := borel _
+    have : BorelSpace ((RealPlaces → ℝˣ) × (ComplexPlaces → ℂˣ)) := ⟨rfl⟩
+    have hrs (i : RealPlaces) :=
+      sLocalIdelicZFunction_entire_of_polarFree_symm (r i).val (r i).property
+    have hcs (j : ComplexPlaces) :=
+      sLocalIdelicZFunction_entire_of_polarFree_symm (c j).val (c j).property
+    let Φ : ((w : InfinitePlace F) → w.Completionˣ) ≃ₜ*
+        ((RealPlaces → ℝˣ) × (ComplexPlaces → ℂˣ)) :=
+      { toFun := fun a ↦ (fun i ↦ Units.map (r i).val.toMonoidHom (a i.val),
+          fun j ↦ Units.map (c j).val.toMonoidHom (a j.val))
+        invFun := fun u w ↦ if hw : w.IsReal then
+            Units.map (r ⟨w, hw⟩).val.symm.toMonoidHom (u.1 ⟨w, hw⟩)
+          else Units.map (c ⟨w, InfinitePlace.not_isReal_iff_isComplex.mp hw⟩).val.symm.toMonoidHom
+            (u.2 ⟨w, InfinitePlace.not_isReal_iff_isComplex.mp hw⟩)
+        left_inv := fun a ↦ funext fun w ↦ by
+          by_cases hw : w.IsReal
+          · simp only [hw, ↓reduceDIte]
+            ext
+            simp
+          · simp only [hw, ↓reduceDIte]
+            ext
+            simp
+        right_inv := fun u ↦ Prod.ext (funext fun i ↦ by
+            simp only [i.2, ↓reduceDIte]
+            ext
+            simp)
+          (funext fun j ↦ by
+            simp only [InfinitePlace.not_isReal_iff_isComplex.mpr j.2, ↓reduceDIte]
+            ext
+            simp)
+        map_mul' := fun a b ↦ Prod.ext (funext fun i ↦ map_mul _ _ _)
+          (funext fun j ↦ map_mul _ _ _)
+        continuous_toFun := (continuous_pi fun i ↦
+            (Continuous.units_map _ (r i).property.continuous).comp (continuous_apply i.val)).prodMk
+          (continuous_pi fun j ↦
+            (Continuous.units_map _ (c j).property.continuous).comp (continuous_apply j.val))
+        continuous_invFun := continuous_pi fun w ↦ by
+          by_cases hw : w.IsReal
+          · simp only [hw, ↓reduceDIte]
+            exact (Continuous.units_map _ (hrs _)).comp ((continuous_apply _).comp continuous_fst)
+          · simp only [hw, ↓reduceDIte]
+            exact (Continuous.units_map _ (hcs _)).comp ((continuous_apply _).comp continuous_snd) }
+    refine (sLocalIdelicZFunction_entire_of_polarFree_pullback (Measure.pi μa) Φ T).norm.congr
+      (ae_of_all _ fun a ↦ ?_)
+    have hT := archimedeanSchwartzTwist_apply univ wt f₁ (Φ a)
+    have hRv := hR f₀ (Φ a)
+    have e1 (i : RealPlaces) : ‖((Φ a).1 i).val‖ = ‖(a i.val).val‖ := hr i _
+    have e2 (j : ComplexPlaces) : ‖((Φ a).2 j).val‖ = ‖(a j.val).val‖ := hc j _
+    have hasm : assemble(r, c, ((fun i ↦ ((Φ a).1 i).val, fun j ↦ ((Φ a).2 j).val) :
+        ArchCoordinates)) = (show A∞ from fun w ↦ (a w).val) := by
+      funext w
+      by_cases hw : w.IsReal
+      · simp [hw, Φ]
+      · simp [hw, Φ]
+    change ‖T (Φ a)‖ = A a
+    rw [hT, norm_mul, norm_mul, Complex.norm_real, Complex.norm_real,
+      Real.norm_of_nonneg (Finset.prod_nonneg fun _ _ ↦ by positivity),
+      Real.norm_of_nonneg (Finset.prod_nonneg fun _ _ ↦ by positivity)]
+    change _ * _ * ‖(R f₀).val (Φ a)‖ = A a
+    rw [hRv, hf₀, hasm]
+    simp only [A, e1, e2]
+    rw [sLocalIdelicZFunction_entire_of_polarFree_prod
+      (fun w ↦ ‖(a w).val‖ ^ ((w.mult : ℝ) * z.re))]
+    have hre (i : RealPlaces) : ‖(a i.val).val‖ ^ ((i.val.mult : ℝ) * z.re) =
+        ‖(a i.val).val‖ ^ ((wt.1 i : ℝ)) := by
+      simp [wt, i.2.mult_eq_one]
+    have hco (j : ComplexPlaces) : ‖(a j.val).val‖ ^ ((j.val.mult : ℝ) * z.re) =
+        (‖(a j.val).val‖ ^ (2 : ℕ)) ^ ((wt.2 j : ℝ)) := by
+      rw [j.2.mult_eq_two, ← Real.rpow_natCast_mul (norm_nonneg _)]
+    simp only [hre, hco]
+    ring
+  have hBf (v : S) : Integrable (Bf v) (μb v) := by
+    obtain ⟨-, hcs⟩ := (exists_finitePlaceSchwartz_zeroExtension_iff v.val
+      (fun u ↦ g v (Multiplicative.ofAdd u.val))).mp ⟨g v, hg v, fun u ↦ rfl⟩
+    exact sLocalIdelicZFunction_entire_of_polarFree_finite (μb v) _
+      ((schwartzBruhat_continuous (G := Multiplicative (v.val.adicCompletion F)) (g v)).comp
+        (continuous_ofAdd.comp Units.continuous_val)) hcs z.re
+  have hmaj := hA.mul_prod (Integrable.fintype_prod_dep hBf)
+  refine hmaj.mono' (hφ.comp hψ).aestronglyMeasurable (ae_of_all _ fun p ↦ le_of_eq ?_)
+  change ‖h (Multiplicative.ofAdd (ψ p).val) * chartₛ(χ) z (QuotientGroup.mk (ψ p))‖ =
+    A p.1 * ∏ v, Bf v (p.2 v)
+  have h₁ : (ψ p).val.1 = (show A∞ from fun w ↦ (p.1 w).val) := rfl
+  have h₂ (v : S) : (ψ p).val.2 v = (p.2 v).val := rfl
+  rw [norm_mul, sLocalIdelicZFunction_entire_of_polarFree_norm, hh, norm_mul, norm_prod, h₁]
+  simp only [h₂, A, Bf, Finset.prod_mul_distrib]
+  ring
+
+
+/-- A logarithm times a power with exponent within one of σ is bounded by the
+powers with exponents σ - 2, σ and σ + 2. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_log {σ x t : ℝ} (hx : |x - σ| < 1) (ht : 0 < t) :
+    t ^ x * |Real.log t| ≤ t ^ (σ - 2) + 2 * t ^ σ + t ^ (σ + 2) := by
+  have hlog : |Real.log t| ≤ t + t⁻¹ := by
+    rcases le_or_gt 1 t with h1 | h1
+    · rw [abs_of_nonneg (Real.log_nonneg h1)]
+      have := Real.log_le_sub_one_of_pos ht
+      have : 0 < t⁻¹ := inv_pos.mpr ht
+      linarith
+    · rw [abs_of_neg (Real.log_neg ht h1), ← Real.log_inv]
+      have := Real.log_le_sub_one_of_pos (inv_pos.mpr ht)
+      linarith
+  have hpow : t ^ x ≤ t ^ (σ - 1) + t ^ (σ + 1) := by
+    have h1 := abs_lt.mp hx
+    rcases le_or_gt 1 t with h | h
+    · have := Real.rpow_le_rpow_of_exponent_le h (show x ≤ σ + 1 by linarith)
+      have : 0 ≤ t ^ (σ - 1) := by positivity
+      linarith
+    · have := Real.rpow_le_rpow_of_exponent_ge ht h.le (show σ - 1 ≤ x by linarith)
+      have : 0 ≤ t ^ (σ + 1) := by positivity
+      linarith
+  have e1 : t ^ (σ - 1) * t = t ^ σ := by
+    rw [← Real.rpow_add_one ht.ne']; ring_nf
+  have e2 : t ^ (σ - 1) * t⁻¹ = t ^ (σ - 2) := by
+    rw [← Real.rpow_neg_one, ← Real.rpow_add ht]; ring_nf
+  have e3 : t ^ (σ + 1) * t = t ^ (σ + 2) := by
+    rw [← Real.rpow_add_one ht.ne']; ring_nf
+  have e4 : t ^ (σ + 1) * t⁻¹ = t ^ σ := by
+    rw [← Real.rpow_neg_one, ← Real.rpow_add ht]; ring_nf
+  calc t ^ x * |Real.log t| ≤ (t ^ (σ - 1) + t ^ (σ + 1)) * (t + t⁻¹) :=
+        mul_le_mul hpow hlog (abs_nonneg _) (by positivity)
+    _ = _ := by
+        rw [add_mul, mul_add, mul_add, e1, e2, e3, e4]; ring
+
+/-- An integral of a test times a unitary weight times a complex power of a positive
+function is entire when it converges absolutely at every exponent. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_analytic {G : Type*} [MeasurableSpace G] (μ : Measure G)
+    (f χ : G → ℂ) (t : G → ℝ) (ht : ∀ g, 0 < t g) (htm : Measurable t)
+    (hχ : ∀ g, ‖χ g‖ = 1)
+    (hint : ∀ z : ℂ, Integrable (fun g ↦ f g * (χ g * (t g : ℂ) ^ z)) μ) :
+    AnalyticOnNhd ℂ (fun z : ℂ ↦ ∫ g, f g * (χ g * (t g : ℂ) ^ z) ∂μ) univ := by
+  apply DifferentiableOn.analyticOnNhd _ isOpen_univ
+  intro s _
+  refine DifferentiableAt.differentiableWithinAt ?_
+  let W (z : ℂ) (g : G) : ℂ := f g * (χ g * (t g : ℂ) ^ z)
+  let D (z : ℂ) (g : G) : ℂ := W z g * Complex.log (t g : ℂ)
+  have hnormW (z : ℂ) (g : G) : ‖W z g‖ = ‖f g‖ * t g ^ z.re := by
+    simp only [W, norm_mul, hχ, one_mul, Complex.norm_cpow_eq_rpow_re_of_pos (ht g)]
+  let Vb : Set ℂ := Metric.ball s 1
+  have hV : Vb ∈ 𝓝 s := Metric.ball_mem_nhds s one_pos
+  have hmeas : ∀ᶠ z in 𝓝 s, AEStronglyMeasurable (W z) μ :=
+    Eventually.of_forall fun z ↦ (hint z).aestronglyMeasurable
+  have hDmeas : AEStronglyMeasurable (D s) μ :=
+    (hint s).aestronglyMeasurable.mul (Complex.measurable_log.comp
+      (Complex.measurable_ofReal.comp htm)).aestronglyMeasurable
+  let bound (g : G) : ℝ := ‖W ((s.re - 2 : ℝ) : ℂ) g‖ + 2 * ‖W (s.re : ℂ) g‖ +
+    ‖W ((s.re + 2 : ℝ) : ℂ) g‖
+  have hbound : Integrable bound μ :=
+    (((hint _).norm.add ((hint _).norm.const_mul 2)).add (hint _).norm)
+  have hDbound : ∀ᵐ g ∂μ, ∀ z ∈ Vb, ‖D z g‖ ≤ bound g := Eventually.of_forall fun g z hz ↦ by
+    have hlog : Complex.log (t g : ℂ) = (Real.log (t g) : ℂ) :=
+      (Complex.ofReal_log (ht g).le).symm
+    have hzr : |z.re - s.re| < 1 := by
+      have h := Complex.abs_re_le_norm (z - s)
+      rw [Complex.sub_re] at h
+      exact h.trans_lt (by simpa [Vb, dist_eq_norm] using hz)
+    simp only [D, bound]
+    rw [norm_mul, hnormW, hlog, Complex.norm_real, Real.norm_eq_abs, hnormW, hnormW, hnormW,
+      Complex.ofReal_re, Complex.ofReal_re, Complex.ofReal_re, mul_assoc]
+    calc ‖f g‖ * (t g ^ z.re * |Real.log (t g)|)
+        ≤ ‖f g‖ * (t g ^ (s.re - 2) + 2 * t g ^ s.re + t g ^ (s.re + 2)) :=
+          mul_le_mul_of_nonneg_left (sLocalIdelicZFunction_entire_of_polarFree_log hzr (ht g)) (norm_nonneg _)
+      _ = _ := by ring
+  have hdiff : ∀ᵐ g ∂μ, ∀ z ∈ Vb, HasDerivAt (fun w ↦ W w g) (D z g) z :=
+    Eventually.of_forall fun g z _ ↦ by
+      have hg : (t g : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (ht g).ne'
+      simpa only [W, D, id_eq, mul_assoc, mul_one] using
+        (((hasDerivAt_id z).const_cpow (Or.inl hg)).const_mul (χ g)).const_mul (f g)
+  exact (hasDerivAt_integral_of_dominated_loc_of_deriv_le hV hmeas (hint s) hDmeas
+    hDbound hbound hdiff).2.differentiableAt
+
+/-- The zeta integrand of a polar-free test is absolutely integrable at every norm twist. -/
+private theorem sLocalIdelicZFunction_entire_of_polarFree_integrable (r : RealModels)
+    (c : ComplexModels) (f : ℬₛ) (hf : f ∈ sAdelePolarFree S r c) (χ : PontryaginDual Jₛ)
+    (z : ℂ) :
+    Integrable (fun u : Aₛˣ ↦ f (Multiplicative.ofAdd u.val) * chartₛ(χ) z (QuotientGroup.mk u))
+      (sMultiplicativeTamagawaMeasure F S) := by
+  let r₀ : RealModels := fun w ↦ ⟨InfinitePlace.Completion.ringEquivRealOfIsReal w.2,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal w.2).toHomeomorph.isHomeomorph⟩
+  let c₀ : ComplexModels := fun w ↦ ⟨InfinitePlace.Completion.ringEquivComplexOfIsComplex w.2,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.2).toHomeomorph.isHomeomorph⟩
+  have hr₀ (w : RealPlaces) (x : w.val.Completion) : ‖(r₀ w).val x‖ = ‖x‖ :=
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal w.2).isometry.norm_map_of_map_zero
+      (map_zero (InfinitePlace.Completion.ringEquivRealOfIsReal w.2)) x
+  have hc₀ (w : ComplexPlaces) (x : w.val.Completion) : ‖(c₀ w).val x‖ = ‖x‖ :=
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.2).isometry.norm_map_of_map_zero
+      (map_zero (InfinitePlace.Completion.ringEquivComplexOfIsComplex w.2)) x
+  have hspan := sAdelePolarFree_eq_span_tmul (S := S) r₀ c₀
+  dsimp only at hspan
+  rw [sAdelePolarFree_eq_of_models r r₀ c c₀, hspan] at hf
+  refine Submodule.span_induction (p := fun f _ ↦ Integrable (fun u : Aₛˣ ↦
+      f (Multiplicative.ofAdd u.val) * chartₛ(χ) z (QuotientGroup.mk u))
+      (sMultiplicativeTamagawaMeasure F S)) ?_ ?_ ?_ ?_ hf
+  · intro x hx
+    obtain ⟨f, g, ⟨f₀, hf₀⟩, hg, hx⟩ := hx
+    subst hx
+    exact sLocalIdelicZFunction_entire_of_polarFree_tensor r₀ c₀ hr₀ hc₀ f g f₀ hf₀ hg _
+      (fun x ↦ (sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec f g x) χ z
+  · exact (integrable_zero _ _ _).congr (ae_of_all _ fun u ↦ (zero_mul _).symm)
+  · intro x y _ _ hx hy
+    exact (hx.add hy).congr (ae_of_all _ fun u ↦ (add_mul _ _ _).symm)
+  · intro a x _ hx
+    exact (hx.const_mul a).congr (ae_of_all _ fun u ↦ (mul_assoc _ _ _).symm)
+
 -- TODO(paper-gap): The proof of (2) starts from entireness and concludes local vanishing.
 -- Restricted local characters are coupled by the S-units, and a pole can cancel against
 -- a zero of a different factor. The stated implication goes in the other direction.
@@ -3125,7 +3468,28 @@ theorem sAdelePolarFree_eq_of_models (r r' : RealModels) (c c' : ComplexModels) 
 The zeta transform of a polar-free test is entire on every norm-twist component. -/
 theorem sLocalIdelicZFunction_entire_of_polarFree (r : RealModels) (c : ComplexModels)
     (f : ℬₛ) (_hf : f ∈ sAdelePolarFree S r c) (χ : PontryaginDual Jₛ) :
-    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) univ := by sorry
+    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) univ := by
+  let (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+  let (v : V) : MeasurableSpace (v.adicCompletion F) := borel _
+  let : MeasurableSpace (InfiniteAdeleRing F) :=
+    inferInstanceAs (MeasurableSpace ((w : InfinitePlace F) → w.Completion))
+  let : MeasurableSpace Aₛ :=
+    inferInstanceAs (MeasurableSpace (InfiniteAdeleRing F × ((v : S) → v.val.adicCompletion F)))
+  have hB := sIdeleGroup_borelSpace (F := F) (S := S)
+  let t (u : Aₛˣ) : ℝ := (((mₛ (QuotientGroup.mk u) : ℝ≥0ˣ) : ℝ≥0) : ℝ)
+  have ht (u : Aₛˣ) : 0 < t u := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have htc : Continuous t := NNReal.continuous_coe.comp (Units.continuous_val.comp
+    ((isProperMap_sIdeleQuotientNorm F S).continuous.comp QuotientGroup.continuous_mk))
+  have hI := sLocalIdelicZFunction_entire_of_polarFree_analytic (sMultiplicativeTamagawaMeasure F S)
+    (fun u : Aₛˣ ↦ f (Multiplicative.ofAdd u.val)) (fun u ↦ (χ (QuotientGroup.mk u) : ℂ)) t ht
+    htc.measurable (fun u ↦ Circle.norm_coe _)
+    (sLocalIdelicZFunction_entire_of_polarFree_integrable r c f _hf χ)
+  have hI' : AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZetaIntegral f (chartₛ(χ) s)) univ := hI
+  have hEq (s : ℂ) : sLocalIdelicZFunction f (chartₛ(χ) s) =
+      sLocalIdelicZetaIntegral f (chartₛ(χ) s) := by
+    exact realArchimedeanMellin_existsUnique_eqNF (sLocalIdelicZFunction_meromorphic f χ) hI'.meromorphicNFOn
+      (fun z hz ↦ sLocalIdelicZFunction_eq_integral f ⟨χ, z, hz, rfl⟩) s
+  simpa only [hEq] using hI'
 
 /-- Paper: Lemma 5.3.4.2(3), p. 260.
 A continuous quasi-character of the S-ideles trivial on S-units acts on polar-free
