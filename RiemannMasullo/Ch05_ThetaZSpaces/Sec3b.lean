@@ -1649,6 +1649,123 @@ theorem archimedeanFlatSchwartz_restrict_to_weighted :
       ∀ (f : archimedeanFlatSchwartz) (u : archMul(ι, κ)), (R f).val u = f.val (archVal u) := by
   sorry
 
+/-- Paper: Lemma 5.3.3.3(3), p. 253. An all-exponent weighted function on
+the punctured lines admits an ordinary Schwartz extension in additive coordinates. -/
+private theorem archimedeanWeightedSchwartz_exists_zero_extension (f : 𝓦(univ)) :
+    ∃ g : 𝓢(archAdd(ι, κ), ℂ), ∀ u : archMul(ι, κ), g (archVal u) = f.val u := by
+  sorry
+
+/-- The points with every real and complex coordinate nonzero are dense. -/
+private theorem archimedeanVal_denseRange :
+    DenseRange (archVal : archMul(ι, κ) → archAdd(ι, κ)) := by
+  have hd (K : Type) [NontriviallyNormedField K] : DenseRange (Units.val : Kˣ → K) := by
+    apply (dense_compl_singleton (0 : K)).mono
+    intro x hx
+    exact ⟨Units.mk0 x hx, rfl⟩
+  exact (DenseRange.piMap (fun _ : ι ↦ hd ℝ)).prodMap
+    (DenseRange.piMap (fun _ : κ ↦ hd ℂ))
+
+/-- The product of the squared absolute values is smooth and vanishes at every wall. -/
+private def archimedeanWallProduct (x : archAdd(ι, κ)) : ℂ :=
+  (∏ i, ((x.1 i : ℂ) ^ 2)) * ∏ j, (Complex.normSq (x.2 j) : ℂ)
+
+private theorem archimedeanWallProduct_smooth :
+    ContDiff ℝ (∞) (archimedeanWallProduct (ι := ι) (κ := κ)) := by
+  have hn : ContDiff ℝ (∞) Complex.normSq := by
+    have hRe := Complex.reCLM.contDiff (n := (∞ : ℕ∞ω))
+    have hIm := Complex.imCLM.contDiff (n := (∞ : ℕ∞ω))
+    exact (hRe.mul hRe).add (hIm.mul hIm)
+  apply ContDiff.mul
+  · apply contDiff_prod
+    intro i _
+    apply ContDiff.pow
+    apply Complex.ofRealCLM.contDiff.comp
+    fun_prop
+  · apply contDiff_prod
+    intro j _
+    apply Complex.ofRealCLM.contDiff.comp
+    apply hn.comp
+    fun_prop
+
+private theorem archimedeanWallProduct_zero (x : archAdd(ι, κ)) (hx : meetsWall(x)) :
+    archimedeanWallProduct x = 0 := by
+  classical
+  rcases hx with ⟨i, hi⟩ | ⟨j, hj⟩
+  · exact mul_eq_zero_of_left (Finset.prod_eq_zero (Finset.mem_univ i) (by simp [hi])) _
+  · exact mul_eq_zero_of_right _ (Finset.prod_eq_zero (Finset.mem_univ j) (by simp [hj]))
+
+/-- Division by the wall product subtracts two from each real exponent and one
+from each complex exponent in the defining family of Schwartz twists. -/
+private theorem archimedeanWeightedSchwartz_div_wall (f : 𝓦(univ)) :
+    ∃ h : 𝓦(univ), ∀ u : archMul(ι, κ),
+      f.val u = archimedeanWallProduct (archVal u) * h.val u := by
+  classical
+  let P (u : archMul(ι, κ)) := archimedeanWallProduct (archVal u)
+  have hP (u : archMul(ι, κ)) : P u ≠ 0 := mul_ne_zero
+    (Finset.prod_ne_zero_iff.mpr fun i _ ↦ pow_ne_zero _ (Complex.ofReal_ne_zero.mpr (u.1 i).ne_zero))
+    (Finset.prod_ne_zero_iff.mpr fun j _ ↦ Complex.ofReal_ne_zero.mpr
+      ((Complex.normSq_pos.mpr (u.2 j).ne_zero).ne'))
+  let h (u : archMul(ι, κ)) := f.val u / P u
+  have hh : h ∈ archimedeanWeightedSchwartzSubmodule (ι := ι) (κ := κ) univ := by
+    simp only [archimedeanWeightedSchwartzSubmodule, Submodule.mem_iInf, Submodule.mem_comap]
+    intro a
+    let b : weights(ι, κ, univ) :=
+      (fun i ↦ ⟨a.1 i - 2, by simp⟩, fun j ↦ ⟨a.2 j - 1, by simp⟩)
+    have he : weightMap(a) h = weightMap(b) f.val := by
+      funext u
+      change _ * _ * (f.val u / P u) = _ * _ * f.val u
+      have hreal (i : ι) : ‖((u.1 i).val)‖ ^ ((a.1 i : ℝ) - 2) =
+          ‖((u.1 i).val)‖ ^ (a.1 i : ℝ) / (u.1 i).val ^ 2 := by
+        rw [Real.rpow_sub (norm_pos_iff.mpr (u.1 i).ne_zero), Real.rpow_two,
+          Real.norm_eq_abs, sq_abs]
+      have hcomplex (j : κ) : (‖((u.2 j).val)‖ ^ 2) ^ ((a.2 j : ℝ) - 1) =
+          (‖((u.2 j).val)‖ ^ 2) ^ (a.2 j : ℝ) / Complex.normSq (u.2 j).val := by
+        rw [Real.rpow_sub (pow_pos (norm_pos_iff.mpr (u.2 j).ne_zero) _),
+          Real.rpow_one, Complex.normSq_eq_norm_sq]
+      dsimp only [b, P, archimedeanWallProduct]
+      simp_rw [hreal, hcomplex, Finset.prod_div_distrib]
+      push_cast
+      ring
+    rw [he]
+    exact (archimedeanSchwartzTwist univ b f).property
+  exact ⟨⟨h, hh⟩, fun u ↦ by change _ = P u * (f.val u / P u); rw [← mul_div_assoc, mul_div_cancel_left₀ _ (hP u)]⟩
+
+/-- Repeated division by a smooth wall factor forces every jet of the ordinary
+Schwartz zero extension to vanish at every coordinate wall. -/
+private theorem archimedeanWeightedSchwartz_exists_flat_extension (f : 𝓦(univ)) :
+    ∃ g : archimedeanFlatSchwartz (ι := ι) (κ := κ),
+      ∀ u : archMul(ι, κ), g.val (archVal u) = f.val u := by
+  classical
+  choose E hE using archimedeanWeightedSchwartz_exists_zero_extension (ι := ι) (κ := κ)
+  have hjet (x : archAdd(ι, κ)) (hx : meetsWall(x)) (n : ℕ) :
+      ∀ a : 𝓦(univ), iteratedFDeriv ℝ n (E a : archAdd(ι, κ) → ℂ) x = 0 := by
+    induction n using Nat.strong_induction_on with
+    | ind n ih =>
+      intro a
+      obtain ⟨b, hb⟩ := archimedeanWeightedSchwartz_div_wall a
+      have he : (E a : archAdd(ι, κ) → ℂ) = fun y ↦ archimedeanWallProduct y * E b y := by
+        apply archimedeanVal_denseRange.equalizer (E a).continuous
+          (archimedeanWallProduct_smooth.continuous.mul (E b).continuous)
+        exact funext fun u ↦ (hE a u).trans ((hb u).trans (congrArg (_ * ·) (hE b u).symm))
+      rw [he, ← norm_eq_zero]
+      apply le_antisymm _ (norm_nonneg _)
+      apply (norm_iteratedFDeriv_mul_le archimedeanWallProduct_smooth ((E b).smooth ⊤) x
+        (n := n) (by simp)).trans
+      apply le_of_eq
+      apply Finset.sum_eq_zero
+      intro i hi
+      by_cases h : i = 0
+      · subst i
+        simp [norm_iteratedFDeriv_zero, archimedeanWallProduct_zero x hx]
+      · have hi := Finset.mem_range.mp hi
+        simp [ih (n - i) (by omega) b]
+  refine ⟨⟨E f, ?_⟩, hE f⟩
+  simp only [archimedeanFlatSchwartz, Submodule.mem_iInf, LinearMap.mem_ker, IsLinearMap.mk'_apply]
+  rintro ⟨x, hx⟩ n v
+  rw [hjet x hx n f]
+  rfl
+
+
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
 Inverse half of the restriction equivalence, for a fixed restriction map: a function of
 the all-exponent weighted space extends by zero across the coordinate walls to a flat
@@ -1660,7 +1777,41 @@ theorem archimedeanWeightedSchwartz_zeroExtension
     ∃ E : 𝓦(univ) →L[ℂ] ↥(archimedeanFlatSchwartz (ι := ι) (κ := κ)),
       (∀ (f : 𝓦(univ)) (u : archMul(ι, κ)), (E f).val (archVal u) = f.val u) ∧
         ∀ f, E (R f) = f := by
-  sorry
+  classical
+  let A := ↥(archimedeanFlatSchwartz (ι := ι) (κ := κ))
+  let : CompleteSpace 𝓢(archAdd(ι, κ), ℂ) := completeSpace_schwartzMap
+  let : CompleteSpace A := (archimedeanFlatSchwartz_isClosed (ι := ι) (κ := κ)).completeSpace_coe
+  let : PolynormableSpace ℂ 𝓢(archAdd(ι, κ), ℂ) :=
+    (schwartz_withSeminorms ℂ _ ℂ).toPolynormableSpace
+  have : (uniformity 𝓢(archAdd(ι, κ), ℂ)).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero]
+    infer_instance
+  let : MetrizableSpace 𝓢(archAdd(ι, κ), ℂ) := UniformSpace.metrizableSpace
+  let : IsUniformAddGroup A := (archimedeanFlatSchwartz (ι := ι) (κ := κ)).toAddSubgroup.isUniformAddGroup
+  have hA : IsFrechetTVS A := by
+    refine ⟨inferInstance, inferInstance, MetrizableSpace.subtype _, ?_⟩
+    rw [IsUniformAddGroup.rightUniformSpace_eq]
+    infer_instance
+  have hB := archimedeanWeightedSchwartz_frechet (ι := ι) (κ := κ)
+    isOpen_univ (inferInstance : OrdConnected (univ : Set ℝ)) univ_nonempty
+  have hi : Function.Injective R := by
+    intro f g h
+    apply Subtype.ext
+    apply SchwartzMap.ext
+    exact congrFun (archimedeanVal_denseRange.equalizer f.val.continuous g.val.continuous
+      (funext fun u ↦ (hR f u).symm.trans
+        ((congrArg (fun a : 𝓦(univ) ↦ a.val u) h).trans (hR g u))))
+  have hs : Function.Surjective R := by
+    intro f
+    obtain ⟨g, hg⟩ := archimedeanWeightedSchwartz_exists_flat_extension f
+    exact ⟨g, Subtype.ext (funext fun u ↦ (hR g u).trans (hg u))⟩
+  have hopen : IsOpenMap R := isOpenMap_of_surjective_toLF (isLFSpace_of_isFrechetTVS hB)
+    (X := fun _ ↦ A) (fun _ ↦ hA) (fun _ ↦ ContinuousLinearMap.id ℂ A) (fun _ ↦ Subset.rfl)
+    (fun x ↦ ⟨0, x, rfl⟩) R hs
+  let e := ContinuousLinearEquiv.ofIsHomeomorph (LinearEquiv.ofBijective R.toLinearMap ⟨hi, hs⟩)
+    ⟨R.continuous, hopen, hi, hs⟩
+  refine ⟨e.symm.toContinuousLinearMap, fun f u ↦ ?_, fun f ↦ e.symm_apply_apply f⟩
+  exact (hR (e.symm f) u).symm.trans (congrArg (fun a : 𝓦(univ) ↦ a.val u) (e.apply_symm_apply f))
 
 /-- Paper: Lemma 5.3.3.3(3), p. 253.
 Restriction to the product of the punctured lines identifies flat Schwartz functions
