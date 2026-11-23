@@ -21,6 +21,7 @@ import Mathlib.Analysis.Complex.Liouville
 import Mathlib.Analysis.Meromorphic.RCLike
 import Mathlib.Topology.LocallyConstant.Algebra
 import Mathlib.Topology.MetricSpace.Ultra.TotallySeparated
+import Mathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.Analysis.Normed.Field.ProperSpace
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Gamma.VerticalStrip
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
