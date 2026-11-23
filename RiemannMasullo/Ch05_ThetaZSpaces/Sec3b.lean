@@ -1360,13 +1360,76 @@ theorem archimedeanWeightedSchwartz_metrizable {I : Set ℝ} (ho : IsOpen I)
     (hi : OrdConnected I) (hne : I.Nonempty) : MetrizableSpace 𝓦(I) := by
   sorry
 
+/-- The product of all partial twists induces the weighted topology and separates points
+because one of its coordinates is the unweighted function. -/
+private theorem archimedeanSchwartzTwists_isEmbedding (I : Set ℝ) :
+    Topology.IsEmbedding (LinearMap.pi (archimedeanSchwartzTwist I) :
+      𝓦(I) →ₗ[ℂ] (weights(ι, κ, I) → SchwartzBruhat (archMul(ι, κ)))) := by
+  classical
+  let X := SchwartzBruhat (archMul(ι, κ))
+  let Z := weights(ι, κ, I)
+  let t : 𝓦(I) →ₗ[ℂ] (Z → X) := LinearMap.pi (archimedeanSchwartzTwist I)
+  have hp := withSeminorms_pi fun _ : Z ↦ PolynormableSpace.withSeminorms ℂ X
+  have hs := withGeneratingSeminorms_spec (archimedeanWeightedSchwartzSubmodule (ι := ι) (κ := κ) I)
+    (fun i : Z × {p : Seminorm ℂ X // Continuous p} ↦ i.2.val.comp (archimedeanSchwartzTwist I i.1))
+  show Topology.IsEmbedding t
+  constructor
+  · constructor
+    refine hs.topologicalSpace_eq_iInf.trans ?_
+    refine Eq.trans ?_ (WithSeminorms.topologicalSpace_eq_iInf
+      (t := TopologicalSpace.induced t inferInstance) (t.withSeminorms_induced hp)).symm
+    rw [iInf_sigma, iInf_prod]
+    rfl
+  · intro f g h
+    let a : Z := (fun _ ↦ ⟨0, Set.mem_insert _ _⟩, fun _ ↦ ⟨0, Set.mem_insert _ _⟩)
+    apply Subtype.ext
+    funext u
+    have hu := congrArg (fun v : X ↦ v u) (congrFun h a)
+    change archimedeanSchwartzTwist I a f u = archimedeanSchwartzTwist I a g u at hu
+    have hv := (archimedeanSchwartzTwist_apply I a f u).symm.trans
+      (hu.trans (archimedeanSchwartzTwist_apply I a g u))
+    simpa [a] using hv
+
 /-- Paper: Lemma 5.3.3.3(1), p. 252.
 Completeness half of the lemma. The partial weight maps embed the weighted space as a
 closed submodule of a product of complete Schwartz–Bruhat spaces, so every Cauchy
 filter of twists converges to the family of its pointwise limits. -/
 theorem archimedeanWeightedSchwartz_complete {I : Set ℝ} (ho : IsOpen I)
     (hi : OrdConnected I) (hne : I.Nonempty) : CompleteSpace 𝓦(I) := by
-  sorry
+  classical
+  clear ho hi hne
+  let G := archMul(ι, κ)
+  let X := SchwartzBruhat G
+  let Z := weights(ι, κ, I)
+  let t : 𝓦(I) →ₗ[ℂ] (Z → X) := LinearMap.pi (archimedeanSchwartzTwist I)
+  let o : Z := (fun _ ↦ ⟨0, Set.mem_insert _ _⟩, fun _ ↦ ⟨0, Set.mem_insert _ _⟩)
+  let w (a : Z) (u : G) : ℂ :=
+    (↑(∏ i, ‖(u.1 i).val‖ ^ (a.1 i : ℝ)) : ℂ) *
+      (↑(∏ j, (‖(u.2 j).val‖ ^ (2 : ℕ)) ^ (a.2 j : ℝ)) : ℂ)
+  have ht (f : 𝓦(I)) (a : Z) (u : G) : t f a u = w a u * f.val u := rfl
+  have h0 (f : 𝓦(I)) (u : G) : t f o u = f.val u := by simp [ht, w, o]
+  have hr : range t = ⋂ (a : Z) (u : G), {g : Z → X | g a u = w a u * g o u} := by
+    ext g
+    simp only [mem_range, mem_iInter, Set.mem_ofPred_eq]
+    constructor
+    · rintro ⟨f, rfl⟩ a u
+      rw [h0, ht]
+    · intro hg
+      have hf : (g o).val ∈ archimedeanWeightedSchwartzSubmodule I := by
+        refine (Submodule.mem_iInf _).mpr fun a ↦ Submodule.mem_comap.mpr ?_
+        have heq : weightMap(a) (g o).val = (g a).val := funext fun u ↦ (hg a u).symm
+        exact heq ▸ (g a).property
+      refine ⟨⟨(g o).val, hf⟩, funext fun a ↦ Subtype.ext (funext fun u ↦ (hg a u).symm)⟩
+  have heval (a : Z) (u : G) : Continuous (fun g : Z → X ↦ g a u) :=
+    (continuous_schwartzBruhat_eval_forEndpoints u).comp (continuous_apply a)
+  have hclosed : IsClosed (range t) := by
+    rw [hr]
+    exact isClosed_iInter fun a ↦ isClosed_iInter fun u ↦
+      isClosed_eq (heval a u) (continuous_const.mul (heval o u))
+  let _ : CompleteSpace X := schwartzBruhat_complete
+  have hu := AddMonoidHom.isUniformInducing_of_isInducing (f := t.toAddMonoidHom)
+    (archimedeanSchwartzTwists_isEmbedding (ι := ι) (κ := κ) I).isInducing
+  exact hu.completeSpace hclosed.isComplete
 
 /-- Paper: Lemma 5.3.3.3(1), p. 252.
 For an open nonempty interval the topology from the partial weight maps is Fréchet. -/
@@ -1421,27 +1484,7 @@ theorem archimedeanWeightedSchwartz_separable {I : Set ℝ} (_ho : IsOpen I)
   let X := SchwartzBruhat (archMul(ι, κ))
   let Z := weights(ι, κ, I)
   let t : 𝓦(I) →ₗ[ℂ] (Z → X) := LinearMap.pi (archimedeanSchwartzTwist I)
-  let : PolynormableSpace ℂ X := (schwartzBruhat_nuclear.{0} (G := archMul(ι, κ))).2.1
-  have hp := withSeminorms_pi fun _ : Z ↦ PolynormableSpace.withSeminorms ℂ X
-  have hs := withGeneratingSeminorms_spec (archimedeanWeightedSchwartzSubmodule (ι := ι) (κ := κ) I)
-    (fun i : Z × {p : Seminorm ℂ X // Continuous p} ↦ i.2.val.comp (archimedeanSchwartzTwist I i.1))
-  have ht : Topology.IsEmbedding t := by
-    constructor
-    · constructor
-      refine hs.topologicalSpace_eq_iInf.trans ?_
-      refine Eq.trans ?_ (WithSeminorms.topologicalSpace_eq_iInf
-        (t := TopologicalSpace.induced t inferInstance) (t.withSeminorms_induced hp)).symm
-      rw [iInf_sigma, iInf_prod]
-      rfl
-    · intro f g h
-      let a : Z := (fun _ ↦ ⟨0, Set.mem_insert _ _⟩, fun _ ↦ ⟨0, Set.mem_insert _ _⟩)
-      apply Subtype.ext
-      funext u
-      have hu := congrArg (fun v : X ↦ v u) (congrFun h a)
-      change archimedeanSchwartzTwist I a f u = archimedeanSchwartzTwist I a g u at hu
-      have hv := (archimedeanSchwartzTwist_apply I a f u).symm.trans
-        (hu.trans (archimedeanSchwartzTwist_apply I a g u))
-      simpa [a] using hv
+  have ht : Topology.IsEmbedding t := archimedeanSchwartzTwists_isEmbedding I
   have hn : IsNuclearTVS.{0} 𝓦(I) := isNuclearTVS_of_linearEmbedding t ht
     (isNuclearTVS_pi fun _ : Z ↦ schwartzBruhat_nuclear (G := archMul(ι, κ)))
   obtain ⟨_, -, _, -⟩ := archimedeanWeightedSchwartz_frechet (ι := ι) (κ := κ) _ho _hi _hne
