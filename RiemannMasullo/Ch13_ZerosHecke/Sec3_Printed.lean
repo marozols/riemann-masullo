@@ -6,8 +6,8 @@ public import Mathlib.NumberTheory.LSeries.WeakPNT
 import Mathlib.NumberTheory.NumberField.Cyclotomic.Ideal
 import Mathlib.MeasureTheory.Integral.IntegralEqImproper
 import Mathlib.Analysis.Calculus.BumpFunction.Normed
-import all RiemannMasullo.Ch12_TraceGeometric.Sec5
-import all RiemannMasullo.AppA_AlgebraicNT.Sec3
+import RiemannMasullo.Ch12_TraceGeometric.Sec5
+import RiemannMasullo.AppA_AlgebraicNT.Sec3
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 import RiemannMasullo.AppB_AnalyticNT.Sec4b
 
@@ -617,6 +617,15 @@ private theorem criticalTraceFormula_false_shell_measure {F : Type} [Field F] [N
     exact ⟨fun h ↦ mul_left_cancel₀ (pow_ne_zero k hq.ne') (h.trans (mul_one _).symm),
       fun h ↦ by rw [h, mul_one]⟩
   exact (measure_preimage_mul μ a S).symm.trans (congrArg μ he)
+
+/-- Norms on a completion at a finite place are integral powers of the residue cardinality.
+A copy of the private lemma of the same name in `AppA_AlgebraicNT/Sec3.lean`. -/
+private theorem norm_adicCompletion_eq_zpow (F : Type) [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) {z : v.adicCompletion F} (hz : z ≠ 0) :
+    ‖z‖ = (v.asIdeal.absNorm : ℝ) ^ (WithZero.log (Valued.v z)) := by
+  rw [FinitePlace.norm_def, WithZeroMulInt.toNNReal_neg_apply _ ((Valuation.ne_zero_iff _).mpr hz)]
+  push_cast
+  rfl
 
 private theorem criticalTraceFormula_false_exists_shell {F : Type} [Field F] [NumberField F]
     (v : HeightOneSpectrum (𝓞 F)) (u : (v.adicCompletion F)ˣ) (hu : 1 < ‖u.val‖) :
