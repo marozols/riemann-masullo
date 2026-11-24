@@ -1,7 +1,10 @@
 module
 
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec4
+import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec2
+import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec4
 import all RiemannMasullo.Ch04_PeriodicSchauderBases.Sec6
+import Mathlib.Topology.Algebra.Module.Equiv.Submodule
 
 import all RiemannMasullo.AppA_AlgebraicNT.Sec3
 
@@ -17,6 +20,8 @@ import RiemannMasullo.Ch03_IdelicZeta.Sec3
 import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a
 import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import RiemannMasullo.ForMathlib.Topology.Maps.Strict.Module
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.Barrelled
+import RiemannMasullo.Ch09_HardySobolev.Sec2
 
 /-! # §7.5 Strong co-primality -/
 
@@ -69,13 +74,292 @@ The comparison space is the norm-one isotype of the full exponential-decay space
 abbrev StrongCoprimalityDecaySpace (ω : PontryaginDual C₁) :=
   ↥(modulatedDecayIsotype m𝔽 univ (mem_univ (0 : ℝ)) ω)
 
+/-- Closed graph theorem between Fréchet spaces. The proof is the one of the private
+`weilTest_continuous_of_isClosed_graph` in `AppB_AnalyticNT/Sec4b.lean`, for the whole space. -/
+private theorem exists_strongCoprimalityThetaLinearMap_closedGraph {E Y : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y] [IsTopologicalAddGroup Y]
+    [ContinuousSMul ℂ Y]
+    (hE : IsFrechetTVS E) (hY : IsFrechetTVS Y)
+    (T : E →ₗ[ℂ] Y) (hT : IsClosed (T.graph : Set (E × Y))) : Continuous T := by
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace E := hE.2.2.2
+  have : CompleteSpace Y := hY.2.2.2
+  have : TopologicalSpace.MetrizableSpace E := hE.2.2.1
+  have : TopologicalSpace.MetrizableSpace Y := hY.2.2.1
+  let Γ := T.graph
+  have : CompleteSpace Γ := completeSpace_coe_iff_isComplete.mpr hT.isComplete
+  have : IsUniformAddGroup Γ := Γ.toAddSubgroup.isUniformAddGroup
+  have : TopologicalSpace.MetrizableSpace (E × Y) := inferInstance
+  have : TopologicalSpace.MetrizableSpace Γ :=
+    inferInstanceAs (TopologicalSpace.MetrizableSpace (Γ : Set (E × Y)))
+  have : FirstCountableTopology Γ := inferInstance
+  have : FirstCountableTopology E := inferInstance
+  have : (uniformity E).IsCountablyGenerated := IsUniformAddGroup.uniformity_countably_generated
+  have : BaireSpace E := BaireSpace.of_completelyPseudoMetrizable
+  let Pr : Γ →L[ℂ] E := (ContinuousLinearMap.fst ℂ E Y).comp Γ.subtypeL
+  have hmem (x : E) : (x, T x) ∈ Γ := (LinearMap.mem_graph_iff _ _).mpr rfl
+  have hval (p : Γ) : p.val.2 = T p.val.1 := (LinearMap.mem_graph_iff _ _).mp p.property
+  have hinj : Injective Pr := fun p q h ↦ by
+    have h1 : p.val.1 = q.val.1 := h
+    exact Subtype.ext (Prod.ext h1 (by rw [hval, hval, h1]))
+  have hsurj : Surjective Pr := fun x ↦ ⟨⟨(x, T x), hmem x⟩, rfl⟩
+  have ho : IsOpenMap Pr := by
+    apply isOpenMap_of_not_isMeagre_range Pr
+    rw [hsurj.range_eq]
+    exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty
+  let h : Γ ≃ₜ E :=
+    (Equiv.ofBijective Pr ⟨hinj, hsurj⟩).toHomeomorphOfContinuousOpen Pr.continuous ho
+  refine (continuous_snd.comp (continuous_subtype_val.comp h.symm.continuous)).congr fun x ↦ ?_
+  have h1 : (h.symm x).val.1 = x := h.apply_symm_apply x
+  change (h.symm x).val.2 = T x
+  rw [hval, h1]
+
+/-- A linear map from a final locally convex topology to a polynormable space is continuous
+if its composites with the defining maps are. The proof is the one of the private
+`continuous_of_locallyConvexFinalTopology` in `AppC_LCTVS/Sec2b.lean`. -/
+private theorem exists_strongCoprimalityThetaLinearMap_final
+    {I : Type*} {X : I → Type*} [∀ i, AddCommGroup (X i)] [∀ i, Module ℂ (X i)]
+    [∀ i, TopologicalSpace (X i)] {D G : Type*} [AddCommGroup D] [Module ℂ D]
+    [AddCommGroup G] [Module ℂ G] [TopologicalSpace G] [PolynormableSpace ℂ G]
+    (j : ∀ i, X i →ₗ[ℂ] D) (g : D →ₗ[ℂ] G) (hg : ∀ i, Continuous (g ∘ j i)) :
+    letI := locallyConvexFinalTopology j
+    Continuous g := by
+  let := locallyConvexFinalTopology j
+  have hD : WithSeminorms
+      (Subtype.val : {p : Seminorm ℂ D // ∀ i, Continuous (p ∘ j i)} → Seminorm ℂ D) := ⟨rfl⟩
+  let := hD.isTopologicalAddGroup
+  exact (PolynormableSpace.withSeminorms ℂ G).continuous_of_continuous_comp g fun p ↦
+    hD.continuous_seminorm ⟨p.val.comp g, fun i ↦ p.property.comp (hg i)⟩
+
+/-- At a fixed idele class, global theta is continuous in the test function, by the
+Banach–Steinhaus theorem on the barrelled Schwartz–Bruhat space applied to the finite partial
+sums of point evaluations. The proof is the one of the private `adelicTheta_eval_continuous`
+in `Ch05_ThetaZSpaces/Sec1.lean`. -/
+private theorem exists_strongCoprimalityThetaLinearMap_thetaEval (c : C𝔽) :
+    Continuous (fun f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) ↦ adelicTheta f c) := by
+  induction c using QuotientGroup.induction_on with | H g => ?_
+  let : BarrelledSpace ℂ (SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F))) :=
+    (adeleSchwartz_montel (F := F)).2.1
+  let : Countable F := Countable.of_moduleFinite (R := ℚ)
+  let : Countable Fˣ := Units.val_injective.countable
+  let pt (ξ : Fˣ) : Multiplicative (AdeleRing (𝓞 F) F) :=
+    Multiplicative.ofAdd (algebraMap F (AdeleRing (𝓞 F) F) (ξ : F) * g.val)
+  let ev (ξ : Fˣ) : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) →L[ℂ] ℂ :=
+    ⟨(LinearMap.proj (pt ξ)).comp (schwartzBruhatSubmodule _).subtype,
+      continuous_schwartzBruhat_eval (pt ξ)⟩
+  let L (s : Finset Fˣ) : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) →L[ℂ] ℂ :=
+    ∑ ξ ∈ s, ev ξ
+  have hL (s : Finset Fˣ) (f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F))) :
+      L s f = ∑ ξ ∈ s, f (pt ξ) := by
+    simp only [L, FunLike.coe_sum, Finset.sum_apply]
+    rfl
+  have hsum (f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F))) :
+      HasSum (fun ξ ↦ f (pt ξ)) (adelicTheta f (QuotientGroup.mk g)) := by
+    rw [adelicTheta_mk]
+    refine Summable.hasSum ?_
+    have hs := ((adelicAverage_summableUniformlyOn f {(g, 0)} isCompact_singleton).summable
+      rfl).of_norm
+    simpa only [add_zero, mul_comm g.val] using hs
+  have hT : Filter.Tendsto (fun s f ↦ L s f) Filter.atTop
+      (𝓝 fun f ↦ adelicTheta f (QuotientGroup.mk g)) :=
+    tendsto_pi_nhds.mpr fun f ↦ by
+      simp only [hL]
+      exact hsum f
+  exact (continuousLinearMapOfTendsto L hT).continuous
+
+open MeasureTheory in
+/-- On a barrelled space, the integral over a compact space of a family of continuous linear
+functionals is continuous if each test vector gives a continuous function of the parameter.
+The proof is the one of the private `continuous_integral_of_continuous_eval` in
+`Ch05_ThetaZSpaces/Sec1.lean`. -/
+private theorem exists_strongCoprimalityThetaLinearMap_integral {E H : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E] [ContinuousConstSMul ℂ E]
+    [BarrelledSpace ℂ E] [TopologicalSpace H] [CompactSpace H] {m : MeasurableSpace H}
+    (μ : Measure H) [IsFiniteMeasure μ]
+    (Φ : E → H → ℂ) (hlin : ∀ h, IsLinearMap ℂ fun f ↦ Φ f h)
+    (hE : ∀ h, Continuous fun f ↦ Φ f h) (hH : ∀ f, Continuous (Φ f))
+    (hint : ∀ f, Integrable (Φ f) μ) : Continuous fun f ↦ ∫ h, Φ f h ∂μ := by
+  let p (h : H) : Seminorm ℂ E := (normSeminorm ℂ ℂ).comp (IsLinearMap.mk' _ (hlin h))
+  have hp (h : H) : Continuous (p h) := continuous_norm.comp (hE h)
+  have hpt (f : E) : BddAbove (Set.range fun h ↦ p h f) :=
+    (isCompact_range (hH f).norm).bddAbove
+  have hbdd : BddAbove (Set.range p) := Seminorm.bddAbove_range_iff.mpr hpt
+  have hsup : Continuous (⨆ h, p h : Seminorm ℂ E) :=
+    (congrArg Continuous (Seminorm.coe_iSup_eq hbdd)).mpr (Seminorm.continuous_iSup p hp hbdd)
+  let I : E →ₗ[ℂ] ℂ := IsLinearMap.mk' (fun f ↦ ∫ h, Φ f h ∂μ)
+    ⟨fun f f' ↦ (integral_congr_ae (.of_forall fun h ↦ (hlin h).map_add f f')).trans
+        (integral_add (hint f) (hint f')),
+      fun c f ↦ (integral_congr_ae (.of_forall fun h ↦ (hlin h).map_smul c f)).trans
+        (integral_smul c _)⟩
+  have hq : Continuous ((μ Set.univ).toNNReal • ⨆ h, p h : Seminorm ℂ E) :=
+    hsup.const_smul _
+  refine (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp I fun _ ↦
+    Seminorm.continuous_of_le hq fun f ↦ ?_
+  have hle (h : H) : ‖Φ f h‖ ≤ (⨆ h, p h) f := by
+    rw [Seminorm.coe_iSup_eq hbdd, iSup_apply]
+    exact le_ciSup (hpt f) h
+  exact (norm_integral_le_of_norm_le_const (.of_forall hle)).trans_eq
+    (mul_comm _ ((μ Set.univ).toNNReal : ℝ))
+
+/-- At a fixed idele class, global homogeneous theta is continuous in the test function. -/
+private theorem exists_strongCoprimalityThetaLinearMap_eval (ω : PontryaginDual C₁) (g : C𝔽) :
+    Continuous (fun f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) ↦
+      homogeneousAdelicTheta ω f g) := by
+  let : BarrelledSpace ℂ (SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F))) :=
+    (adeleSchwartz_montel (F := F)).2.1
+  let : MeasurableSpace C𝔽 := borel _
+  let : CompactSpace C₁ := (ideleClassGroup_finiteness F).2.1
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  have hθ := adelicTheta_isLinear (F := F)
+  have hlin (c : C𝔽) : IsLinearMap ℂ fun f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) ↦
+      adelicTheta f c :=
+    ⟨fun f f' ↦ congrArg (fun φ : C(C𝔽, ℂ) ↦ φ c) (hθ.map_add f f'),
+      fun a f ↦ congrArg (fun φ : C(C𝔽, ℂ) ↦ φ c) (hθ.map_smul a f)⟩
+  exact exists_strongCoprimalityThetaLinearMap_integral (normOneIdeleClassTamagawaMeasure F)
+    (fun f h ↦ adelicTheta f (h.val * g) * (ω h : ℂ))
+    (fun h ↦ ⟨fun f f' ↦ (congrArg (· * (ω h : ℂ)) ((hlin _).map_add f f')).trans
+        (add_mul _ _ _),
+      fun a f ↦ (congrArg (· * (ω h : ℂ)) ((hlin _).map_smul a f)).trans
+        (smul_mul_assoc _ _ _)⟩)
+    (fun h ↦ (exists_strongCoprimalityThetaLinearMap_thetaEval (h.val * g)).mul continuous_const)
+    (fun f ↦ ((adelicTheta f).continuous.comp
+      (continuous_subtype_val.mul continuous_const)).mul
+        (continuous_subtype_val.comp ω.continuous))
+    (fun f ↦ homogeneousAdelicTheta_integrable ω f g)
+
+open MeasureTheory in
+/-- The homogeneous theta function of a zero-moment test decays exponentially in both
+directions: each real twist is the isotypic average of the corresponding twist of the plain
+theta function (Remark 9.2.0.1), up to the volume of the norm-one classes. -/
+private theorem exists_strongCoprimalityThetaLinearMap_mem (ω : PontryaginDual C₁) (f : P) :
+    (homogeneousAdelicTheta ω f.val : C𝔽 → ℂ) ∈ modulatedExponentialDecaySubmodule m𝔽 univ := by
+  let : MeasurableSpace C𝔽 := borel _
+  have : BorelSpace C𝔽 := ⟨rfl⟩
+  let : CompactSpace C₁ := (ideleClassGroup_finiteness F).2.1
+  let μ₁ := normOneIdeleClassTamagawaMeasure F
+  let : μ₁.IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  have hm : IsModulation m𝔽 := ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+  have hθ := adelicTheta_mem_modulatedExponentialDecay_of_polar f.val f.property
+  simp only [modulatedExponentialDecaySubmodule, Submodule.mem_iInf, Submodule.mem_comap] at hθ ⊢
+  intro a
+  let φ : SchwartzBruhat C𝔽 := ⟨_, hθ a⟩
+  let Q := schwartzBruhatIsotypicProjector m𝔽 hm μ₁ ω
+  let w (x : C𝔽) : ℂ := ((((m𝔽 x).val : ℝ) ^ (a : ℝ) : ℝ) : ℂ)
+  have hφ (k : C₁) (x : C𝔽) :
+      φ ((k : C𝔽)⁻¹ * x) = w x * adelicTheta f.val ((k : C𝔽)⁻¹ * x) := by
+    change w ((k : C𝔽)⁻¹ * x) * _ = _
+    have hk : m𝔽 ((k : C𝔽)⁻¹ * x) = m𝔽 x := by
+      change ideleClassNorm F ((k : C𝔽)⁻¹ * x) = ideleClassNorm F x
+      rw [map_mul, map_inv, MonoidHom.mem_ker.mp k.property, inv_one, one_mul]
+    simp only [w, hk]
+  have hreal : μ₁.real univ ≠ 0 := measureReal_univ_ne_zero
+  have key : modulationWeight m𝔽 a (⇑(homogeneousAdelicTheta ω f.val)) =
+      ((μ₁.real univ : ℝ) : ℂ) • ⇑(Q φ) := by
+    funext x
+    change w x * (∫ k : C₁, adelicTheta f.val (k.val * x) * (ω k : ℂ) ∂μ₁) =
+      ((μ₁.real univ : ℝ) : ℂ) * Q φ x
+    rw [(schwartzBruhatIsotypicProjector_apply m𝔽 hm μ₁ ω φ x).2, Complex.real_smul,
+      ← mul_assoc, ← Complex.ofReal_mul, mul_inv_cancel₀ hreal, Complex.ofReal_one, one_mul]
+    calc w x * (∫ k : C₁, adelicTheta f.val (k.val * x) * (ω k : ℂ) ∂μ₁)
+        = ∫ k : C₁, w x * (adelicTheta f.val (k.val * x) * (ω k : ℂ)) ∂μ₁ :=
+          (integral_const_mul _ _).symm
+      _ = ∫ k : C₁, (fun k : C₁ ↦ w x * (adelicTheta f.val (k.val * x) * (ω k : ℂ))) k⁻¹ ∂μ₁ :=
+          (integral_inv_eq_self _ μ₁).symm
+      _ = ∫ k : C₁, star (ω k : ℂ) * φ ((k : C𝔽)⁻¹ * x) ∂μ₁ := by
+          refine integral_congr_ae (.of_forall fun k ↦ ?_)
+          simp only [hφ, Subgroup.coe_inv, map_inv, Circle.coe_inv_eq_conj, Complex.star_def]
+          ring
+  rw [key]
+  exact Submodule.smul_mem _ _ (Q φ).property
+
 /-- Paper: Equation (7.5.0.2), p. 374.
 The homogeneous theta transform of a zero-moment test is an exponentially decaying function of
 the given isotype, continuously in the test. Continuity is with respect to the topology of the
 zero-moment test space and that of the isotype. -/
 theorem exists_strongCoprimalityThetaLinearMap (ω : PontryaginDual C₁) :
     ∃ T : P →L[ℂ] StrongCoprimalityDecaySpace ω, ∀ (f : P) (g : C𝔽),
-      (T f).val.val g = homogeneousAdelicThetaLinearMap F ω f.val g := by sorry
+      (T f).val.val g = homogeneousAdelicThetaLinearMap F ω f.val g := by
+  classical
+  have hm : IsModulation m𝔽 := ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+  have hms : Surjective m𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.2.2.2.1
+  let Y := StrongCoprimalityDecaySpace ω
+  have hY : IsFrechetTVS Y := isotype_frechet m𝔽 hm hms ω
+  have : PolynormableSpace ℂ Y := hY.2.1
+  have : ContinuousSMul ℂ Y := PolynormableSpace.continuousSMul ℂ Y
+  have hθlin := homogeneousAdelicTheta_isLinear (F := F) ω
+  -- The theta function of a zero-moment test as a vector of the isotype.
+  let Vθ (f : P) : Y := ⟨⟨⇑(homogeneousAdelicTheta ω f.val),
+    exists_strongCoprimalityThetaLinearMap_mem ω f⟩, by
+      apply (mem_modulatedDecayIsotype_iff (m := m𝔽) (ω := ω) _ _ _).mpr
+      intro u x
+      exact homogeneousAdelicTheta_homogeneous ω f.val u x⟩
+  let A : P →ₗ[ℂ] Y :=
+    { toFun := Vθ
+      map_add' := fun f f' ↦ Subtype.ext (Subtype.ext (funext fun g ↦
+        congrArg (fun v : C(C𝔽, ℂ) ↦ v g) (hθlin.map_add f.val f'.val)))
+      map_smul' := fun t f ↦ Subtype.ext (Subtype.ext (funext fun g ↦
+        congrArg (fun v : C(C𝔽, ℂ) ↦ v g) (hθlin.map_smul t f.val))) }
+  -- A continuous projection of all tests onto the zero-moment tests.
+  obtain ⟨e₁, he₁⟩ := adelePolarValues_surjective (F := F) (1, 0)
+  obtain ⟨e₂, he₂⟩ := adelePolarValues_surjective (F := F) (0, 1)
+  let pv := adelePolarValues (F := F)
+  let π₀ := LinearMap.id - (LinearMap.fst ℂ ℂ ℂ ∘ₗ pv).smulRight e₁ -
+    (LinearMap.snd ℂ ℂ ℂ ∘ₗ pv).smulRight e₂
+  have he₁' : pv e₁ = (1, 0) := he₁
+  have he₂' : pv e₂ = (0, 1) := he₂
+  have hπ₀ (f) : π₀ f ∈ P := by
+    change pv (π₀ f) = 0
+    simp only [π₀, map_sub, LinearMap.sub_apply, LinearMap.id_apply, LinearMap.smulRight_apply,
+      LinearMap.comp_apply, map_smul, he₁', he₂', LinearMap.fst_apply, LinearMap.snd_apply]
+    ext <;> simp
+  have hπ₀P (f : P) : π₀ f.val = f.val := by
+    have hf : pv f.val = 0 := f.property
+    simp only [π₀, LinearMap.sub_apply, LinearMap.id_apply, LinearMap.smulRight_apply,
+      LinearMap.comp_apply, hf, LinearMap.fst_apply, LinearMap.snd_apply, Prod.fst_zero,
+      Prod.snd_zero, zero_smul, sub_zero]
+  have hπ₀c : Continuous π₀ := by
+    have hpv := adelePolarValues_continuous (F := F)
+    exact (continuous_id.sub ((continuous_fst.comp hpv).smul continuous_const)).sub
+      ((continuous_snd.comp hpv).smul continuous_const)
+  let T₀ : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)) →ₗ[ℂ] Y :=
+    A ∘ₗ (π₀.codRestrict P hπ₀)
+  -- Continuity on the strict LF space of all tests, stage by stage, by the closed graph theorem.
+  let : MeasurableSpace C𝔽 := borel _
+  have : BorelSpace C𝔽 := ⟨rfl⟩
+  obtain ⟨-, S, -, hS, -, ht⟩ := (adeleSchwartz_strictLF (F := F)).2
+  have hstage (k : ℕ) : Continuous (T₀ ∘ (S k).subtype) := by
+    have hE := hS k
+    have : IsTopologicalAddGroup (S k) := hE.1
+    have : PolynormableSpace ℂ (S k) := hE.2.1
+    have : ContinuousSMul ℂ (S k) := PolynormableSpace.continuousSMul ℂ (S k)
+    refine exists_strongCoprimalityThetaLinearMap_closedGraph hE hY (T₀ ∘ₗ (S k).subtype) ?_
+    have hset : ((T₀ ∘ₗ (S k).subtype).graph : Set (S k × Y)) =
+        ⋂ g : C𝔽, {p | p.2.val.val g = (T₀ p.1.val).val.val g} := by
+      ext p
+      refine ⟨fun h ↦ mem_iInter.mpr fun g ↦ ?_, fun h ↦ ?_⟩
+      · exact congrArg (fun y : Y ↦ y.val.val g) ((LinearMap.mem_graph_iff _ p).mp h)
+      · exact (LinearMap.mem_graph_iff _ p).mpr (Subtype.ext (Subtype.ext (funext fun g ↦
+          mem_iInter.mp h g)))
+    rw [hset]
+    refine isClosed_iInter fun g ↦ isClosed_eq
+      ((isotype_eval_continuous m𝔽 hm hms ω g).comp continuous_snd) ?_
+    exact ((exists_strongCoprimalityThetaLinearMap_eval ω g).comp hπ₀c).comp
+      (continuous_subtype_val.comp continuous_fst)
+  have hT₀ : Continuous T₀ := by
+    have hc := exists_strongCoprimalityThetaLinearMap_final (fun k ↦ (S k).subtype) T₀ hstage
+    rw [ht]
+    exact hc
+  have hA (f : P) : T₀ f.val = A f := by
+    change A (⟨π₀ f.val, hπ₀ f.val⟩ : P) = A f
+    rw [show (⟨π₀ f.val, hπ₀ f.val⟩ : P) = f from Subtype.ext (hπ₀P f)]
+  exact ⟨⟨A, (hT₀.comp continuous_subtype_val).congr hA⟩, fun f g ↦ rfl⟩
 
 private theorem exists_strongCoprimalityThetaEmbedding_ker_le (ω : PontryaginDual C₁)
     (T : P →L[ℂ] StrongCoprimalityDecaySpace ω)
@@ -114,6 +398,298 @@ private theorem exists_strongCoprimalityThetaEmbedding_injective (ω : Pontryagi
 
 /-- Paper: Equation (7.5.0.2), p. 374.
 The homogeneous theta functions of zero-moment tests form a closed subspace of the
+exponentially decaying isotype: the range of any continuous linear map that sends the class
+of a zero-moment test to its homogeneous theta function is closed.
+The group Mellin transform of the isotype sends that range onto the pole-free theta Mellin
+image, which is the (unshifted) spectral nuclearity denominator of Equation (7.4.0.1) in the
+Schwartz-Bergman model, a closed divisible subspace. -/
+private theorem exists_strongCoprimalityThetaEmbedding_isClosed_range (ω : PontryaginDual C₁)
+    (j : StrongCoprimalityThetaSpace ω →L[ℂ] StrongCoprimalityDecaySpace ω)
+    (hj : ∀ (f : P) (g : C𝔽),
+      (j ((K(ω)).mkQ f)).val.val g = homogeneousAdelicThetaLinearMap F ω f.val g) :
+    IsClosed (range j) := by
+  classical
+  have hm : IsModulation m𝔽 := ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+  have hms : Surjective m𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.2.2.2.1
+  let : MeasurableSpace C𝔽 := borel _
+  let : BorelSpace C𝔽 := ⟨rfl⟩
+  -- A continuous section of the idele norm and its image in the class group.
+  let τI : ℝ≥0ˣ →ₜ* I𝔽 :=
+    ⟨canonicalIdeleNormSection F, canonicalIdeleNormSection_continuous F⟩
+  have hτI : RightInverse τI (ideleNorm F) := canonicalIdeleNormSection_rightInverse F
+  let τ : ℝ≥0ˣ →ₜ* C𝔽 :=
+    { toMonoidHom :=
+        (QuotientGroup.mk' (IdeleGroup.principalSubgroup (𝓞 F) F)).comp τI.toMonoidHom
+      continuous_toFun := continuous_quotient_mk'.comp τI.continuous }
+  have hτapp (t : ℝ≥0ˣ) : τ t = QuotientGroup.mk (τI t) := rfl
+  have hτval (t : ℝ≥0ˣ) : ideleClassNorm F (τ t) = t := by
+    rw [hτapp t]
+    show ideleNorm F (τI t) = t
+    exact hτI t
+  have hτm (t : ℝ≥0ˣ) : m𝔽 (τ t) = t := hτval t
+  have hτ : RightInverse τ m𝔽 := fun t ↦ hτval t
+  have hmem (g : C𝔽) : g / τ (m𝔽 g) ∈ C₁ := by
+    rw [MonoidHom.mem_ker, map_div]
+    have h1 : ideleClassNorm F (τ (m𝔽 g)) = ideleClassNorm F g := by
+      rw [hτval (m𝔽 g)]
+      rfl
+    rw [h1, div_self']
+  -- Extension of `ω` to a character of the class group, trivial on the norm section.
+  let χfun : C𝔽 → Circle := fun g ↦ ω ⟨g / τ (m𝔽 g), hmem g⟩
+  have hsub1 : (⟨(1 : C𝔽) / τ (m𝔽 1), hmem 1⟩ : C₁) = 1 := by
+    apply Subtype.ext
+    show (1 : C𝔽) / τ (m𝔽 1) = 1
+    rw [map_one, map_one]
+    simp
+  have hχ1 : χfun 1 = 1 := (congrArg (fun z : C₁ ↦ ω z) hsub1).trans (map_one ω)
+  have hsubmul (g h : C𝔽) : (⟨g * h / τ (m𝔽 (g * h)), hmem (g * h)⟩ : C₁) =
+      (⟨g / τ (m𝔽 g), hmem g⟩ : C₁) * ⟨h / τ (m𝔽 h), hmem h⟩ := by
+    apply Subtype.ext
+    show g * h / τ (m𝔽 (g * h)) = (g / τ (m𝔽 g)) * (h / τ (m𝔽 h))
+    have hmul : m𝔽 (g * h) = m𝔽 g * m𝔽 h := by
+      change ideleClassNorm F (g * h) = ideleClassNorm F g * ideleClassNorm F h
+      exact map_mul (ideleClassNorm F) g h
+    have hτmul : τ (m𝔽 g * m𝔽 h) = τ (m𝔽 g) * τ (m𝔽 h) := map_mul τ _ _
+    rw [hmul, hτmul, div_mul_div_comm]
+  have hχmul (g h : C𝔽) : χfun (g * h) = χfun g * χfun h :=
+    (congrArg (fun z : C₁ ↦ ω z) (hsubmul g h)).trans (map_mul ω _ _)
+  have hχcont : Continuous χfun :=
+    ω.continuous.comp (Continuous.subtype_mk (by fun_prop) hmem)
+  let χ : PontryaginDual C𝔽 :=
+    { toFun := χfun, map_one' := hχ1, map_mul' := hχmul, continuous_toFun := hχcont }
+  have hχapp (g : C𝔽) : χ g = ω ⟨g / τ (m𝔽 g), hmem g⟩ := rfl
+  have hsubτ (t : ℝ≥0ˣ) : (⟨τ t / τ (m𝔽 (τ t)), hmem (τ t)⟩ : C₁) = 1 := by
+    apply Subtype.ext
+    show τ t / τ (m𝔽 (τ t)) = 1
+    rw [hτm t]
+    simp
+  have hχτ (t : ℝ≥0ˣ) : χ (τ t) = 1 :=
+    (congrArg (fun z : C₁ ↦ ω z) (hsubτ t)).trans (map_one ω)
+  have hχk (k : C₁) : ((χ (k : C𝔽) : Circle) : ℂ) = ((ω k : Circle) : ℂ) := by
+    have hsub : (⟨(k : C𝔽) / τ (m𝔽 (k : C𝔽)), hmem (k : C𝔽)⟩ : C₁) = k := by
+      apply Subtype.ext
+      show (k : C𝔽) / τ (m𝔽 (k : C𝔽)) = (k : C𝔽)
+      have hk1 : m𝔽 (k : C𝔽) = 1 := k.property
+      rw [hk1]
+      simp
+    show ((ω ⟨(k : C𝔽) / τ (m𝔽 (k : C𝔽)), hmem (k : C𝔽)⟩ : Circle) : ℂ) =
+      ((ω k : Circle) : ℂ)
+    exact congrArg (fun z : C₁ ↦ ((ω z : Circle) : ℂ)) hsub
+  have hωχ : (χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ :
+      C₁ →ₜ* C𝔽)) = ω := by
+    ext k
+    exact hχk k
+  -- The pole-free theta Mellin image is closed in the Schwartz-Bergman model.
+  let Z := (exists_globalPolarThetaMellin (F := F) χ τI hτI).choose
+  have hZ := (exists_globalPolarThetaMellin (F := F) χ τI hτI).choose_spec
+  have hZclosed : IsClosed (Z.toLinearMap.range : Set B) := by
+    have hD : IsClosed (spectralNuclearityDenominator χ τI hτI 0 : Set B) :=
+      schwartzBergmanDivisible_isClosed
+        ⟨⟨_, (spectralNuclearityGenerator_differentiable χ τI hτI 0).continuous⟩,
+          spectralNuclearityGenerator_differentiable χ τI hτI 0⟩
+    rw [spectralNuclearityDenominator_zero] at hD
+    simpa [Z] using hD
+  -- The group Mellin transform on the ambient decay space.
+  let : CompactSpace (m𝔽).toMonoidHom.ker :=
+    isCompact_iff_compactSpace.mp (IsModulation.isCompact_ker hm)
+  let μ₁ : MeasureTheory.Measure (m𝔽).toMonoidHom.ker :=
+    MeasureTheory.Measure.haarMeasure ⊤
+  have hμ₁ : μ₁ univ = 1 := MeasureTheory.Measure.haarMeasure_self
+  let μ : MeasureTheory.Measure C𝔽 := canonicalModulatedHaar m𝔽 hm
+  have hμhaar : μ.IsHaarMeasure :=
+    (Classical.choose_spec (existsUnique_canonicalModulatedHaar m𝔽 hm).exists).1
+  let : μ.IsHaarMeasure := hμhaar
+  have hμ : μ = (μ₁.prod positiveRealHaar).map
+      (fun z : (m𝔽).toMonoidHom.ker × ℝ≥0ˣ ↦ z.1.val * τ z.2) :=
+    canonicalModulatedHaar_eq_map_prod m𝔽 hm τ hτ μ₁ MeasureTheory.Measure.haarMeasure_self
+  obtain ⟨Am, Fm, Tm, em, hAm, hFm, hTm, hem, hTFm⟩ :=
+    modulatedMellin_isotypicDiagram (m := m𝔽) (hm := hm) (hms := hms) (I := univ)
+      (hOpen := isOpen_univ) (hInt := ordConnected_univ) (hne := univ_nonempty)
+      (τ := τ) (hτ := hτ) (μ₁ := μ₁) (μ := μ) (hμ := hμ) (χ := χ) (b := 0)
+      (hb := fun t ↦ by rw [zero_mul]; simp [hχτ t])
+  -- The compact average of an isotype vector is its section value.
+  have hYavg (y : StrongCoprimalityDecaySpace ω) (t : ℝ≥0ˣ) :
+      (∫ k : (m𝔽).toMonoidHom.ker, (χ k.val : ℂ) * y.val.val (k.val * τ t) ∂μ₁) =
+        y.val.val (τ t) := by
+    have hkω (k : (m𝔽).toMonoidHom.ker) :
+        (χ k.val : ℂ) = ((ω k : Circle) : ℂ) := by
+      have h := congrArg (fun ψ : PontryaginDual C₁ ↦ ((ψ k : Circle) : ℂ)) hωχ
+      exact h
+    have hv' (k : (m𝔽).toMonoidHom.ker) :
+        (χ k.val : ℂ) * y.val.val (k.val * τ t) = y.val.val (τ t) := by
+      have he := (mem_modulatedDecayIsotype_iff (m := m𝔽) (ω := ω) univ
+        (mem_univ (0 : ℝ)) y.val).mp y.property k⁻¹ (τ t)
+      rw [Subgroup.coe_inv, inv_inv, map_inv, Circle.coe_inv] at he
+      have hne : ((ω k : Circle) : ℂ) ≠ 0 := by simp
+      rw [he, hkω k, ← mul_assoc, mul_inv_cancel₀ hne, one_mul]
+    rw [MeasureTheory.integral_congr_ae (.of_forall hv'), MeasureTheory.integral_const,
+      MeasureTheory.measureReal_def, hμ₁, ENNReal.toReal_one, one_smul]
+  -- The two Mellin transforms agree on theta classes.
+  have hjF (f : P) : Fm (j ((K(ω)).mkQ f)).val = Z ((K(ω(χ))).mkQ f) := by
+    have hval (g : C𝔽) : (j ((K(ω)).mkQ f)).val.val g = homogeneousAdelicTheta ω f.val g := by
+      rw [hj f g]
+      rfl
+    have hZval : ∀ (g : P) (s : ℂ), (Z ((K(ω(χ))).mkQ g)).val s =
+        homogeneousThetaMellinIntegral τI (ω(χ)) g.val (ideleClassNormTwist χ s) :=
+      fun g s ↦ (hZ g s).1
+    refine Subtype.ext (funext fun s => ?_)
+    calc (Fm (j ((K(ω)).mkQ f)).val).val s
+        = modulatedFourierMellin m𝔽 univ hm μ (j ((K(ω)).mkQ f)).val.val
+            (quasiCharacterNormTwist (m𝔽).toMonoidHom (m𝔽).continuous
+              ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp χ) s) :=
+          hFm _ s (mem_univ s)
+      _ = ∫ t : ℝ≥0ˣ, ((t.val : ℝ) : ℂ) ^ s * (χ (τ t) : ℂ) *
+            (j ((K(ω)).mkQ f)).val.val (τ t) ∂positiveRealHaar := by
+          rw [(modulatedMellin_split (m := m𝔽) (hm := hm) (hms := hms) (I := univ)
+            (hOpen := isOpen_univ) (hInt := ordConnected_univ) (hne := univ_nonempty)
+            (τ := τ) (hτ := hτ) (μ₁ := μ₁) (μ := μ) (hμ := hμ) (χ := χ)
+            (f := (j ((K(ω)).mkQ f)).val) (s := s) (hs := mem_univ s)).2.2]
+          exact MeasureTheory.integral_congr_ae (.of_forall fun t ↦ by
+            beta_reduce
+            rw [hYavg _ t])
+      _ = ∫ t : ℝ≥0ˣ, ((t.val : ℝ) : ℂ) ^ s *
+            homogeneousAdelicTheta ω f.val (τ t) ∂positiveRealHaar := by
+          refine MeasureTheory.integral_congr_ae (.of_forall fun t ↦ ?_)
+          beta_reduce
+          simp only [hval (τ t), hχτ t, Circle.coe_one, mul_one]
+      _ = (Z ((K(ω(χ))).mkQ f)).val s := by
+          rw [hZval f s]
+          unfold homogeneousThetaMellinIntegral
+          refine MeasureTheory.integral_congr_ae (.of_forall fun t ↦ ?_)
+          beta_reduce
+          rw [hωχ]
+          have htw : (ideleClassNormTwist χ s) (QuotientGroup.mk (τI t)) =
+              ((t.val : ℝ) : ℂ) ^ s := by
+            rw [show QuotientGroup.mk (τI t) = τ t from rfl]
+            change (χ (τ t) : ℂ) * (((ideleClassNorm F (τ t) : ℝ≥0) : ℝ) : ℂ) ^ s =
+              (((t.val : ℝ≥0) : ℝ) : ℂ) ^ s
+            rw [hχτ t, hτval t]
+            simp
+          rw [hτapp t, htw, mul_comm]
+  -- Injectivity on the isotype.
+  have hFker : Fm.ker = Am.ker := by
+    refine le_antisymm (fun f hf ↦ ?_) (fun f hf ↦ ?_)
+    · rw [LinearMap.mem_ker] at hf
+      have h1 : positiveRealFourierMellin univ isOpen_univ ordConnected_univ univ_nonempty
+          (em (Am.ker.mkQ f)) = 0 :=
+        ((hTFm f).symm.trans (congrArg Tm hf)).trans (map_zero Tm)
+      have h2 : em (Am.ker.mkQ f) = 0 :=
+        (positiveRealFourierMellin univ isOpen_univ ordConnected_univ univ_nonempty).injective
+          (h1.trans (map_zero _).symm)
+      have h3 : Am.ker.mkQ f = 0 := em.injective (h2.trans (map_zero em).symm)
+      exact (Submodule.Quotient.mk_eq_zero Am.ker).mp h3
+    · rw [LinearMap.mem_ker] at hf ⊢
+      have h3 : Am.ker.mkQ f = 0 := (Submodule.Quotient.mk_eq_zero Am.ker).mpr hf
+      refine Tm.injective ?_
+      calc Tm (Fm f) = positiveRealFourierMellin univ isOpen_univ ordConnected_univ
+              univ_nonempty (em (Am.ker.mkQ f)) := hTFm f
+        _ = positiveRealFourierMellin univ isOpen_univ ordConnected_univ univ_nonempty
+              (em 0) := by rw [h3]
+        _ = Tm 0 := by simp
+  have hAker : ∀ y : StrongCoprimalityDecaySpace ω, y.val ∈ Am.ker → y = 0 := by
+    intro y hy
+    rw [LinearMap.mem_ker] at hy
+    have hyτ (t : ℝ≥0ˣ) : y.val.val (τ t) = 0 := by
+      have h1 : (Am y.val).val (Real.log (t.val : ℝ)) = 0 :=
+        congrArg (fun z : PositiveRealExponentialDecay univ ↦ z.val (Real.log (t.val : ℝ))) hy
+      rw [hAm y.val t] at h1
+      exact (hYavg y t).symm.trans h1
+    refine Subtype.ext (Subtype.ext (funext fun g ↦ ?_))
+    have hg : (⟨g / τ (m𝔽 g), hmem g⟩ : C₁).val * τ (m𝔽 g) = g :=
+      div_mul_cancel g (τ (m𝔽 g))
+    have he := (mem_modulatedDecayIsotype_iff (m := m𝔽) (ω := ω) univ
+      (mem_univ (0 : ℝ)) y.val).mp y.property (⟨g / τ (m𝔽 g), hmem g⟩ : C₁)⁻¹ (τ (m𝔽 g))
+    rw [Subgroup.coe_inv, inv_inv] at he
+    calc y.val.val g
+        = y.val.val ((⟨g / τ (m𝔽 g), hmem g⟩ : C₁).val * τ (m𝔽 g)) := by rw [hg]
+      _ = _ := he
+      _ = 0 := by rw [hyτ, mul_zero]
+  have hrange : (range j : Set (StrongCoprimalityDecaySpace ω)) =
+      {y | Fm y.val ∈ (Z.toLinearMap.range : Set B)} := by
+    ext y
+    constructor
+    · rintro ⟨x, rfl⟩
+      obtain ⟨f, rfl⟩ := (K(ω)).mkQ_surjective x
+      exact ⟨(K(ω(χ))).mkQ f, (hjF f).symm⟩
+    · intro hy
+      obtain ⟨w, hw⟩ := hy
+      obtain ⟨f, rfl⟩ := (K(ω(χ))).mkQ_surjective w
+      refine ⟨(K(ω)).mkQ f, ?_⟩
+      have hzero : Fm (y - j ((K(ω)).mkQ f)).val = 0 := by
+        rw [show (y - j ((K(ω)).mkQ f)).val = y.val - (j ((K(ω)).mkQ f)).val from rfl,
+          map_sub]
+        exact sub_eq_zero.mpr ((hw.symm).trans (hjF f).symm)
+      have hmem0 : (y - j ((K(ω)).mkQ f)).val ∈ Fm.ker := hzero
+      rw [hFker] at hmem0
+      have hsub : y - j ((K(ω)).mkQ f) = 0 := hAker _ hmem0
+      exact (sub_eq_zero.mp hsub).symm
+  rw [hrange]
+  exact hZclosed.preimage (Fm.continuous.comp continuous_subtype_val)
+
+/-- A space with a closed linear embedding into a Fréchet space is Fréchet. -/
+private theorem exists_strongCoprimalityThetaEmbedding_frechet {X Y : Type*}
+    [AddCommGroup X] [Module ℂ X] [TopologicalSpace X] [IsTopologicalAddGroup X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+    (i : X →L[ℂ] Y) (hi : IsClosedEmbedding i) (hY : IsFrechetTVS Y) : IsFrechetTVS X := by
+  obtain ⟨_, _, _, c⟩ := hY
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace Y := c
+  let : UniformSpace X := IsTopologicalAddGroup.rightUniformSpace X
+  have : IsUniformAddGroup X := isUniformAddGroup_of_addCommGroup
+  have hu := AddMonoidHom.isUniformInducing_of_isInducing
+    (f := i.toLinearMap.toAddMonoidHom) hi.isInducing
+  exact ⟨inferInstance, hi.eq_induced ▸ PolynormableSpace.induced i.toLinearMap,
+    hi.isEmbedding.metrizableSpace, hu.completeSpace hi.isClosed_range.isComplete⟩
+
+/-- An injective continuous linear map with closed range from a quotient of a closed subspace
+of a strict LF-space into a Fréchet space is inducing, by the open mapping theorem onto its
+range. -/
+private theorem exists_strongCoprimalityThetaEmbedding_isInducing_of_isClosed {W Y : Type*}
+    [AddCommGroup W] [Module ℂ W] [TopologicalSpace W] [IsTopologicalAddGroup W]
+    [ContinuousSMul ℂ W]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y] [IsTopologicalAddGroup Y]
+    (hB : IsStrictLFSpace W) (Q : Submodule ℂ W) (hQ : IsClosed (Q : Set W))
+    (K : Submodule ℂ Q) (hY : IsFrechetTVS Y)
+    (j : Q ⧸ K →L[ℂ] Y) (hinj : Injective j) (hc : IsClosed (range j)) : IsInducing j := by
+  obtain ⟨-, S, hmono, hS, hcov, -⟩ := hB
+  have hY' := hY
+  obtain ⟨_, _, hmetY, -⟩ := hY'
+  have : T2Space (Q ⧸ K) := T2Space.of_injective_continuous hinj j.continuous
+  let R : Submodule ℂ Y := LinearMap.range (j : Q ⧸ K →ₗ[ℂ] Y)
+  have hR : IsClosed (R : Set Y) := by
+    rw [LinearMap.coe_range]
+    exact hc
+  have hRF : IsFrechetTVS R :=
+    exists_strongCoprimalityThetaEmbedding_frechet R.subtypeL hR.isClosedEmbedding_subtypeVal hY
+  let j' : Q ⧸ K →L[ℂ] R := j.codRestrict R fun x ↦ ⟨x, rfl⟩
+  have hsurj : Surjective j' := by
+    rintro ⟨y, x, rfl⟩
+    exact ⟨x, rfl⟩
+  let Xk (k : ℕ) : Submodule ℂ (S k) := Q.comap (S k).subtype
+  have hXk (k : ℕ) : IsFrechetTVS (Xk k) := by
+    have hcl : IsClosed (Xk k : Set (S k)) := hQ.preimage continuous_subtype_val
+    exact exists_strongCoprimalityThetaEmbedding_frechet (Xk k).subtypeL
+      hcl.isClosedEmbedding_subtypeVal (hS k)
+  let ι (k : ℕ) : Xk k →L[ℂ] Q :=
+    ((S k).subtypeL.comp (Xk k).subtypeL).codRestrict Q fun x ↦ x.property
+  let u (k : ℕ) : Xk k →L[ℂ] Q ⧸ K := K.mkQL.comp (ι k)
+  have hr (k : ℕ) : range (u k) ⊆ range (u (k + 1)) := by
+    rintro _ ⟨x, rfl⟩
+    exact ⟨⟨⟨x.val.val, hmono (Nat.le_succ k) x.val.property⟩, x.property⟩, rfl⟩
+  have hcov' (z : Q ⧸ K) : ∃ k, z ∈ range (u k) := by
+    obtain ⟨f, rfl⟩ := K.mkQ_surjective z
+    obtain ⟨k, hk⟩ := hcov f.val
+    exact ⟨k, ⟨⟨f.val, hk⟩, f.property⟩, rfl⟩
+  have hopen : IsOpenMap j' :=
+    isOpenMap_of_surjective_toLF (isLFSpace_of_isFrechetTVS hRF) hXk u hr hcov' j' hsurj
+  have hinj' : Injective j' := fun x y h ↦ hinj (congrArg Subtype.val h)
+  let L := LinearEquiv.ofBijective (j' : Q ⧸ K →ₗ[ℂ] R) ⟨hinj', hsurj⟩
+  let H := L.toEquiv.toHomeomorphOfContinuousOpen j'.continuous hopen
+  exact IsInducing.subtypeVal.comp H.isInducing
+
+/-- Paper: Equation (7.5.0.2), p. 374.
+The homogeneous theta functions of zero-moment tests form a closed subspace of the
 exponentially decaying isotype, so the theta transform is a topological embedding.
 The paper obtains this from the Mellin model of §7.4, where the theta image is the
 closed denominator of the nuclearity quotient. -/
@@ -121,7 +697,15 @@ private theorem exists_strongCoprimalityThetaEmbedding_isInducing (ω : Pontryag
     (j : StrongCoprimalityThetaSpace ω →L[ℂ] StrongCoprimalityDecaySpace ω)
     (hj : ∀ (f : P) (g : C𝔽),
       (j ((K(ω)).mkQ f)).val.val g = homogeneousAdelicThetaLinearMap F ω f.val g) :
-    IsInducing j := by sorry
+    IsInducing j := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, hsurj, _⟩ := ideleGroup_quotient.{_, 0} F
+  have hmod : IsModulation m𝔽 ∧ Surjective m𝔽 :=
+    ⟨⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩, hsurj⟩
+  exact exists_strongCoprimalityThetaEmbedding_isInducing_of_isClosed
+    (adeleSchwartz_strictLF (F := F)).2 P adelePolarSubspace_closed K(ω)
+    (isotype_frechet m𝔽 hmod.1 hmod.2 ω) j
+    (exists_strongCoprimalityThetaEmbedding_injective ω j hj)
+    (exists_strongCoprimalityThetaEmbedding_isClosed_range ω j hj)
 
 /-- Paper: Equation (7.5.0.2), p. 374.
 The topological linear embedding takes a zero-moment test class to its homogeneous theta
@@ -378,6 +962,179 @@ theorem mem_strongCoprimalityDifferenceRange (ω : PontryaginDual C₁) (S : Fin
     (strongCoprimalityDifference_add S π) (strongCoprimalityDifference_smul S π)
     (strongCoprimalityDifference_zero S π) h
 
+/-- The comparison denominator is an expanding difference-product range, whose quotient
+is separable, nuclear, and Fréchet. It repeats `strongCoprimalityPrimaryQuotient_decay`, which is
+declared after `strongCoprimality` and so is out of its reach. -/
+private theorem strongCoprimality_decayQuotient (ω : PontryaginDual C₁) (S : Finset V)
+    (π : (v : V) → (v.adicCompletion F)ˣ)
+    (hπ : ∀ v ∈ S, Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val) :
+    let X := StrongCoprimalityDecaySpace ω ⧸ strongCoprimalityDifferenceRange ω S π
+    TopologicalSpace.SeparableSpace X ∧ IsNuclearTVS X ∧ IsFrechetTVS X := by
+  classical
+  have hmod := strongCoprimalityNorm_isModulation_surjective (F := F)
+  let a := fun v : V ↦ (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v (π v))⁻¹
+  let gs := S.toList.map a
+  have hgs : ∀ g ∈ gs, 1 < (m𝔽 g).val := by
+    rintro g hg
+    obtain ⟨v, hv, rfl⟩ := List.mem_map.mp hg
+    have hu := hπ v (Finset.mem_toList.mp hv)
+    change (1 : ℝ≥0) < ((ideleClassNorm F ((IdeleClassGroup.ofAdicCompletion (𝓞 F) F v (π v))⁻¹)).val)
+    rw [map_inv, ideleClassNorm_ofAdicCompletion]
+    rw [Units.coe_map_inv]
+    change (1 : ℝ≥0) < ‖((π v)⁻¹).val‖₊
+    apply NNReal.coe_lt_coe.mp
+    simp only [NNReal.coe_one, coe_nnNorm, Units.val_inv_eq_inv_val, norm_inv]
+    rw [norm_uniformizer_adicCompletion v _ hu, inv_inv]
+    exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have heq : strongCoprimalityDifferenceRange ω S π =
+      fullDecayDifferenceRange m𝔽 hmod.1 hmod.2 ω gs := by
+    rw [fullDecayDifferenceRange_eq_span]
+    unfold strongCoprimalityDifferenceRange
+    congr 1
+    ext h
+    simp only [gs, List.foldr_map, a, strongCoprimalityDifference]
+  rw [heq]
+  exact modulatedIsotypicDifferenceProduct_quotient m𝔽 hmod.1 hmod.2 ω gs hgs
+
+/-- A topological linear embedding with closed range into a Fréchet space, followed by a
+quotient map onto a Fréchet space, is open when every class of the target meets the range. -/
+private theorem strongCoprimality_isOpenMap {X Y Q : Type*}
+    [AddCommGroup X] [Module ℂ X] [TopologicalSpace X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+    [AddCommGroup Q] [Module ℂ Q] [TopologicalSpace Q]
+    (hY : IsFrechetTVS Y) (hQ : IsFrechetTVS Q)
+    (j : X →L[ℂ] Y) (hj : IsEmbedding j) (hc : IsClosed (range j))
+    (q : Y →L[ℂ] Q) (hq : Surjective q) (hs : ∀ y, ∃ x, q y = q (j x)) :
+    IsOpenMap (fun x ↦ q (j x)) := by
+  obtain ⟨_, hpolY, hmetY, hcompY⟩ := hY
+  obtain ⟨_, hpolQ, hmetQ, hcompQ⟩ := hQ
+  have : ContinuousSMul ℂ Y := PolynormableSpace.continuousSMul ℂ Y
+  have : ContinuousSMul ℂ Q := PolynormableSpace.continuousSMul ℂ Q
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace Y := hcompY
+  let : UniformSpace Q := IsTopologicalAddGroup.rightUniformSpace Q
+  have : IsUniformAddGroup Q := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace Q := hcompQ
+  have : (uniformity Q).IsCountablyGenerated := IsUniformAddGroup.uniformity_countably_generated
+  have : BaireSpace Q := BaireSpace.of_completelyPseudoMetrizable
+  let R : Submodule ℂ Y := LinearMap.range (j : X →ₗ[ℂ] Y)
+  have hR : IsClosed (R : Set Y) := by
+    rw [LinearMap.coe_range]
+    exact hc
+  have : CompleteSpace R := completeSpace_coe_iff_isComplete.mpr hR.isComplete
+  have : IsUniformAddGroup R := R.toAddSubgroup.isUniformAddGroup
+  have : TopologicalSpace.MetrizableSpace R :=
+    inferInstanceAs (TopologicalSpace.MetrizableSpace (R : Set Y))
+  let ψ : R →L[ℂ] Q := q.comp R.subtypeL
+  have hψ : IsOpenMap ψ := by
+    apply isOpenMap_of_not_isMeagre_range
+    have hsurj : Surjective ψ := by
+      intro z
+      obtain ⟨y, rfl⟩ := hq z
+      obtain ⟨x, hx⟩ := hs y
+      exact ⟨⟨j x, x, rfl⟩, hx.symm⟩
+    rw [hsurj.range_eq]
+    exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty
+  let j' : X → R := fun x ↦ ⟨j x, x, rfl⟩
+  have hj' : IsOpenMap j' := by
+    intro W hW
+    obtain ⟨Z, hZ, rfl⟩ := hj.isInducing.isOpen_iff.mp hW
+    have himage : j' '' (j ⁻¹' Z) = Subtype.val ⁻¹' Z := by
+      ext ⟨y, x, rfl⟩
+      exact ⟨fun ⟨x', hx', hxy⟩ ↦ by
+          have h := congrArg Subtype.val hxy
+          change j x' = j x at h
+          change j x ∈ Z
+          exact h ▸ hx',
+        fun h ↦ ⟨x, h, rfl⟩⟩
+    rw [himage]
+    exact hZ.preimage continuous_subtype_val
+  exact hψ.comp hj'
+
+/-- A topological linear embedding with closed range into a Fréchet space induces a topological
+linear isomorphism of quotients, once the target quotient is Fréchet, the source denominator is
+the preimage of the target one, and every target class meets the range. -/
+private theorem strongCoprimality_quotientEquiv {X Y : Type*}
+    [AddCommGroup X] [Module ℂ X] [TopologicalSpace X] [IsTopologicalAddGroup X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y] [IsTopologicalAddGroup Y]
+    (D : Submodule ℂ X) (E : Submodule ℂ Y)
+    (hY : IsFrechetTVS Y) (hQ : IsFrechetTVS (Y ⧸ E))
+    (j : X →L[ℂ] Y) (hj : IsEmbedding j) (hc : IsClosed (range j))
+    (hmem : ∀ x, j x ∈ E ↔ x ∈ D) (hs : ∀ y, ∃ x, y - j x ∈ E) :
+    ∃ e : (X ⧸ D) ≃L[ℂ] (Y ⧸ E), ∀ x : X,
+      e (Submodule.Quotient.mk x) = Submodule.Quotient.mk (j x) := by
+  let φ : X →L[ℂ] Y ⧸ E := E.mkQL.comp j
+  have hle : D ≤ LinearMap.ker (φ : X →ₗ[ℂ] Y ⧸ E) := fun x hx ↦ by
+    rw [LinearMap.mem_ker]
+    exact (Submodule.Quotient.mk_eq_zero E).mpr ((hmem x).mpr hx)
+  let J : X ⧸ D →L[ℂ] Y ⧸ E := D.liftQL φ hle
+  have hJ (x : X) : J (Submodule.Quotient.mk x) = Submodule.Quotient.mk (j x) := rfl
+  have hinj : Injective J := by
+    refine (injective_iff_map_eq_zero J).mpr fun z hz ↦ ?_
+    obtain ⟨x, rfl⟩ := D.mkQ_surjective z
+    change Submodule.Quotient.mk (j x) = (0 : Y ⧸ E) at hz
+    rw [Submodule.mkQ_apply, Submodule.Quotient.mk_eq_zero]
+    exact (hmem x).mp ((Submodule.Quotient.mk_eq_zero E).mp hz)
+  have hs' (y : Y) : ∃ x, E.mkQL y = E.mkQL (j x) := by
+    obtain ⟨x, hx⟩ := hs y
+    exact ⟨x, (Submodule.Quotient.eq E).mpr hx⟩
+  have hsurj : Surjective J := by
+    intro z
+    obtain ⟨y, rfl⟩ := E.mkQ_surjective z
+    obtain ⟨x, hx⟩ := hs' y
+    exact ⟨Submodule.Quotient.mk x, hx.symm⟩
+  have hopen0 := strongCoprimality_isOpenMap hY hQ j hj hc E.mkQL E.mkQ_surjective hs'
+  have hopen : IsOpenMap J := by
+    intro W hW
+    have himage : J '' W = (fun x ↦ E.mkQL (j x)) '' (D.mkQ ⁻¹' W) := by
+      ext z
+      constructor
+      · rintro ⟨w, hw, rfl⟩
+        obtain ⟨x, rfl⟩ := D.mkQ_surjective w
+        exact ⟨x, hw, rfl⟩
+      · rintro ⟨x, hx, rfl⟩
+        exact ⟨D.mkQ x, hx, rfl⟩
+    rw [himage]
+    exact hopen0 _ (hW.preimage D.isQuotientMap_mkQ.continuous)
+  let L := LinearEquiv.ofBijective (J : X ⧸ D →ₗ[ℂ] Y ⧸ E) ⟨hinj, hsurj⟩
+  let H := L.toEquiv.toHomeomorphOfContinuousOpen J.continuous hopen
+  exact ⟨⟨L, J.continuous, H.symm.continuous⟩, hJ⟩
+
+open Classical in
+/-- Paper: Theorem 7.5.0.1, pp. 374–376.
+A pole-free homogeneous theta class lies in the principal-value denominator over `S` exactly
+when its homogeneous theta function lies in the range of the difference product over the
+unramified places of `S`, each difference taken along the inverse class of `π v`. -/
+private theorem strongCoprimality_mem_differenceRange_iff (χ : U) (S : Finset V)
+    (π : (v : V) → (v.adicCompletion F)ˣ)
+    (hπ : ∀ v ∈ S, Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val)
+    (j : StrongCoprimalityThetaSpace ω(χ) →L[ℂ] StrongCoprimalityDecaySpace ω(χ))
+    (hj : ∀ (f : P) (g : C𝔽),
+      (j ((K(ω(χ))).mkQ f)).val.val g = homogeneousAdelicThetaLinearMap F ω(χ) f.val g)
+    (x : StrongCoprimalityThetaSpace ω(χ)) :
+    j x ∈ strongCoprimalityDifferenceRange ω(χ)
+        (S.filter (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v)) π ↔
+      x ∈ strongCoprimalityDenominator ω(χ) S := by sorry
+
+open Classical in
+/-- Paper: Theorem 7.5.0.1, pp. 375–376.
+Every exponentially decaying function of the isotype is the homogeneous theta function of a
+pole-free theta class, up to an element of the range of the difference product over the
+unramified places of `S`, each difference taken along the inverse class of `π v`. -/
+private theorem strongCoprimality_exists_sub_mem (χ : U) (S : Finset V)
+    (π : (v : V) → (v.adicCompletion F)ˣ)
+    (hπ : ∀ v ∈ S, Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val)
+    (j : StrongCoprimalityThetaSpace ω(χ) →L[ℂ] StrongCoprimalityDecaySpace ω(χ))
+    (hj : ∀ (f : P) (g : C𝔽),
+      (j ((K(ω(χ))).mkQ f)).val.val g = homogeneousAdelicThetaLinearMap F ω(χ) f.val g)
+    (y : StrongCoprimalityDecaySpace ω(χ)) :
+    ∃ x, y - j x ∈ strongCoprimalityDifferenceRange ω(χ)
+      (S.filter (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v)) π := by sorry
+
 open Classical in
 /-- Paper: Theorem 7.5.0.1, p. 374.
 The map induced by homogeneous theta is a topological linear isomorphism from the Weil
@@ -395,7 +1152,18 @@ theorem strongCoprimality (χ : U) (S : Finset V)
     let E := strongCoprimalityDifferenceRange ω T π
     ∃ e : (StrongCoprimalityThetaSpace ω ⧸ D) ≃L[ℂ] (StrongCoprimalityDecaySpace ω ⧸ E),
       ∀ x : StrongCoprimalityThetaSpace ω,
-        e (Submodule.Quotient.mk x) = Submodule.Quotient.mk (j x) := by sorry
+        e (Submodule.Quotient.mk x) = Submodule.Quotient.mk (j x) := by
+  intro ω j D T E
+  have hspec := (exists_strongCoprimalityThetaEmbedding ω).choose_spec
+  have hT : ∀ v ∈ T, Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val :=
+    fun v hv ↦ _hπ v (Finset.mem_filter.mp hv).1
+  have hmod := strongCoprimalityNorm_isModulation_surjective (F := F)
+  exact strongCoprimality_quotientEquiv D E (isotype_frechet m𝔽 hmod.1 hmod.2 ω)
+    (strongCoprimality_decayQuotient.{_, 0} ω T π hT).2.2 j hspec.1
+    (exists_strongCoprimalityThetaEmbedding_isClosed_range ω j hspec.2)
+    (strongCoprimality_mem_differenceRange_iff χ S π _hπ j hspec.2)
+    (strongCoprimality_exists_sub_mem χ S π _hπ j hspec.2)
 
 private theorem strongCoprimalityDenominator_insert_le_conj_left {E G N : Type*} [AddCommGroup E]
     [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
@@ -594,6 +1362,127 @@ theorem strongCoprimalityFourierJet_mk (s : ℂ) (k : ℕ) (f : P) :
     rw [he, href, iteratedDeriv_comp_const_sub]
     simp only [sub_sub_cancel]
 
+/-- The reflected zeta function of a Fourier transformed test is analytic at the evaluation
+point of an imaginary-axis center, away from the exceptional center of the norm twist. -/
+private theorem exists_strongCoprimalityFourierJet_full_analytic (s : ℂ) (hs : s.re = 0)
+    (hc : ideleClassNormTwist χ s ≠ 1) (f : SchwartzBruhat (Multiplicative (𝔸[F]))) :
+    AnalyticAt ℂ (fun z ↦ globalIdelicZFunction (adeleSchwartzFourier f)
+      (ideleClassNormTwist χ⁻¹ z)) (1 - s) := by
+  have hne1 : ideleClassNormTwist χ⁻¹ (1 - s) ≠ 1 := by
+    intro h
+    have habs : (1 - s).re = 0 := by
+      rw [← quasiCharacterAbscissa_ideleClassNormTwist χ⁻¹ (1 - s), h]
+      simp [quasiCharacterAbscissa]
+    rw [Complex.sub_re, Complex.one_re, hs] at habs
+    norm_num at habs
+  have hne2 : ideleClassNormTwist χ⁻¹ (1 - s) ≠ ideleClassNormTwist (1 : U) 1 := by
+    intro h
+    apply hc
+    ext g
+    have hg := DFunLike.congr_fun h g
+    set N : ℂ := (((ideleClassNorm F g : NNReal) : ℝ) : ℂ) with hNdef
+    change (Circle.coeHom ((χ⁻¹ : U) g)) * N ^ (1 - s) = 1 * N ^ (1 : ℂ) at hg
+    change (Circle.coeHom (χ g)) * N ^ s = 1
+    have hinv : Circle.coeHom ((χ⁻¹ : U) g) = (Circle.coeHom (χ g))⁻¹ := rfl
+    rw [hinv, Complex.cpow_one, one_mul] at hg
+    have hN : N ≠ 0 := by
+      rw [hNdef]
+      exact_mod_cast (ideleClassNorm F g).ne_zero
+    have hNs : N ^ s ≠ 0 := Complex.cpow_ne_zero_iff.mpr (Or.inl hN)
+    rw [Complex.cpow_sub _ _ hN, Complex.cpow_one, div_eq_mul_inv] at hg
+    have h2 : (Circle.coeHom (χ g))⁻¹ = N ^ s := by
+      have h1 : (Circle.coeHom (χ g))⁻¹ * (N ^ s)⁻¹ = 1 := by
+        refine mul_right_cancel₀ hN ?_
+        calc (Circle.coeHom (χ g))⁻¹ * (N ^ s)⁻¹ * N
+            = (Circle.coeHom (χ g))⁻¹ * (N * (N ^ s)⁻¹) := by ring
+          _ = N := hg
+          _ = 1 * N := (one_mul N).symm
+      calc (Circle.coeHom (χ g))⁻¹ = (Circle.coeHom (χ g))⁻¹ * ((N ^ s)⁻¹ * N ^ s) := by
+              rw [inv_mul_cancel₀ hNs, mul_one]
+        _ = (Circle.coeHom (χ g))⁻¹ * (N ^ s)⁻¹ * N ^ s := by ring
+        _ = 1 * N ^ s := by rw [h1]
+        _ = N ^ s := one_mul _
+    rw [← h2]
+    exact mul_inv_cancel₀ (Circle.coe_ne_zero (χ g))
+  exact (globalIdelicZFunction_poles (adeleSchwartzFourier f) χ⁻¹).1 (1 - s) ⟨hne1, hne2⟩
+
+/-- Paper: Equation (7.5.0.8), p. 377.
+The reflected jet, read on the full homogeneous theta space, is a continuous linear
+functional taking a test to the corresponding derivative of its reflected zeta function. -/
+private theorem exists_strongCoprimalityFourierJet_full_functional (s : ℂ) (hs : s.re = 0)
+    (hc : ideleClassNormTwist χ s ≠ 1) (k : ℕ) :
+    let q := (LinearMap.ker (homogeneousAdelicThetaLinearMap F (ω(χ)))).mkQ
+    ∃ d : StrongDual ℂ (GlobalHomogeneousThetaSpace F (ω(χ))),
+      ∀ f : SchwartzBruhat (Multiplicative (𝔸[F])),
+        d (q f) = iteratedDeriv k (fun z ↦ globalIdelicZFunction (adeleSchwartzFourier f)
+          (ideleClassNormTwist χ⁻¹ z)) (1 - s) := by
+  classical
+  intro q
+  let E := GlobalHomogeneousThetaSpace F (ω(χ))
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let : BarrelledSpace ℂ E := (globalHomogeneousThetaSpace_montel (F := F) (ω := ω(χ))).1
+  let c := ideleClassNormTwist χ
+  let N := ideleClassNormTwist (1 : U) 1
+  let regularSet := (c ⁻¹' ({1, N} : Set (QuasiCharacter C𝔽)))ᶜ
+  have hi : Injective c := by
+    intro z w he
+    apply trivial_normTwist_injective (F := F)
+    ext g
+    have h := DFunLike.congr_fun he g
+    change (χ g : ℂ) * _ ^ z = (χ g : ℂ) * _ ^ w at h
+    change 1 * ((((ideleClassNorm F g).val : ℝ) : ℂ) ^ z) =
+      1 * ((((ideleClassNorm F g).val : ℝ) : ℂ) ^ w)
+    exact congrArg (1 * ·) (mul_left_cancel₀ (Circle.coe_ne_zero _) h)
+  have ho : IsOpen regularSet := (((Set.finite_singleton N).insert 1).preimage hi.injOn).isClosed.isOpen_compl
+  have hnot (z : ℂ) (hz : z ∈ regularSet) : c z ≠ 1 ∧ c z ≠ N := not_or.mp hz
+  have hreg : s ∈ regularSet := by
+    refine not_or.mpr ⟨hc, fun he ↦ ?_⟩
+    have h := congrArg (quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+      (ideleClassNorm_ne_one (F := F))) he
+    change quasiCharacterAbscissa _ _ _ (ideleClassNormTwist χ s) =
+      quasiCharacterAbscissa _ _ _ (ideleClassNormTwist (1 : U) 1) at h
+    rw [quasiCharacterAbscissa_ideleClassNormTwist, quasiCharacterAbscissa_ideleClassNormTwist, hs] at h
+    norm_num at h
+  let Z (f : SchwartzBruhat (Multiplicative (𝔸[F]))) (z : ℂ) := globalIdelicZFunction f (c z)
+  have hev (z : ℂ) (hz : z ∈ regularSet) : ∃ l : StrongDual ℂ E, ∀ f, l (q f) = Z f z := by
+    let Ω := {d : QuasiCharacter C𝔽 // ∀ h : C₁, d h.val = (ω(χ) h : ℂ)}
+    let v : Ω := ⟨c z, fun h ↦ by
+      change (χ h.val : ℂ) * (((ideleClassNorm F h.val).val : ℝ) : ℂ) ^ z = _
+      have ht : (((ideleClassNorm F h.val).val : ℝ) : ℂ) = 1 := by rw [h.property]; rfl
+      rw [ht, Complex.one_cpow, mul_one]
+      rfl⟩
+    let a : {d : Ω // 0 ≤ globalIdelicOrderBound d.val} := ⟨v, by
+      change 0 ≤ globalIdelicOrderBound (c z)
+      simp [globalIdelicOrderBound, (hnot z hz).1, (hnot z hz).2, N]⟩
+    obtain ⟨M, _, hM⟩ := exists_globalHomogeneousThetaMellin (F := F) (ω(χ))
+    let A := meromorphicNormOneComponent (ideleClassNorm F) (isProperMap_ideleClassNorm F).continuous
+      (ω(χ)) (globalIdelicOrderBound (F := F))
+    refine ⟨(ContinuousMap.evalCLM ℂ a).comp (A.subtypeL.comp M), fun f ↦ ?_⟩
+    exact (hM f a).trans (globalIdelicMellin_apply f _)
+  have hq : Surjective q := Submodule.mkQ_surjective _
+  choose r hr using hq
+  let Φ (x : E) := Z (r x)
+  have ha (x : E) : AnalyticOnNhd ℂ (Φ x) regularSet :=
+    fun z hz ↦ (globalIdelicZFunction_poles (r x) χ).1 z (hnot z hz)
+  have hΦ (x : E) (z : ℂ) (hz : z ∈ regularSet) :
+      (hev z hz).choose x = Φ x z := (congrArg (hev z hz).choose (hr x).symm).trans ((hev z hz).choose_spec (r x))
+  obtain ⟨d, hd⟩ := exists_continuousLinearMap_iteratedDeriv_of_analytic Φ ho ha
+    (fun z hz ↦ ⟨(hev z hz).choose, fun x ↦ hΦ x z hz⟩) k s hreg
+  refine ⟨(-1 : ℂ) ^ k • d, fun f ↦ ?_⟩
+  have hfun : Φ (q f) =ᶠ[𝓝 s] Z f :=
+    Filter.mem_of_superset (ho.mem_nhds hreg) fun z hz ↦ (hΦ (q f) z hz).symm.trans ((hev z hz).choose_spec f)
+  have hrefl : (fun z ↦ globalIdelicZFunction (adeleSchwartzFourier f) (ideleClassNormTwist χ⁻¹ z)) =
+      fun z ↦ Z f (1 - z) := by
+    funext z
+    have h := globalIdelicZFunction_functionalEquation f (ideleClassNormTwist χ (1 - z))
+    rw [dualQuasiCharacter_ideleClassNormTwist, sub_sub_cancel] at h
+    exact h.symm
+  change (-1 : ℂ) ^ k • d (q f) = _
+  rw [hd, hfun.iteratedDeriv_eq k, hrefl, iteratedDeriv_comp_const_sub]
+  dsimp only
+  rw [sub_sub_cancel]
+
 /-- Paper: Equation (7.5.0.8), p. 377.
 At each regular center on the imaginary axis the reflected jet is defined on
 the full homogeneous theta space and restricts to the jet on polar tests.
@@ -607,7 +1496,13 @@ theorem exists_strongCoprimalityFourierJet_full (s : ℂ) (_hs : s.re = 0)
           (ideleClassNormTwist χ⁻¹ z)
         AnalyticAt ℂ Z (1 - s) ∧ d (q f) = iteratedDeriv k Z (1 - s)) ∧
       ∀ f : P, d (q f.val) =
-        strongCoprimalityFourierJet χ τ hτ s k ((K(ω(χ))).mkQ f) := by sorry
+        strongCoprimalityFourierJet χ τ hτ s k ((K(ω(χ))).mkQ f) := by
+  obtain ⟨d, hd⟩ := exists_strongCoprimalityFourierJet_full_functional (F := F) χ s _hs _hc k
+  refine ⟨d, ?_, ?_⟩
+  · intro f
+    exact ⟨exists_strongCoprimalityFourierJet_full_analytic (F := F) χ s _hs _hc f, hd f⟩
+  · intro f
+    exact (hd f.val).trans (strongCoprimalityFourierJet_mk (F := F) χ τ hτ s k f).2.symm
 
 -- In the proof on pp. 376–377 one can enlarge S to contain the primes of
 -- the different and all places above each rational prime occurring in S
@@ -1899,6 +2794,500 @@ theorem strongCoprimalityPrimaryQuotient_local_equiv (ω : PontryaginDual C₁) 
 
 end SLocal
 
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Count overlapping lattices with multiplicity, preserving the character coordinate. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_indices {α : Type*} {N : ℕ}
+    (f : Fin N → ℤ → α) (hf : ∀ k, Injective (f k))
+    (I : α → Finset (Fin N)) (hI : ∀ ξ k, k ∈ I ξ ↔ ξ ∈ range (f k)) :
+    ∃ e : (Fin N × ℤ) ≃ {j : α × ℕ // j.2 < (I j.1).card},
+      ∀ p, (e p).val.1 = f p.1 p.2 := by
+  classical
+  let J := {j : α × ℕ // j.2 < (I j.1).card}
+  let g (p : Fin N × ℤ) := f p.1 p.2
+  let q (j : J) := j.val.1
+  have fiber (ξ : α) : {p // g p = ξ} ≃ {j // q j = ξ} := by
+    let a : {p // g p = ξ} → ↥(I ξ) := fun p ↦
+      ⟨p.val.1, (hI ξ p.val.1).mpr ⟨p.val.2, p.property⟩⟩
+    have ha : Bijective a := by
+      constructor
+      · intro p r h
+        have hk : p.val.1 = r.val.1 := congrArg Subtype.val h
+        apply Subtype.ext
+        apply Prod.ext hk
+        apply hf r.val.1
+        exact (congrArg (fun k ↦ f k p.val.2) hk).symm.trans
+          (p.property.trans r.property.symm)
+      · intro k
+        obtain ⟨n, hn⟩ := (hI ξ k.val).mp k.property
+        exact ⟨⟨(k.val, n), hn⟩, rfl⟩
+    let b : Fin (I ξ).card ≃ {j // q j = ξ} :=
+      { toFun r := ⟨⟨(ξ, r.val), r.isLt⟩, rfl⟩
+        invFun j := ⟨j.val.val.2, by simpa only [← j.property] using j.val.property⟩
+        left_inv _ := rfl
+        right_inv := by
+          intro j
+          apply Subtype.ext
+          apply Subtype.ext
+          exact Prod.ext j.property.symm rfl }
+    exact (Equiv.ofBijective a ha).trans ((Fintype.equivFinOfCardEq
+      (Fintype.card_coe (I ξ))).trans b)
+  exact ⟨Equiv.ofFiberEquiv fiber, Equiv.ofFiberEquiv_map fiber⟩
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Rapidly decreasing coefficients synthesize polynomially growing vectors continuously. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_synthesis {X : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X] [T2Space X]
+    {ι : Type*} {p : ι → Seminorm ℂ X} (hX : IsFrechetTVS X) (hp : WithSeminorms p)
+    (b : ℕ → X)
+    (hgrowth : ∀ i, ∃ (C : ℝ) (k : ℕ), ∀ n, p i (b n) ≤ C * latticeWeight n ^ k) :
+    ∃ A : RapidDecaySequence 1 →L[ℂ] X, ∀ a,
+      Summable (fun n ↦ a (latticeIndex n) • b n) ∧
+      A a = ∑' n, a (latticeIndex n) • b n := by
+  classical
+  let : UniformSpace X := IsTopologicalAddGroup.rightUniformSpace X
+  have : IsUniformAddGroup X := isUniformAddGroup_of_addCommGroup
+  obtain ⟨_, _, hmet, hcomplete⟩ := hX
+  let : PolynormableSpace ℂ X := hp.toPolynormableSpace
+  let R := RapidDecaySequence 1
+  have hR : IsFrechetTVS R := rapidDecaySequence_isFrechet
+  let : MetrizableSpace R := hR.2.2.1
+  let : BarrelledSpace ℂ R := isFrechetTVS_barrelled hR
+  let coord (n : ℕ) : R →L[ℂ] ℂ :=
+    { toFun a := a (latticeIndex n), map_add' _ _ := rfl, map_smul' _ _ := rfl,
+      cont := rapidCoordinate_continuous n }
+  let t (a : R) (n : ℕ) := coord n a • b n
+  have ht (a : R) : Summable (t a) := by
+    apply summable_iff_cauchySeq_finset.mpr
+    rw [CauchySeq, cauchy_map_iff', uniformity_eq_comap_nhds_zero, Filter.tendsto_comap_iff,
+      hp.tendsto_nhds]
+    intro i ε hε
+    obtain ⟨C, k, hC⟩ := hgrowth i
+    let j : X →ₗ[ℂ] LocalBanach (p i) := UniformSpace.Completion.toComplL.toLinearMap.comp LinearMap.id
+    have hj (x : X) : ‖j x‖ = p i x := localBanach_norm_coe (p i) x
+    have hsum : Summable (fun n ↦ j (t a n)) := by
+      apply Summable.of_norm
+      apply (((rapidSequence_mem_iff a.val).mp a.property k).mul_left C).of_nonneg_of_le
+        (fun _ ↦ norm_nonneg _)
+      intro n
+      rw [hj, show p i (t a n) = ‖coord n a‖ * p i (b n) from map_smul_eq_mul ..]
+      calc
+        _ ≤ ‖coord n a‖ * (C * latticeWeight n ^ k) := mul_le_mul_of_nonneg_left (hC n) (norm_nonneg _)
+        _ = _ := by change _ = C * (latticeWeight n ^ k * ‖coord n a‖); ring
+    have ht' := cauchy_map_iff'.mp (summable_iff_cauchySeq_finset.mp hsum)
+    rw [tendsto_uniformity_iff_dist_tendsto_zero, Metric.tendsto_nhds] at ht'
+    filter_upwards [ht' ε hε] with z hz
+    rw [Real.dist_eq, sub_zero, abs_of_nonneg dist_nonneg, dist_eq_norm', ← map_sum, ← map_sum,
+      ← map_sub, hj] at hz
+    simpa only [sub_zero, Function.comp_apply] using hz
+  let synthesisSum (N : ℕ) := ∑ n ∈ Finset.range N, (coord n).smulRight (b n)
+  have htend : Filter.Tendsto (fun N a ↦ synthesisSum N a) Filter.atTop (𝓝 (fun a ↦ ∑' n, t a n)) := by
+    apply tendsto_pi_nhds.mpr
+    intro a
+    simpa only [synthesisSum, sum_apply, ContinuousLinearMap.smulRight_apply] using (ht a).hasSum.tendsto_sum_nat
+  let A : R →L[ℂ] X := continuousLinearMapOfTendsto synthesisSum htend
+  exact ⟨A, fun a ↦ ⟨ht a, rfl⟩⟩
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Finite lattice synthesis is bijective for separating biorthogonal coordinates. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_finiteSynthesis {X : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X] [T2Space X]
+    {ι : Type*} {p : ι → Seminorm ℂ X} (hX : IsFrechetTVS X) (hp : WithSeminorms p)
+    {N : ℕ} (b : Fin N × ℕ → X) (c : Fin N × ℕ → StrongDual ℂ X)
+    (hortho : ∀ j k, c j (b k) = if j = k then 1 else 0)
+    (hsep : ∀ x, (∀ j, c j x = 0) → x = 0)
+    (hgrowth : ∀ k i, ∃ (C : ℝ) (d : ℕ), ∀ n, p i (b (k,n)) ≤ C * latticeWeight n ^ d)
+    (hdecay : ∀ (x : X) k, ∃ a : RapidDecaySequence 1, ∀ n, a (latticeIndex n) = c (k,n) x) :
+    ∃ A : (Fin N → RapidDecaySequence 1) →L[ℂ] X, Bijective A := by
+  classical
+  let source (k : Fin N) := strongCoprimalityPrimaryQuotient_sequence_synthesis hX hp (fun n ↦ b (k,n)) (hgrowth k)
+  let S (k : Fin N) : RapidDecaySequence 1 →L[ℂ] X := (source k).choose
+  have hS (k : Fin N) (a : RapidDecaySequence 1) :
+      Summable (fun n ↦ a (latticeIndex n) • b (k,n)) ∧
+      S k a = ∑' n, a (latticeIndex n) • b (k,n) := (source k).choose_spec a
+  have hcoord (j : Fin N × ℕ) (k : Fin N) (a : RapidDecaySequence 1) :
+      c j (S k a) = if j.1 = k then a (latticeIndex j.2) else 0 := by
+    rw [(hS k a).2, (c j).map_tsum (hS k a).1]
+    simp only [map_smul, hortho, smul_eq_mul, mul_ite, mul_one, mul_zero]
+    by_cases h : j.1 = k
+    · subst k
+      simp only [Prod.ext_iff, true_and, ↓reduceIte]
+      simpa only [↓reduceIte] using (tsum_eq_single j.2 (fun n hn ↦ by simp [Ne.symm hn]) : (∑' n, if j.2 = n then a (latticeIndex n) else 0) = _)
+    · simp [Prod.ext_iff, h]
+  let A : (Fin N → RapidDecaySequence 1) →L[ℂ] X :=
+    ∑ k : Fin N, (S k).comp (ContinuousLinearMap.proj k)
+  have hA (j : Fin N × ℕ) (a : Fin N → RapidDecaySequence 1) :
+      c j (A a) = a j.1 (latticeIndex j.2) := by
+    simp only [A, sum_apply, ContinuousLinearMap.comp_apply,
+      ContinuousLinearMap.proj_apply, map_sum, hcoord]
+    simp
+  refine ⟨A, ⟨?_, fun x ↦ ?_⟩⟩
+  · intro a d he
+    funext k
+    apply Subtype.ext
+    funext i
+    obtain ⟨n, rfl⟩ := latticeIndex.surjective i
+    exact (hA (k,n) a).symm.trans ((congrArg (c (k,n)) he).trans (hA (k,n) d))
+  let a : Fin N → RapidDecaySequence 1 := fun k ↦ (hdecay x k).choose
+  refine ⟨a, sub_eq_zero.mp (hsep _ fun j ↦ ?_)⟩
+  rw [map_sub]
+  have he : c j (A a) = c j x := by
+    simp only [A, sum_apply, ContinuousLinearMap.comp_apply, ContinuousLinearMap.proj_apply]
+    rw [map_sum]
+    simp only [hcoord]
+    rw [Finset.sum_eq_single j.1]
+    · simpa only [↓reduceIte] using (hdecay x j.1).choose_spec j.2
+    · intro k _ hk
+      simp [Ne.symm hk]
+    · simp
+  rw [he, sub_self]
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Selecting one of finitely many rapid sequences at each index preserves rapid decay. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_select {N : ℕ} (a : Fin N → RapidDecaySequence 1) (r : ℕ → Fin N) :
+    ∃ v : RapidDecaySequence 1, ∀ n, v (latticeIndex n) = a (r n) (latticeIndex n) := by
+  let v (i : Fin 1 → ℤ) := a (r (latticeIndex.symm i)) i
+  have hv : v ∈ rapidDecaySequenceSubmodule 1 := by
+    apply (rapidSequence_mem_iff v).mpr
+    intro j
+    have hs : Summable (fun n ↦ ∑ k : Fin N, latticeWeight n ^ j * ‖a k (latticeIndex n)‖) :=
+      summable_sum fun k _ ↦ (rapidSequence_mem_iff (a k).val).mp (a k).property j
+    apply hs.of_nonneg_of_le
+    · intro n
+      exact mul_nonneg (pow_nonneg (le_trans (by norm_num) (latticeWeight_bounds n).1) _) (norm_nonneg _)
+    · intro n
+      simp only [v, latticeIndex.symm_apply_apply]
+      exact Finset.single_le_sum (fun k _ ↦ mul_nonneg
+        (pow_nonneg (le_trans (by norm_num) (latticeWeight_bounds n).1) _) (norm_nonneg (a k (latticeIndex n))))
+        (Finset.mem_univ (r n))
+  exact ⟨⟨v,hv⟩, fun n ↦ by simp only [v, latticeIndex.symm_apply_apply]⟩
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- The moment basis identifies a nonempty commensurate difference quotient with rapid sequences. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_periodic_pos {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+    (m : G →ₜ* ℝ≥0ˣ) (hm : IsModulation m) (hms : Surjective m)
+    (ω : PontryaginDual m.toMonoidHom.ker) {N : ℕ} (hN : 0 < N) (γs : Fin N → G)
+    (hγs : ∀ k, 1 < (m (γs k)).val) [MeasurableSpace G] [BorelSpace G]
+    (μ : Measure G) [μ.IsHaarMeasure]
+    (hcomm : ∃ a : ℝ, 0 < a ∧ ∀ k, ∃ r : ℚ, Real.log ((m (γs k)).val : ℝ) = (r : ℝ) * a) :
+    let X := ↥(modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω) ⧸
+      (modulatedIsotypicDifferenceProduct m hm hms ω univ ordConnected_univ
+        (mem_univ (0 : ℝ)) (List.ofFn γs)).range
+    ∃ A : (Fin N → RapidDecaySequence 1) →L[ℂ] X, Bijective A := by
+  classical
+  let X := ↥(modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω) ⧸
+      (modulatedIsotypicDifferenceProduct m hm hms ω univ ordConnected_univ
+        (mem_univ (0 : ℝ)) (List.ofFn γs)).range
+  let J := {j : PontryaginDual G × ℕ // j.2 < modulatedPeriodicMultiplicity m ω γs j.1}
+  let D : J → StrongDual ℂ X := modulatedQuotientLogMoment m hm hms ω γs hγs μ
+  let τ := (exists_surjectiveModulation_section m hm hms).choose
+  have hτ := (exists_surjectiveModulation_section m hm hms).choose_spec
+  let lift := exists_modulatedCyclicCharacter_lifts m (γs ⟨0,hN⟩) τ hτ (hγs ⟨0,hN⟩)
+  let χ := lift.choose
+  have hχ : ∀ ω' (u : m.toMonoidHom.ker), χ ω' u.val = ω' u :=
+    lift.choose_spec.choose_spec.choose_spec.1
+  let phase (k : Fin N) (ω' : PontryaginDual m.toMonoidHom.ker) :=
+    (existsUnique_modulatedCharacterPhase m (γs k) (hγs k) (χ ω')).exists
+  let t₀ (k : Fin N) (ω' : PontryaginDual m.toMonoidHom.ker) := (phase k ω').choose
+  have ht₀ (k : Fin N) (ω' : PontryaginDual m.toMonoidHom.ker) := (phase k ω').choose_spec
+  let f (k : Fin N) (n : ℤ) : PontryaginDual G :=
+    (PontryaginDual.map (⟨QuotientGroup.mk' (Subgroup.zpowers (γs k)),
+        QuotientGroup.continuous_mk⟩ : G →ₜ* (G ⧸ Subgroup.zpowers (γs k)))
+      (modulatedCyclicCharacter m (γs k) (hγs k) χ (t₀ k) (ht₀ k) (ω,n)))⁻¹
+  have hf (k : Fin N) := modulatedPeriodicFrequency_bijective m hm hms ω γs hγs χ hχ t₀ ht₀ k
+  let I (ξ : PontryaginDual G) := Finset.univ.filter (fun k ↦ ξ ∈ modulatedCyclicAnnihilatorFiber m ω (γs k))
+  have hI (ξ : PontryaginDual G) (k : Fin N) : k ∈ I ξ ↔ ξ ∈ range (f k) := by
+    simp only [I, Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [(hf k).2]
+  let equiv := strongCoprimalityPrimaryQuotient_sequence_indices f (fun k ↦ (hf k).1) I hI
+  let e : (Fin N × ℤ) ≃ J := equiv.choose
+  have he (p : Fin N × ℤ) : (e p).val.1 = f p.1 p.2 := equiv.choose_spec p
+  let σ := (modulatedPeriodicMomentIndex_enumerable m hm hms ω γs hγs hN).some
+  let basis := modulatedQuotientLogMoment_bases m hm hms ω γs hγs μ hcomm σ
+  let ψ : J → X := basis.choose
+  have hb : IsSchauderBasis (ψ ∘ σ) (D ∘ σ) := basis.choose_spec.1
+  have hdiag (j : J) : D j (ψ j) = 1 := by
+    simpa using hb.1 (σ.symm j) (σ.symm j)
+  have hoff (j k : J) (h : j ≠ k) : D j (ψ k) = 0 := by
+    have hh : σ.symm j ≠ σ.symm k := σ.symm.injective.ne h
+    simpa [hh] using hb.1 (σ.symm j) (σ.symm k)
+  let en : (Fin N × ℕ) ≃ J := (Equiv.prodCongr (Equiv.refl (Fin N)) Equiv.intEquivNat.symm).trans e
+  let b : Fin N × ℕ → X := ψ ∘ en
+  let c : Fin N × ℕ → StrongDual ℂ X := D ∘ en
+  have hprops : SeparableSpace X ∧ IsNuclearTVS.{0} X ∧ IsFrechetTVS X := modulatedIsotypicDifferenceProduct_quotient m hm hms ω (List.ofFn γs)
+    (by intro g hg; obtain ⟨k,rfl⟩ := List.mem_ofFn.mp hg; exact hγs k)
+  have hX : IsFrechetTVS X := hprops.2.2
+  let : PolynormableSpace ℂ X := hX.2.1
+  let : MetrizableSpace X := hX.2.2.1
+  let : T2Space X := inferInstance
+  let p := fun q : {q : Seminorm ℂ X // Continuous q} ↦ q.val
+  have hp : WithSeminorms p := PolynormableSpace.withSeminorms ℂ X
+  apply strongCoprimalityPrimaryQuotient_sequence_finiteSynthesis hX hp b c
+  · intro j k
+    by_cases h : j = k
+    · subst k; simpa only [b,c,Function.comp_apply,↓reduceIte] using hdiag (en j)
+    · simpa only [b,c,Function.comp_apply,ite_eq_right h] using hoff (en j) (en k) (en.injective.ne h)
+  · intro x hx
+    have hh (n : ℕ) : D (σ n) x = 0 := by simpa only [c,Function.comp_apply,en.apply_symm_apply] using hx (en.symm (σ n))
+    have hs := hb.2 x
+    simp only [Function.comp_apply, ContinuousLinearMap.coe_coe, hh, zero_smul] at hs
+    exact hs.unique hasSum_zero
+  · intro k i
+    obtain ⟨d, hd⟩ := modulatedQuotientLogMoment_biorthogonal_growth m hm hms ω γs hγs
+      χ hχ t₀ ht₀ μ hcomm ψ hdiag hoff (p i) i.property
+    obtain ⟨C,hC,hbound⟩ := hd k
+    refine ⟨C,d,fun n ↦ ?_⟩
+    exact hbound (Equiv.intEquivNat.symm n) (en (k,n)) (he (k,Equiv.intEquivNat.symm n))
+  · intro x k
+    obtain ⟨u,rfl⟩ := Submodule.mkQ_surjective _ x
+    let hs (r : Fin N) := modulatedLogMoment_lattice_schwartz m hm hms ω γs hγs
+      χ hχ t₀ ht₀ μ u r k
+    let iso := integer_schwartz_sequence
+    let a (r : Fin N) : RapidDecaySequence 1 := iso.choose.symm (hs r).choose
+    have ha (r : Fin N) (n : ℤ) : a r (fun _ ↦ n) =
+        if r.val < modulatedPeriodicMultiplicity m ω γs (f k n) then
+          modulatedLogMoment m hm hms ω μ (f k n) r.val u else 0 := by
+      have ht := iso.choose_spec (a r) n
+      rw [show iso.choose (a r) = (hs r).choose from iso.choose.apply_symm_apply _] at ht
+      exact ht.symm.trans ((hs r).choose_spec n)
+    have hlt (j : J) : j.val.2 < N := by
+      apply j.property.trans_le
+      exact (Finset.card_le_card (Finset.filter_subset _ _)).trans (by simp)
+    let r (n : ℕ) : Fin N := ⟨(en (k,n)).val.2, hlt (en (k,n))⟩
+    let chooseSeq := strongCoprimalityPrimaryQuotient_sequence_select a r
+    refine ⟨chooseSeq.choose, fun n ↦ ?_⟩
+    rw [chooseSeq.choose_spec n]
+    have hn : latticeIndex n = (fun _ : Fin 1 ↦ Equiv.intEquivNat.symm n) := rfl
+    rw [hn, ha]
+    have hj : (en (k,n)).val.1 = f k (Equiv.intEquivNat.symm n) := he _
+    have hr : (r n).val < modulatedPeriodicMultiplicity m ω γs (f k (Equiv.intEquivNat.symm n)) := by
+      rw [← hj]
+      exact (en (k,n)).property
+    rw [ite_eq_left hr]
+    change _ = modulatedQuotientLogMoment m hm hms ω γs hγs μ (en (k,n)) _
+    rw [modulatedQuotientLogMoment_mkQ]
+    change _ = modulatedLogMoment m hm hms ω μ (en (k,n)).val.1 (en (k,n)).val.2 u
+    rw [hj]
+
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Include the empty difference product, whose quotient and sequence source are both zero. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_periodic {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+    (m : G →ₜ* ℝ≥0ˣ) (hm : IsModulation m) (hms : Surjective m)
+    (ω : PontryaginDual m.toMonoidHom.ker) {N : ℕ} (γs : Fin N → G)
+    (hγs : ∀ k, 1 < (m (γs k)).val) [MeasurableSpace G] [BorelSpace G]
+    (μ : Measure G) [μ.IsHaarMeasure]
+    (hcomm : ∃ a : ℝ, 0 < a ∧ ∀ k, ∃ r : ℚ, Real.log ((m (γs k)).val : ℝ) = (r : ℝ) * a) :
+    let X := ↥(modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω) ⧸
+      (modulatedIsotypicDifferenceProduct m hm hms ω univ ordConnected_univ
+        (mem_univ (0 : ℝ)) (List.ofFn γs)).range
+    ∃ A : (Fin N → RapidDecaySequence 1) →L[ℂ] X, Bijective A := by
+  by_cases hN : 0 < N
+  · exact strongCoprimalityPrimaryQuotient_sequence_periodic_pos m hm hms ω hN γs hγs μ hcomm
+  have hN : N = 0 := Nat.eq_zero_of_not_pos hN
+  subst N
+  let R := (modulatedIsotypicDifferenceProduct m hm hms ω univ ordConnected_univ
+    (mem_univ (0 : ℝ)) (List.ofFn γs)).range
+  have hr (u : ↥(modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω)) : u ∈ R := by
+    refine ⟨u, ?_⟩
+    simp only [List.ofFn_zero, modulatedIsotypicDifferenceProduct, modulatedDifferenceProduct]
+    rfl
+  have hz (x : ↥(modulatedDecayIsotype m univ (mem_univ (0 : ℝ)) ω) ⧸ R) : x = 0 := by
+    obtain ⟨u,rfl⟩ := R.mkQ_surjective x
+    exact (Submodule.Quotient.mk_eq_zero R).mpr (hr u)
+  refine ⟨0, ⟨fun _ _ _ ↦ Subsingleton.elim _ _, fun x ↦ ⟨0, ?_⟩⟩⟩
+  exact (hz x).symm
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- The inverse uniformizer class has norm equal to the residue cardinality. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_norm {F : Type*} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (π : (v.adicCompletion F)ˣ)
+    (hπ : Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) π.val) :
+    (((ideleClassNorm F ((IdeleClassGroup.ofAdicCompletion (𝓞 F) F v π)⁻¹)).val : ℝ≥0) : ℝ) =
+      (Ideal.absNorm v.asIdeal : ℝ) := by
+  rw [map_inv, ideleClassNorm_ofAdicCompletion, Units.coe_map_inv]
+  change (‖(π⁻¹).val‖₊ : ℝ) = _
+  simp only [coe_nnNorm, Units.val_inv_eq_inv_val, norm_inv]
+  rw [norm_uniformizer_adicCompletion v _ hπ, inv_inv]
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Residue cardinalities above one rational prime have commensurate logarithms. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_commensurate {F : Type*} [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (p : HeightOneSpectrum (𝓞 ℚ))
+    (hv : v.under (𝓞 ℚ) = p) :
+    ∃ r : ℚ, Real.log (Ideal.absNorm v.asIdeal : ℝ) =
+      (r : ℝ) * Real.log (Ideal.absNorm p.asIdeal : ℝ) := by
+  let : v.asIdeal.LiesOver p.asIdeal := ⟨(congrArg HeightOneSpectrum.asIdeal hv).symm⟩
+  refine ⟨v.asIdeal.inertiaDeg (𝓞 ℚ), ?_⟩
+  rw [← Ideal.absNorm_pow_inertiaDeg p.asIdeal v.asIdeal, Nat.cast_pow, Real.log_pow]
+  simp only [Rat.cast_natCast]
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Extra sequence coordinates may be discarded by a continuous surjection. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_projection {M N : ℕ} (h : M ≤ N) :
+    ∃ A : (Fin N → RapidDecaySequence 1) →L[ℂ] (Fin M → RapidDecaySequence 1), Surjective A := by
+  classical
+  let A : (Fin N → RapidDecaySequence 1) →L[ℂ] (Fin M → RapidDecaySequence 1) :=
+    ContinuousLinearMap.pi fun k ↦ ContinuousLinearMap.proj (Fin.castLE h k)
+  refine ⟨A, fun a ↦ ?_⟩
+  let b (i : Fin N) : RapidDecaySequence 1 := if hi : i.val < M then a ⟨i.val, hi⟩ else 0
+  refine ⟨b, funext fun k ↦ ?_⟩
+  change (if hi : k.val < M then a ⟨k.val, hi⟩ else 0) = a k
+  simp only [dite_eq_left k.isLt]
+
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Open mapping identifies a Fréchet target with the quotient by a closed synthesis kernel. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_closedKernel {X : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X]
+    (hX : IsFrechetTVS X) {N : ℕ}
+    (A : (Fin N → RapidDecaySequence 1) →L[ℂ] X) (hA : Surjective A) :
+    let E := Fin N → RapidDecaySequence 1
+    ∃ (D : Submodule ℂ E) (W : Submodule ℂ (E ⧸ D)),
+      IsClosed (D : Set E) ∧ IsClosed (W : Set (E ⧸ D)) ∧ Nonempty (X ≃L[ℂ] W) := by
+  let R := RapidDecaySequence 1
+  let E := Fin N → R
+  obtain ⟨_, _, hm, hc⟩ := (rapidDecaySequence_isFrechet (r := 1))
+  let : CompleteSpace R := by rwa [IsUniformAddGroup.rightUniformSpace_eq] at hc
+  have hE : IsFrechetTVS E := by
+    refine ⟨inferInstance, inferInstance, inferInstance, ?_⟩
+    rw [IsUniformAddGroup.rightUniformSpace_eq]
+    infer_instance
+  let : MetrizableSpace X := hX.2.2.1
+  let : T2Space X := inferInstance
+  have hop : IsOpenMap A := isOpenMap_of_surjective_toLF (isLFSpace_of_isFrechetTVS hX)
+    (X := fun _ ↦ E) (fun _ ↦ hE) (fun _ ↦ ContinuousLinearMap.id ℂ E)
+    (fun _ ↦ Subset.rfl) (fun a ↦ ⟨0,a,rfl⟩) A hA
+  let e := (exists_quotient_equiv_of_kernel A (hop.isQuotientMap A.continuous hA) A.ker rfl).choose
+  refine ⟨A.ker, ⊤, A.isClosed_ker, ?_, ?_⟩
+  · exact isClosed_univ
+  · exact ⟨e.symm.trans (Submodule.topContEquiv (R := ℂ) (M := E ⧸ A.ker)).symm⟩
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- The primary difference quotient has a finite rapid-sequence synthesis model. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_decay {F : Type*} [Field F] [NumberField F]
+    (ω : PontryaginDual (ideleClassNorm F).ker) (p : HeightOneSpectrum (𝓞 ℚ))
+    (S : Finset (HeightOneSpectrum (𝓞 F))) (hS : ∀ v ∈ S, v.under (𝓞 ℚ) = p)
+    (π : (v : HeightOneSpectrum (𝓞 F)) → (v.adicCompletion F)ˣ)
+    (hπ : ∀ v ∈ S, Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val) :
+    ∃ A : (Fin S.card → RapidDecaySequence 1) →L[ℂ]
+      (StrongCoprimalityDecaySpace ω ⧸ strongCoprimalityDifferenceRange ω S π), Bijective A := by
+  classical
+  let G := IdeleClassGroup (𝓞 F) F
+  let : T2Space G := (ideleGroup_quotient.{_,0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace G := (ideleGroup_quotient.{_,0} F).2.2.2.2.2.2.1
+  let : SecondCountableTopology G := by
+    let : SecondCountableTopology (IdeleGroup (𝓞 F) F) := idele_secondCountable F
+    exact (ideleGroup_quotient.{_,0} F).2.2.2.2.1.secondCountableTopology
+  let : MeasurableSpace G := borel G
+  let : BorelSpace G := ⟨rfl⟩
+  let μ := ideleClassTamagawaMeasure F
+  let : μ.IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  let m : G →ₜ* ℝ≥0ˣ := ⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩
+  have hmod := strongCoprimalityNorm_isModulation_surjective (F := F)
+  let a (v : HeightOneSpectrum (𝓞 F)) := (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v (π v))⁻¹
+  let γs (k : Fin S.toList.length) := a (S.toList.get k)
+  have hnorm (k : Fin S.toList.length) : ((m (γs k)).val : ℝ) =
+      (Ideal.absNorm (S.toList.get k).asIdeal : ℝ) :=
+    strongCoprimalityPrimaryQuotient_sequence_norm _ _ (hπ _ (Finset.mem_toList.mp (List.get_mem _ _)))
+  have hγs (k : Fin S.toList.length) : 1 < (m (γs k)).val := by
+    apply NNReal.coe_lt_coe.mp
+    rw [NNReal.coe_one, hnorm]
+    exact_mod_cast HeightOneSpectrum.one_lt_absNorm (S.toList.get k)
+  have hcomm : ∃ t : ℝ, 0 < t ∧ ∀ k, ∃ r : ℚ,
+      Real.log ((m (γs k)).val : ℝ) = (r : ℝ) * t := by
+    refine ⟨Real.log (Ideal.absNorm p.asIdeal : ℝ), Real.log_pos ?_, fun k ↦ ?_⟩
+    · exact_mod_cast HeightOneSpectrum.one_lt_absNorm p
+    · rw [hnorm]
+      exact strongCoprimalityPrimaryQuotient_sequence_commensurate _ p (hS _ (Finset.mem_toList.mp (List.get_mem _ _)))
+  have hlist : List.ofFn γs = S.toList.map a := by
+    dsimp only [γs]
+    rw [List.ofFn_comp', List.ofFn_get]
+  have heq : strongCoprimalityDifferenceRange ω S π =
+      (modulatedIsotypicDifferenceProduct m hmod.1 hmod.2 ω univ ordConnected_univ
+        (mem_univ (0 : ℝ)) (List.ofFn γs)).range := by
+    rw [hlist]
+    change _ = fullDecayDifferenceRange m hmod.1 hmod.2 ω (S.toList.map a)
+    rw [fullDecayDifferenceRange_eq_span]
+    unfold strongCoprimalityDifferenceRange
+    congr 1
+    ext h
+    simp only [List.foldr_map, a, strongCoprimalityDifference]
+    rfl
+  rw [heq, ← Finset.length_toList S]
+  exact strongCoprimalityPrimaryQuotient_sequence_periodic m hmod.1 hmod.2 ω γs hγs μ hcomm
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Discard ramified places, synthesize the comparison quotient, and transfer by strong coprimality. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_character {F : Type*} [Field F] [NumberField F]
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (p : HeightOneSpectrum (𝓞 ℚ)) :
+    let ω := χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ :
+      (ideleClassNorm F).ker →ₜ* IdeleClassGroup (𝓞 F) F)
+    let S := (finite_nuclearityPlacesAbove (F := F) p).toFinset
+    let E := Fin S.card → RapidDecaySequence 1
+    ∃ (D : Submodule ℂ E) (W : Submodule ℂ (E ⧸ D)),
+      IsClosed (D : Set E) ∧ IsClosed (W : Set (E ⧸ D)) ∧
+        Nonempty (StrongCoprimalityQuotient ω S ≃L[ℂ] W) := by
+  classical
+  let ω := χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ :
+      (ideleClassNorm F).ker →ₜ* IdeleClassGroup (𝓞 F) F)
+  let S := (finite_nuclearityPlacesAbove (F := F) p).toFinset
+  have h (v : HeightOneSpectrum (𝓞 F)) := (Valued.v : Valuation (v.adicCompletion F)
+    (WithZero (Multiplicative ℤ))).exists_isUniformizer_of_isCyclic_of_nontrivial
+  let π : (v : HeightOneSpectrum (𝓞 F)) → (v.adicCompletion F)ˣ :=
+    fun v ↦ Units.mk0 (h v).choose (h v).choose_spec.ne_zero
+  have hπ (v : HeightOneSpectrum (𝓞 F)) : Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val :=
+    (h v).choose_spec
+  let T := S.filter (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v)
+  have hT (v : HeightOneSpectrum (𝓞 F)) (hv : v ∈ T) : v.under (𝓞 ℚ) = p :=
+    (finite_nuclearityPlacesAbove (F := F) p).mem_toFinset.mp (Finset.mem_filter.mp hv).1
+  let model := strongCoprimalityPrimaryQuotient_sequence_decay ω p T hT π (fun v _ ↦ hπ v)
+  let proj := strongCoprimalityPrimaryQuotient_sequence_projection (Finset.card_filter_le S (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v))
+  let equiv := (strongCoprimality χ S π (fun v _ ↦ hπ v)).choose
+  let A := equiv.symm.toContinuousLinearMap.comp (model.choose.comp proj.choose)
+  have hA : Surjective A := equiv.symm.surjective.comp (model.choose_spec.2.comp proj.choose_spec)
+  have hNF : IsFrechetTVS (StrongCoprimalityQuotient ω S) ∧
+      IsNuclearTVS.{0} (StrongCoprimalityQuotient ω S) :=
+    strongCoprimalityPrimaryQuotient_nuclearFrechet ω p
+  exact strongCoprimalityPrimaryQuotient_sequence_closedKernel hNF.1 A hA
+open TopologicalSpace Filter MeasureTheory in
+open scoped Uniformity in
+/-- Extend a norm-one character using a section of the idelic norm. -/
+private theorem strongCoprimalityPrimaryQuotient_sequence_lift {F : Type*} [Field F] [NumberField F] (ω : PontryaginDual (ideleClassNorm F).ker) :
+    ∃ χ : PontryaginDual (IdeleClassGroup (𝓞 F) F), χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ : (ideleClassNorm F).ker →ₜ* IdeleClassGroup (𝓞 F) F) = ω := by
+  let : T2Space (IdeleClassGroup (𝓞 F) F) := (ideleGroup_quotient.{_,0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace (IdeleClassGroup (𝓞 F) F) :=
+    (ideleGroup_quotient.{_,0} F).2.2.2.2.2.2.1
+  let : SecondCountableTopology (IdeleClassGroup (𝓞 F) F) := by
+    let : SecondCountableTopology (IdeleGroup (𝓞 F) F) := idele_secondCountable F
+    exact (ideleGroup_quotient.{_,0} F).2.2.2.2.1.secondCountableTopology
+  let m : IdeleClassGroup (𝓞 F) F →ₜ* ℝ≥0ˣ :=
+    ⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩
+  have hmod := strongCoprimalityNorm_isModulation_surjective (F := F)
+  obtain ⟨σ, hσ⟩ := exists_surjectiveModulation_section m hmod.1 hmod.2
+  have hk (g : IdeleClassGroup (𝓞 F) F) : g / σ (m g) ∈ (ideleClassNorm F).ker := by
+    change (ideleClassNorm F) (g / σ (m g)) = 1
+    rw [map_div, show ideleClassNorm F (σ (m g)) = m g from hσ (m g)]
+    change (ideleClassNorm F g) / (ideleClassNorm F g) = 1
+    exact div_self' _
+  let q : IdeleClassGroup (𝓞 F) F →ₜ* (ideleClassNorm F).ker :=
+    { toFun := fun g ↦ ⟨g / σ (m g), hk g⟩
+      map_one' := Subtype.ext (by simp)
+      map_mul' := fun g h ↦ Subtype.ext (by simp [mul_div_mul_comm])
+      continuous_toFun := (continuous_id.div' (σ.continuous.comp (isProperMap_ideleClassNorm F).continuous)).subtype_mk hk }
+  refine ⟨ω.comp q, ?_⟩
+  ext1 u
+  change ω (q u) = ω u
+  congr 1
+  apply Subtype.ext
+  change u.val / σ ((ideleClassNorm F) u.val) = u.val
+  rw [u.property, map_one, div_one]
+
 /-- Paper: Remark 7.5.0.2, p. 379.
 The primary quotient is a closed subspace of a Hausdorff quotient of a finite product
 of smooth periodic spaces, expressed via their rapidly decreasing Fourier sequences. -/
@@ -1907,10 +3296,132 @@ theorem strongCoprimalityPrimaryQuotient_sequence_subquotient (ω : PontryaginDu
     let E := Fin T.card → RapidDecaySequence 1
     ∃ (D : Submodule ℂ E) (W : Submodule ℂ (E ⧸ D)),
       IsClosed (D : Set E) ∧ IsClosed (W : Set (E ⧸ D)) ∧
-        Nonempty (StrongCoprimalityQuotient ω T ≃L[ℂ] W) := by sorry
+        Nonempty (StrongCoprimalityQuotient ω T ≃L[ℂ] W) := by
+  let lift := strongCoprimalityPrimaryQuotient_sequence_lift ω
+  let χ := lift.choose
+  have hχ := lift.choose_spec
+  rw [← hχ]
+  exact strongCoprimalityPrimaryQuotient_sequence_character χ p
 
 -- TODO(prerequisite): The separate Köthe-space assertion requires a general
 -- Köthe-space model. The example in §C.1.5, p. 667 is unfinished.
+
+open TopologicalSpace in
+/-- Coordinate projection has a continuous zero-extension right inverse, including empty products. -/
+private theorem strongCoprimalityPrimaryQuotient_strongDual_coordinates {M N : ℕ} (h : M ≤ N) :
+    ∃ (proj : (Fin N → RapidDecaySequence 1) →L[ℂ] (Fin M → RapidDecaySequence 1))
+      (J : (Fin M → RapidDecaySequence 1) →L[ℂ] (Fin N → RapidDecaySequence 1)), RightInverse J proj := by
+  classical
+  let proj : (Fin N → RapidDecaySequence 1) →L[ℂ] (Fin M → RapidDecaySequence 1) :=
+    ContinuousLinearMap.pi fun k ↦ ContinuousLinearMap.proj (Fin.castLE h k)
+  let J : (Fin M → RapidDecaySequence 1) →L[ℂ] (Fin N → RapidDecaySequence 1) :=
+    ContinuousLinearMap.pi fun i ↦ if hi : i.val < M then ContinuousLinearMap.proj ⟨i.val, hi⟩ else 0
+  refine ⟨proj,J,fun a ↦ funext fun k ↦ ?_⟩
+  simp [proj,J,k.isLt]
+open TopologicalSpace in
+/-- Open mapping upgrades bijective rapid-sequence synthesis to a topological linear equivalence. -/
+private theorem strongCoprimalityPrimaryQuotient_strongDual_sequenceEquiv {X : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X]
+    (hX : IsFrechetTVS X) {N : ℕ}
+    (A : (Fin N → RapidDecaySequence 1) →L[ℂ] X) (hA : Bijective A) :
+    Nonempty ((Fin N → RapidDecaySequence 1) ≃L[ℂ] X) := by
+  let R := RapidDecaySequence 1
+  let E := Fin N → R
+  obtain ⟨_, _, hm, hc⟩ := (rapidDecaySequence_isFrechet (r := 1))
+  let : CompleteSpace R := by rwa [IsUniformAddGroup.rightUniformSpace_eq] at hc
+  have hE : IsFrechetTVS E := by
+    refine ⟨inferInstance, inferInstance, inferInstance, ?_⟩
+    rw [IsUniformAddGroup.rightUniformSpace_eq]
+    infer_instance
+  let : MetrizableSpace X := hX.2.2.1
+  let : T2Space X := inferInstance
+  have hop : IsOpenMap A := isOpenMap_of_surjective_toLF (isLFSpace_of_isFrechetTVS hX)
+    (X := fun _ ↦ E) (fun _ ↦ hE) (fun _ ↦ ContinuousLinearMap.id ℂ E)
+    (fun _ ↦ Subset.rfl) (fun a ↦ ⟨0,a,rfl⟩) A hA.2
+  let e := LinearEquiv.ofBijective A.toLinearMap hA
+  exact ⟨{ e with continuous_toFun := A.continuous, continuous_invFun := e.toEquiv.continuous_symm_iff.mpr hop }⟩
+open TopologicalSpace in
+/-- Transposing a split surjection identifies its strong dual with a closed complemented subspace. -/
+private theorem strongCoprimalityPrimaryQuotient_strongDual_retract {X E : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E] [ContinuousSMul ℂ E]
+    (A : E →L[ℂ] X) (J : X →L[ℂ] E) (hAJ : RightInverse J A) :
+    ∃ (W : Submodule ℂ (StrongDual ℂ E)) (D : Submodule ℂ W),
+      IsClosed (W : Set (StrongDual ℂ E)) ∧ IsClosed (D : Set W) ∧
+        Nonempty (StrongDual ℂ X ≃L[ℂ] (W ⧸ D)) := by
+  let T : StrongDual ℂ X →L[ℂ] StrongDual ℂ E := A.precomp ℂ
+  let R : StrongDual ℂ E →L[ℂ] StrongDual ℂ X := J.precomp ℂ
+  have hRT : LeftInverse R T := by
+    intro l
+    ext x
+    change l (A (J x)) = l x
+    rw [hAJ x]
+  have hclosed : IsClosed (T.range : Set (StrongDual ℂ E)) :=
+    hRT.isClosed_range R.continuous T.continuous
+  let e := LinearEquiv.ofInjective T.toLinearMap hRT.injective
+  have hi : Continuous e.symm := by
+    apply (R.continuous.comp continuous_subtype_val).congr
+    intro w
+    obtain ⟨l,hl⟩ := w.property
+    have hw : e l = w := Subtype.ext hl
+    rw [← hw, e.symm_apply_apply]
+    exact hRT l
+  let ec : StrongDual ℂ X ≃L[ℂ] T.range :=
+    { e with continuous_toFun := T.continuous.subtype_mk _, continuous_invFun := hi }
+  let idW := ContinuousLinearMap.id ℂ T.range
+  let eqQ := (exists_ker_quotientEquiv_of_rightInverse idW idW (fun _ ↦ rfl)).choose
+  exact ⟨T.range,idW.ker,hclosed,idW.isClosed_ker,⟨ec.trans eqQ.symm⟩⟩
+open TopologicalSpace in
+/-- Pad the finite sequence model, transpose the retraction, and take the zero-kernel quotient. -/
+private theorem strongCoprimalityPrimaryQuotient_strongDual_model {X : Type*} [AddCommGroup X] [Module ℂ X]
+    [TopologicalSpace X] [IsTopologicalAddGroup X] [ContinuousSMul ℂ X]
+    {M N : ℕ} (e : (Fin M → RapidDecaySequence 1) ≃L[ℂ] X) (h : M ≤ N) :
+    ∃ (W : Submodule ℂ (StrongDual ℂ (Fin N → RapidDecaySequence 1))) (D : Submodule ℂ W),
+      IsClosed (W : Set (StrongDual ℂ (Fin N → RapidDecaySequence 1))) ∧ IsClosed (D : Set W) ∧
+        Nonempty (StrongDual ℂ X ≃L[ℂ] (W ⧸ D)) := by
+  let ret := strongCoprimalityPrimaryQuotient_strongDual_coordinates h
+  let proj := ret.choose
+  let J := ret.choose_spec.choose
+  have hPJ : RightInverse J proj := ret.choose_spec.choose_spec
+  apply strongCoprimalityPrimaryQuotient_strongDual_retract (e.toContinuousLinearMap.comp proj) (J.comp e.symm.toContinuousLinearMap)
+  intro x
+  change e (proj (J (e.symm x))) = x
+  rw [hPJ, e.apply_symm_apply]
+
+open TopologicalSpace in
+/-- Use the unramified sequence model to realize the strong dual inside the prescribed ambient dual. -/
+private theorem strongCoprimalityPrimaryQuotient_strongDual_character {F : Type*} [Field F] [NumberField F]
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (p : IsDedekindDomain.HeightOneSpectrum (𝓞 ℚ)) :
+    let ω := χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ :
+      (ideleClassNorm F).ker →ₜ* IdeleClassGroup (𝓞 F) F)
+    let T := (finite_nuclearityPlacesAbove (F := F) p).toFinset
+    let E := StrongDual ℂ (Fin T.card → RapidDecaySequence 1)
+    ∃ (W : Submodule ℂ E) (D : Submodule ℂ W),
+      IsClosed (W : Set E) ∧ IsClosed (D : Set W) ∧
+        Nonempty (StrongDual ℂ (StrongCoprimalityQuotient ω T) ≃L[ℂ] (W ⧸ D)) := by
+  classical
+  let ω := χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ :
+      (ideleClassNorm F).ker →ₜ* IdeleClassGroup (𝓞 F) F)
+  let S := (finite_nuclearityPlacesAbove (F := F) p).toFinset
+  have h (v : IsDedekindDomain.HeightOneSpectrum (𝓞 F)) := (Valued.v : Valuation (v.adicCompletion F)
+    (WithZero (Multiplicative ℤ))).exists_isUniformizer_of_isCyclic_of_nontrivial
+  let π : (v : IsDedekindDomain.HeightOneSpectrum (𝓞 F)) → (v.adicCompletion F)ˣ :=
+    fun v ↦ Units.mk0 (h v).choose (h v).choose_spec.ne_zero
+  have hπ (v : IsDedekindDomain.HeightOneSpectrum (𝓞 F)) : Valuation.IsUniformizer
+      (Valued.v : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ))) (π v).val :=
+    (h v).choose_spec
+  let T := S.filter (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v)
+  have hT (v : IsDedekindDomain.HeightOneSpectrum (𝓞 F)) (hv : v ∈ T) : v.under (𝓞 ℚ) = p :=
+    (finite_nuclearityPlacesAbove (F := F) p).mem_toFinset.mp (Finset.mem_filter.mp hv).1
+  let model := strongCoprimalityPrimaryQuotient_sequence_decay ω p T hT π (fun v _ ↦ hπ v)
+  let equiv := (strongCoprimality χ S π (fun v _ ↦ hπ v)).choose
+  let C := equiv.symm.toContinuousLinearMap.comp model.choose
+  have hC : Bijective C := equiv.symm.bijective.comp model.choose_spec
+  have hNF : IsFrechetTVS (StrongCoprimalityQuotient ω S) ∧
+      IsNuclearTVS.{0} (StrongCoprimalityQuotient ω S) :=
+    strongCoprimalityPrimaryQuotient_nuclearFrechet ω p
+  let e := (strongCoprimalityPrimaryQuotient_strongDual_sequenceEquiv hNF.1 C hC).some
+  exact strongCoprimalityPrimaryQuotient_strongDual_model e (Finset.card_filter_le S (fun v ↦ (ideleClassNormTwist χ 0).IsUnramifiedAt v))
 
 /-- Paper: Remark 7.5.0.2, p. 379.
 The strong dual of the primary quotient is a Hausdorff quotient of a closed subspace
@@ -1921,7 +3432,12 @@ theorem strongCoprimalityPrimaryQuotient_strongDual_subquotient (ω : Pontryagin
     let E := StrongDual ℂ (Fin T.card → RapidDecaySequence 1)
     ∃ (W : Submodule ℂ E) (D : Submodule ℂ W),
       IsClosed (W : Set E) ∧ IsClosed (D : Set W) ∧
-        Nonempty (StrongDual ℂ (StrongCoprimalityQuotient ω T) ≃L[ℂ] (W ⧸ D)) := by sorry
+        Nonempty (StrongDual ℂ (StrongCoprimalityQuotient ω T) ≃L[ℂ] (W ⧸ D)) := by
+  let lift := strongCoprimalityPrimaryQuotient_sequence_lift ω
+  let χ := lift.choose
+  have hχ := lift.choose_spec
+  rw [← hχ]
+  exact strongCoprimalityPrimaryQuotient_strongDual_character χ p
 
 -- TODO(later): needs §8.1 for the orbital-support and support-constrained basis claims
 -- announced on p. 374 and at the start of Chapter 8 on p. 381.
